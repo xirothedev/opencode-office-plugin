@@ -5,7 +5,7 @@ import { mkdir, rm } from "fs/promises"
 import { readFileSync, existsSync } from "fs"
 
 describe("officecli tool", () => {
-  const testFile = "/tmp/officecli-test.docx"
+  const testFile = "/tmp/officecli-test.txt"
   const mockContext = {
     agent: "test-agent",
     sessionID: "test-session",

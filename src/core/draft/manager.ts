@@ -2,6 +2,8 @@ import { getDraftsDir, getHistoryDir, getFilePathHash } from "../storage/paths.j
 import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync, copyFileSync } from "fs"
 import { join, dirname, extname } from "path"
 import { releaseLock } from "./lock.js"
+import { detectFormat } from "../format/detect.js"
+import { writeOfficeFromMarkdown } from "../format/backends/office.js"
 
 interface AcceptPoint {
   timestamp: number
@@ -28,13 +30,19 @@ export function createDraft(absolutePath: string, sessionID: string, content: st
   writeFileSync(draftPath, content)
 }
 
-export function acceptDraft(absolutePath: string, sessionID: string, timestamp?: number): void {
+export async function acceptDraft(absolutePath: string, sessionID: string, timestamp?: number): Promise<void> {
   const filePathHash = getFilePathHash(absolutePath)
   const ext = extname(absolutePath)
   const draftPath = getDraftPath(filePathHash, sessionID, ext)
+  const format = detectFormat(absolutePath)
 
-  // Copy draft to real file
-  copyFileSync(draftPath, absolutePath)
+  // Copy draft to real file (with conversion for binary formats)
+  if (format === "docx" || format === "xlsx" || format === "pptx") {
+    const markdown = readFileSync(draftPath, "utf-8")
+    await writeOfficeFromMarkdown(markdown, absolutePath)
+  } else {
+    copyFileSync(draftPath, absolutePath)
+  }
 
   // Record accept-point
   const snapshot = readFileSync(draftPath, "utf-8")

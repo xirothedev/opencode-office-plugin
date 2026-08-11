@@ -7,7 +7,7 @@ import { readFileSync, existsSync } from "fs"
 import { join } from "path"
 
 describe("draft manager", () => {
-  const testFile = "/tmp/test-real-file.docx"
+  const testFile = "/tmp/test-real-file.txt"
   const testHash = getFilePathHash(testFile)
   const sessionA = "session-a"
 
@@ -30,24 +30,24 @@ describe("draft manager", () => {
 
   it("draft file contains content", () => {
     createDraft(testFile, sessionA, "test content")
-    const draftPath = getDraftPath(testHash, sessionA, ".docx")
+    const draftPath = getDraftPath(testHash, sessionA, ".txt")
     const content = readFileSync(draftPath, "utf-8")
     expect(content).toBe("test content")
   })
 
-  it("acceptDraft writes real file", () => {
+  it("acceptDraft writes real file", async () => {
     createDraft(testFile, sessionA, "draft content")
     acquireLock(testHash, sessionA)
-    acceptDraft(testFile, sessionA)
+    await acceptDraft(testFile, sessionA)
     expect(existsSync(testFile)).toBe(true)
     const content = readFileSync(testFile, "utf-8")
     expect(content).toBe("draft content")
   })
 
-  it("acceptDraft records accept-point in history", () => {
+  it("acceptDraft records accept-point in history", async () => {
     createDraft(testFile, sessionA, "content")
     acquireLock(testHash, sessionA)
-    acceptDraft(testFile, sessionA)
+    await acceptDraft(testFile, sessionA)
     const historyPath = join(getHistoryDir(), `${testHash}.json`)
     expect(existsSync(historyPath)).toBe(true)
     const history = JSON.parse(readFileSync(historyPath, "utf-8"))
@@ -56,10 +56,10 @@ describe("draft manager", () => {
     expect(history[0].snapshot).toBeDefined()
   })
 
-  it("acceptDraft releases lock", () => {
+  it("acceptDraft releases lock", async () => {
     createDraft(testFile, sessionA, "content")
     acquireLock(testHash, sessionA)
-    acceptDraft(testFile, sessionA)
+    await acceptDraft(testFile, sessionA)
     const lockPath = join(getDraftsDir(), "..", "locks", `${testHash}.json`)
     expect(existsSync(lockPath)).toBe(false)
   })

@@ -4,7 +4,7 @@ import { getDraftsDir, getHistoryDir, getLocksDir } from "../../../src/core/stor
 import { mkdir, rm, writeFile } from "fs/promises"
 
 describe("officecli read binary file", () => {
-  const testFile = "/tmp/read-binary-test.docx"
+  const testFile = "/tmp/read-binary-test.bin"
   const mockContext = {
     agent: "test-agent",
     sessionID: "test-session",
@@ -28,14 +28,14 @@ describe("officecli read binary file", () => {
     await rm(getLocksDir(), { recursive: true, force: true })
   })
 
-  it("read binary returns format error", async () => {
+  it("read unknown extension treats as text", async () => {
     // Write binary file
-    await writeFile(testFile, "fake pdf content", "utf-8")
+    await writeFile(testFile, "fake binary content", "utf-8")
 
     const result = await officecliTool.execute(
       { action: "read", filePath: testFile },
       mockContext
     )
-    expect(result.output).toContain("format conversion")
+    expect(result.output).toContain("fake binary content")
   })
 })

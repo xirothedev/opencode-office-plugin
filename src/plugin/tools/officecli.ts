@@ -7,6 +7,7 @@ import { extname } from "path"
 import { detectFormat } from "../../core/format/detect.js"
 import { extractTextFromPDF } from "../../core/format/backends/pdf.js"
 import { extractTextFromImage } from "../../core/format/backends/image.js"
+import { extractTextFromOffice } from "../../core/format/backends/office.js"
 
 export const officecliTool: ToolDefinition = tool({
   description: "Office document automation. Create, edit, read, accept, undo, revert documents with draft lifecycle.",
@@ -39,7 +40,7 @@ export const officecliTool: ToolDefinition = tool({
       if (!lock || lock.sessionID !== sessionID) {
         return { output: "error: no active draft to accept" }
       }
-      acceptDraft(filePath, sessionID, args.timestamp)
+      await acceptDraft(filePath, sessionID, args.timestamp)
       return { output: `Accepted draft for ${filePath}` }
     }
 
@@ -117,6 +118,10 @@ export const officecliTool: ToolDefinition = tool({
           const content = await extractTextFromPDF(draftPath)
           return { output: content }
         }
+        if (format === "docx" || format === "xlsx" || format === "pptx") {
+          const content = await extractTextFromOffice(draftPath)
+          return { output: content }
+        }
         if (format === "image") {
           const content = await extractTextFromImage(draftPath)
           return { output: content }
@@ -132,6 +137,10 @@ export const officecliTool: ToolDefinition = tool({
       }
       if (format === "pdf") {
         const content = await extractTextFromPDF(filePath)
+        return { output: content }
+      }
+      if (format === "docx" || format === "xlsx" || format === "pptx") {
+        const content = await extractTextFromOffice(filePath)
         return { output: content }
       }
       if (format === "image") {
