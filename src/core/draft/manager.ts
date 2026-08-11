@@ -57,3 +57,22 @@ export function acceptDraft(absolutePath: string, sessionID: string): void {
   // Release lock
   releaseLock(filePathHash)
 }
+
+export function undoDraft(absolutePath: string, sessionID: string): void {
+  const filePathHash = getFilePathHash(absolutePath)
+  const ext = extname(absolutePath)
+  const draftPath = getDraftPath(filePathHash, sessionID, ext)
+
+  // Delete draft
+  if (existsSync(draftPath)) {
+    unlinkSync(draftPath)
+  }
+}
+
+export function getHistory(filePathHash: string): AcceptPoint[] {
+  const historyPath = join(getHistoryDir(), `${filePathHash}.json`)
+  if (!existsSync(historyPath)) {
+    return []
+  }
+  return JSON.parse(readFileSync(historyPath, "utf-8"))
+}

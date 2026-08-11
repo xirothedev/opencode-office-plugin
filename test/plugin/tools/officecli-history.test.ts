@@ -1,0 +1,59 @@
+import { describe, it, expect, beforeEach, afterEach } from "vitest"
+import { officecliTool } from "../../../src/plugin/tools/officecli.js"
+import { getDraftsDir, getHistoryDir, getLocksDir, getFilePathHash } from "../../../src/core/storage/paths.js"
+import { mkdir, rm } from "fs/promises"
+import { acquireLock } from "../../../src/core/draft/lock.js"
+
+describe("officecli history action", () => {
+  const testFile = "/tmp/history-test.docx"
+  const testHash = getFilePathHash(testFile)
+  const mockContext = {
+    agent: "test-agent",
+    sessionID: "test-session",
+    messageID: "test-message",
+    directory: "/tmp",
+    worktree: "/tmp",
+    abort: new AbortController().signal,
+    metadata: () => {},
+    ask: async () => {},
+  }
+
+  beforeEach(async () => {
+    await mkdir(getDraftsDir(), { recursive: true })
+    await mkdir(getHistoryDir(), { recursive: true })
+    await mkdir(getLocksDir(), { recursive: true })
+  })
+
+  afterEach(async () => {
+    await rm(getDraftsDir(), { recursive: true, force: true })
+    await rm(getHistoryDir(), { recursive: true, force: true })
+    await rm(getLocksDir(), { recursive: true, force: true })
+  })
+
+  it("history returns list of accept-points", async () => {
+    // Create + accept twice
+    await officecliTool.execute(
+      { action: "create", filePath: testFile, content: "v1" },
+      mockContext
+    )
+    await officecliTool.execute(
+      { action: "accept", filePath: testFile },
+      mockContext
+    )
+
+    await officecliTool.execute(
+      { action: "create", filePath: testFile, content: "v2" },
+      mockContext
+    )
+    await officecliTool.execute(
+      { action: "accept", filePath: testFile },
+      mockContext
+    )
+
+    const result = await officecliTool.execute(
+      { action: "history", filePath: testFile },
+      mockContext
+    )
+    expect(result.output).toContain("2 accept-points")
+  })
+})
