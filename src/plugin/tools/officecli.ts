@@ -1,7 +1,9 @@
 import { tool, type ToolDefinition } from "@opencode-ai/plugin"
-import { createDraft, acceptDraft, undoDraft, getHistory } from "../../core/draft/manager.js"
+import { createDraft, acceptDraft, undoDraft, getHistory, getDraftPath, draftExists } from "../../core/draft/manager.js"
 import { acquireLock, getLock, releaseLock } from "../../core/draft/lock.js"
 import { getFilePathHash } from "../../core/storage/paths.js"
+import { writeFileSync } from "fs"
+import { extname } from "path"
 
 export const officecliTool: ToolDefinition = tool({
   description: "Office document automation. Create, edit, read, accept, undo, revert documents with draft lifecycle.",
@@ -50,6 +52,24 @@ export const officecliTool: ToolDefinition = tool({
       undoDraft(filePath, sessionID)
       releaseLock(filePathHash)
       return { output: `Draft undone for ${filePath}` }
+    }
+
+    if (action === "edit") {
+      if (!filePath || !content) {
+        return { output: "error: edit requires filePath and content" }
+      }
+      const filePathHash = getFilePathHash(filePath)
+      const lock = getLock(filePathHash)
+      if (!lock || lock.sessionID !== sessionID) {
+        return { output: "error: no active draft to edit" }
+      }
+      if (!draftExists(filePathHash, sessionID)) {
+        return { output: "error: draft not found" }
+      }
+      const ext = extname(filePath)
+      const draftPath = getDraftPath(filePathHash, sessionID, ext)
+      writeFileSync(draftPath, content)
+      return { output: `Draft edited for ${filePath}` }
     }
 
     if (action === "history") {
