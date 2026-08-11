@@ -4,6 +4,7 @@ import { acquireLock, getLock, releaseLock } from "../../core/draft/lock.js"
 import { getFilePathHash } from "../../core/storage/paths.js"
 import { writeFileSync, readFileSync, existsSync } from "fs"
 import { extname } from "path"
+import { detectFormat } from "../../core/format/detect.js"
 
 export const officecliTool: ToolDefinition = tool({
   description: "Office document automation. Create, edit, read, accept, undo, revert documents with draft lifecycle.",
@@ -101,14 +102,24 @@ export const officecliTool: ToolDefinition = tool({
       }
       const filePathHash = getFilePathHash(filePath)
       const ext = extname(filePath)
+      const format = detectFormat(filePath)
+
       // Return draft if exists, else real file
       if (draftExists(filePathHash, sessionID)) {
         const draftPath = getDraftPath(filePathHash, sessionID, ext)
         const content = readFileSync(draftPath, "utf-8")
+        // Check if binary format
+        if (format !== "text") {
+          return { output: "error: format conversion not implemented for binary files" }
+        }
         return { output: content }
       }
       if (!existsSync(filePath)) {
         return { output: `error: file not found: ${filePath}` }
+      }
+      // Check if binary format
+      if (format !== "text") {
+        return { output: "error: format conversion not implemented for binary files" }
       }
       const content = readFileSync(filePath, "utf-8")
       return { output: content }
