@@ -50,10 +50,12 @@ tool({
 - `history(filePath)` → return `[{timestamp, sessionID, acceptPointIndex}]`
 
 **Structured errors**:
+opencode's `ToolResult` type = `string | {output: string}`. Errors returned as `{output: "error: message"}`. Agent parses error string. No structured error codes (opencode plugin API doesn't support them).
+
 ```typescript
-{success: false, error: "Lock held by session abc", code: "LOCK_HELD_BY_OTHER"}
-{success: false, error: "File not found", code: "FILE_NOT_FOUND"}
-{success: false, error: "Invalid action", code: "INVALID_ACTION"}
+{output: "error: lock held by session abc"}
+{output: "error: file not found"}
+{output: "error: invalid action"}
 ```
 
 ### edit (tool override)
