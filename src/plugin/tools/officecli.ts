@@ -2,7 +2,7 @@ import { tool, type ToolDefinition } from "@opencode-ai/plugin"
 import { createDraft, acceptDraft, undoDraft, getHistory, getDraftPath, draftExists, getSnapshot } from "../../core/draft/manager.js"
 import { acquireLock, getLock, releaseLock } from "../../core/draft/lock.js"
 import { getFilePathHash } from "../../core/storage/paths.js"
-import { writeFileSync } from "fs"
+import { writeFileSync, readFileSync, existsSync } from "fs"
 import { extname } from "path"
 
 export const officecliTool: ToolDefinition = tool({
@@ -93,6 +93,25 @@ export const officecliTool: ToolDefinition = tool({
       acquireLock(filePathHash, sessionID)
       createDraft(filePath, sessionID, snapshot)
       return { output: `Reverted to snapshot for ${filePath}` }
+    }
+
+    if (action === "read") {
+      if (!filePath) {
+        return { output: "error: read requires filePath" }
+      }
+      const filePathHash = getFilePathHash(filePath)
+      const ext = extname(filePath)
+      // Return draft if exists, else real file
+      if (draftExists(filePathHash, sessionID)) {
+        const draftPath = getDraftPath(filePathHash, sessionID, ext)
+        const content = readFileSync(draftPath, "utf-8")
+        return { output: content }
+      }
+      if (!existsSync(filePath)) {
+        return { output: `error: file not found: ${filePath}` }
+      }
+      const content = readFileSync(filePath, "utf-8")
+      return { output: content }
     }
 
     return { output: `error: action ${action} not implemented` }
