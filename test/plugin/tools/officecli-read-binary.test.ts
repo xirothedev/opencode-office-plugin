@@ -4,7 +4,7 @@ import { getDraftsDir, getHistoryDir, getLocksDir } from "../../../src/core/stor
 import { mkdir, rm, writeFile } from "fs/promises"
 
 describe("officecli read binary file", () => {
-  const testFile = "/tmp/read-binary-test.pdf"
+  const testFile = "/tmp/read-binary-test.docx"
   const mockContext = {
     agent: "test-agent",
     sessionID: "test-session",

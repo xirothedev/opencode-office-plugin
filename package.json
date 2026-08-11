@@ -11,11 +11,18 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
-  "keywords": ["opencode", "plugin", "office", "document"],
+  "keywords": [
+    "opencode",
+    "plugin",
+    "office",
+    "document"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
-    "@opencode-ai/plugin": "^1.18.16"
+    "@opencode-ai/plugin": "^1.18.16",
+    "pdfjs-dist": "^6.2.108",
+    "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

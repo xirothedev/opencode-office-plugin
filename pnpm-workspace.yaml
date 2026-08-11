@@ -1,3 +1,4 @@
 allowBuilds:
   esbuild: true
   msgpackr-extract: true
+  tesseract.js: true

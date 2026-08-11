@@ -5,6 +5,8 @@ import { getFilePathHash } from "../../core/storage/paths.js"
 import { writeFileSync, readFileSync, existsSync } from "fs"
 import { extname } from "path"
 import { detectFormat } from "../../core/format/detect.js"
+import { extractTextFromPDF } from "../../core/format/backends/pdf.js"
+import { extractTextFromImage } from "../../core/format/backends/image.js"
 
 export const officecliTool: ToolDefinition = tool({
   description: "Office document automation. Create, edit, read, accept, undo, revert documents with draft lifecycle.",
@@ -79,7 +81,11 @@ export const officecliTool: ToolDefinition = tool({
       }
       const filePathHash = getFilePathHash(filePath)
       const history = getHistory(filePathHash)
-      return { output: `${history.length} accept-points for ${filePath}` }
+      const metadata = history.map((ap) => ({
+        timestamp: ap.timestamp,
+        sessionID: ap.sessionID,
+      }))
+      return { output: `${history.length} accept-points for ${filePath}\n${JSON.stringify(metadata)}` }
     }
 
     if (action === "revert") {
@@ -107,17 +113,31 @@ export const officecliTool: ToolDefinition = tool({
       // Return draft if exists, else real file
       if (draftExists(filePathHash, sessionID)) {
         const draftPath = getDraftPath(filePathHash, sessionID, ext)
-        const content = readFileSync(draftPath, "utf-8")
-        // Check if binary format
+        if (format === "pdf") {
+          const content = await extractTextFromPDF(draftPath)
+          return { output: content }
+        }
+        if (format === "image") {
+          const content = await extractTextFromImage(draftPath)
+          return { output: content }
+        }
         if (format !== "text") {
           return { output: "error: format conversion not implemented for binary files" }
         }
+        const content = readFileSync(draftPath, "utf-8")
         return { output: content }
       }
       if (!existsSync(filePath)) {
         return { output: `error: file not found: ${filePath}` }
       }
-      // Check if binary format
+      if (format === "pdf") {
+        const content = await extractTextFromPDF(filePath)
+        return { output: content }
+      }
+      if (format === "image") {
+        const content = await extractTextFromImage(filePath)
+        return { output: content }
+      }
       if (format !== "text") {
         return { output: "error: format conversion not implemented for binary files" }
       }

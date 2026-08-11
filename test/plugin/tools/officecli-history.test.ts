@@ -56,4 +56,41 @@ describe("officecli history action", () => {
     )
     expect(result.output).toContain("2 accept-points")
   })
+
+  it("history returns metadata with timestamps and session IDs", async () => {
+    // Create + accept with different timestamps
+    await officecliTool.execute(
+      { action: "create", filePath: testFile, content: "v1" },
+      mockContext
+    )
+    await officecliTool.execute(
+      { action: "accept", filePath: testFile, timestamp: 1000 },
+      mockContext
+    )
+
+    await officecliTool.execute(
+      { action: "create", filePath: testFile, content: "v2" },
+      mockContext
+    )
+    await officecliTool.execute(
+      { action: "accept", filePath: testFile, timestamp: 2000 },
+      mockContext
+    )
+
+    const result = await officecliTool.execute(
+      { action: "history", filePath: testFile },
+      mockContext
+    )
+
+    // Output should be JSON-parseable
+    const jsonMatch = result.output.match(/\[[\s\S]*\]/)
+    expect(jsonMatch).toBeTruthy()
+    const history = JSON.parse(jsonMatch![0])
+    expect(history).toHaveLength(2)
+    expect(history[0]).toHaveProperty("timestamp")
+    expect(history[0]).toHaveProperty("sessionID")
+    expect(history[0].timestamp).toBe(1000)
+    expect(history[0].sessionID).toBe("test-session")
+    expect(history[1].timestamp).toBe(2000)
+  })
 })
