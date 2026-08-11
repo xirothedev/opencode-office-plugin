@@ -1,5 +1,5 @@
 import { tool, type ToolDefinition } from "@opencode-ai/plugin"
-import { createDraft, acceptDraft, undoDraft, getHistory, getDraftPath, draftExists } from "../../core/draft/manager.js"
+import { createDraft, acceptDraft, undoDraft, getHistory, getDraftPath, draftExists, getSnapshot } from "../../core/draft/manager.js"
 import { acquireLock, getLock, releaseLock } from "../../core/draft/lock.js"
 import { getFilePathHash } from "../../core/storage/paths.js"
 import { writeFileSync } from "fs"
@@ -36,7 +36,7 @@ export const officecliTool: ToolDefinition = tool({
       if (!lock || lock.sessionID !== sessionID) {
         return { output: "error: no active draft to accept" }
       }
-      acceptDraft(filePath, sessionID)
+      acceptDraft(filePath, sessionID, args.timestamp)
       return { output: `Accepted draft for ${filePath}` }
     }
 
@@ -79,6 +79,20 @@ export const officecliTool: ToolDefinition = tool({
       const filePathHash = getFilePathHash(filePath)
       const history = getHistory(filePathHash)
       return { output: `${history.length} accept-points for ${filePath}` }
+    }
+
+    if (action === "revert") {
+      if (!filePath || !args.timestamp) {
+        return { output: "error: revert requires filePath and timestamp" }
+      }
+      const filePathHash = getFilePathHash(filePath)
+      const snapshot = getSnapshot(filePathHash, args.timestamp)
+      if (!snapshot) {
+        return { output: "error: snapshot not found for timestamp" }
+      }
+      acquireLock(filePathHash, sessionID)
+      createDraft(filePath, sessionID, snapshot)
+      return { output: `Reverted to snapshot for ${filePath}` }
     }
 
     return { output: `error: action ${action} not implemented` }

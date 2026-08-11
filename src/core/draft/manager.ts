@@ -28,7 +28,7 @@ export function createDraft(absolutePath: string, sessionID: string, content: st
   writeFileSync(draftPath, content)
 }
 
-export function acceptDraft(absolutePath: string, sessionID: string): void {
+export function acceptDraft(absolutePath: string, sessionID: string, timestamp?: number): void {
   const filePathHash = getFilePathHash(absolutePath)
   const ext = extname(absolutePath)
   const draftPath = getDraftPath(filePathHash, sessionID, ext)
@@ -39,7 +39,7 @@ export function acceptDraft(absolutePath: string, sessionID: string): void {
   // Record accept-point
   const snapshot = readFileSync(draftPath, "utf-8")
   const acceptPoint: AcceptPoint = {
-    timestamp: Date.now(),
+    timestamp: timestamp ?? Date.now(),
     snapshot,
     sessionID,
   }
@@ -75,4 +75,10 @@ export function getHistory(filePathHash: string): AcceptPoint[] {
     return []
   }
   return JSON.parse(readFileSync(historyPath, "utf-8"))
+}
+
+export function getSnapshot(filePathHash: string, timestamp: number): string | null {
+  const history = getHistory(filePathHash)
+  const acceptPoint = history.find((ap) => ap.timestamp === timestamp)
+  return acceptPoint ? acceptPoint.snapshot : null
 }
