@@ -16,17 +16,17 @@ graph LR
 
 ## Install
 
-```bash
-opencode plug @openoffice/plugin
-```
-
-Or add to `opencode.json`:
+Add the package to the `plugin` array in opencode configuration — `opencode.json` in your project, or `~/.config/opencode/config.json` for all projects:
 
 ```json
 {
   "plugin": ["@openoffice/plugin"]
 }
 ```
+
+opencode installs the package and its dependencies on startup. For version pinning, local development install, verification, and troubleshooting, see [docs/INSTALL.md](docs/INSTALL.md).
+
+> **Note**: This plugin targets the opencode V1 plugin API. opencode 2's new plugin API is not supported yet — see [docs/INSTALL.md](docs/INSTALL.md).
 
 ## Requirements
 
@@ -142,11 +142,13 @@ Plugin data stored in `~/.local/share/opencode/plugins/openoffice/`:
 
 ## Documentation
 
+- [Install](docs/INSTALL.md) - Install the plugin in opencode (published + local dev)
 - [Design](docs/DESIGN.md) - Architecture and data schema
 - [Context](docs/CONTEXT.md) - Domain glossary
 - [Testing](docs/TESTING.md) - Local development guide
 - [Workflows](docs/WORKFLOWS.md) - Common usage patterns
 - [Full Flow](docs/FULL-FLOW.md) - End-to-end orchestration
+- [ADRs](docs/adr/) - Architecture decisions (CI/CD, opencode V1 target)
 
 ## License
 

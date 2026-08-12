@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest"
 import { officecliTool } from "../../../src/plugin/tools/officecli.js"
 import { getDraftsDir, getHistoryDir, getLocksDir, getFilePathHash } from "../../../src/core/storage/paths.js"
 import { mkdir, rm, readFile } from "fs/promises"
-import { acquireLock } from "../../../src/core/draft/lock.js"
 import { getDraftPath } from "../../../src/core/draft/manager.js"
 
 describe("officecli edit action", () => {

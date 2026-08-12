@@ -83,3 +83,11 @@ _Avoid_: audit, check, inspection
 **Lock status**:
 State of file lock: `acquired` (agent editing), `in-review` (user reviewing in Office), `stale` (timeout exceeded). Prevents concurrent edits during review workflow. Set via `setLockStatus()`.
 _Avoid_: lock state, lock mode
+
+**Release**:
+Version of the plugin published to the npm registry. Identified by a `v<semver>` git tag on the repository. Installing users reference a Release by name (`@openoffice/plugin@0.1.0`).
+_Avoid_: version, build
+
+**Publish**:
+Making a new Release available on the npm registry. Performed by CI when a release tag is pushed; never done by hand from a workstation.
+_Avoid_: deploy, ship

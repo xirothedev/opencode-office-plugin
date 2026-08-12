@@ -4,7 +4,7 @@ Office document automation plugin for opencode. Transparent draft lifecycle, loc
 
 ## Plugin Scope
 
-**Full plugin, no daemon**. Drop standalone daemon, wire protocol, binary release. Plugin = npm package `@openoffice/plugin`. Installed via `opencode plug @openoffice/plugin` or added to opencode.json `"plugin"` array.
+**Full plugin, no daemon**. Drop standalone daemon, wire protocol, binary release. Plugin = npm package `@openoffice/plugin`. Installed by adding it to the `"plugin"` array in opencode config (see docs/INSTALL.md). Targets the opencode V1 plugin API (ADR-0002).
 
 **Standalone**. This folder = plugin root. No monorepo, no symlinks to old openoffice project. Greenfield.
 
@@ -179,7 +179,11 @@ Office document automation for opencode.
 
 ## Install
 
-opencode plug @openoffice/plugin
+```json
+{
+  "plugin": ["@openoffice/plugin"]
+}
+```
 
 ## Usage
 
