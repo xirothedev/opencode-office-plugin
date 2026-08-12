@@ -2,16 +2,31 @@ import { getLocksDir, getFilePathHash } from "../storage/paths.js"
 import { readFileSync, writeFileSync, existsSync, unlinkSync } from "fs"
 import { join } from "path"
 
+export type LockStatus = "acquired" | "in-review" | "stale"
+
 interface Lock {
   sessionID: string
   touchedAt: number
+  status: LockStatus
 }
 
 const STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000 // 24 hours
 
 export function acquireLock(filePathHash: string, sessionID: string): void {
   const lockPath = join(getLocksDir(), `${filePathHash}.json`)
-  const lock: Lock = { sessionID, touchedAt: Date.now() }
+  const lock: Lock = { sessionID, touchedAt: Date.now(), status: "acquired" }
+  writeFileSync(lockPath, JSON.stringify(lock))
+}
+
+export function setLockStatus(filePathHash: string, status: LockStatus): void {
+  const lockPath = join(getLocksDir(), `${filePathHash}.json`)
+  if (!existsSync(lockPath)) {
+    return
+  }
+  const data = readFileSync(lockPath, "utf-8")
+  const lock = JSON.parse(data) as Lock
+  lock.status = status
+  lock.touchedAt = Date.now()
   writeFileSync(lockPath, JSON.stringify(lock))
 }
 

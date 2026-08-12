@@ -67,3 +67,19 @@ _Avoid_: office tool, document tool, doc tool
 **Edit override**:
 Plugin registers tool named `edit`, overrides opencode built-in. Checks lock, routes to draft transparently. Binary files (png/pdf/docx) → deny with error "use officecli for binary files". Agent thinks using `edit`, plugin enforces draft lifecycle.
 _Avoid_: edit interceptor, edit wrapper
+
+**Comment**:
+Annotation on document range. Stored in `word/comments.xml` with author, text, timestamp. Linked to document via `commentRangeStart`/`commentRangeEnd` markers. User sees in Word/Excel/PowerPoint comment panel. Agent adds via `officecli(action="comment")`.
+_Avoid_: annotation, note, remark
+
+**Track change**:
+Insertion or deletion with author attribution. Stored inline in `word/document.xml` as `<w:ins>`/`<w:del>` elements with author, timestamp, id. User accepts/rejects in Word's Review tab. Agent adds via `officecli(action="track-insert"|"track-delete")`.
+_Avoid_: revision, redline, edit marker
+
+**Review**:
+Read pending comments and track changes from document. Returns summary of all annotations and modifications awaiting user decision. Agent calls `officecli(action="review")` to see what user needs to review.
+_Avoid_: audit, check, inspection
+
+**Lock status**:
+State of file lock: `acquired` (agent editing), `in-review` (user reviewing in Office), `stale` (timeout exceeded). Prevents concurrent edits during review workflow. Set via `setLockStatus()`.
+_Avoid_: lock state, lock mode
