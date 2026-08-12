@@ -2,6 +2,18 @@
 
 Office document automation plugin for opencode. Manage documents with draft lifecycle, version history, and format conversion.
 
+## Overview
+
+```mermaid
+graph LR
+    A[User Prompt] --> B[Agent]
+    B --> C[officecli tool]
+    C --> D[Draft Lifecycle]
+    D --> E[Format Conversion]
+    E --> F[Real File]
+    F --> G[Version History]
+```
+
 ## Install
 
 ```bash
