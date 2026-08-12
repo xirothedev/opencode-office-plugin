@@ -20,9 +20,10 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@firecrawl/anydoc": "^0.1.8",
+    "@firecrawl/pdf-inspector": "^1.13.0",
     "@opencode-ai/plugin": "^1.18.16",
-    "pdfjs-dist": "^6.2.108",
-    "tesseract.js": "^7.0.0"
+    "pdfjs-dist": "^4.0.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

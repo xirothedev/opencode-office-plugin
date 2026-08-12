@@ -30,8 +30,8 @@ Or add to `opencode.json`:
 
 ## Requirements
 
-- **PDF extraction**: Built-in (pdfjs-dist)
-- **Image OCR**: Built-in (tesseract.js)
+- **PDF extraction**: Built-in (pdfjs-dist + pdf-inspector)
+- **Image OCR**: Built-in (anydoc)
 - **Office formats (DOCX/XLSX/PPTX)**: Requires [pandoc](https://pandoc.org/installing.html)
 
 ```bash
@@ -124,11 +124,11 @@ Creates draft from historical snapshot. Must `accept` to write.
 | Format | Read | Write | Backend |
 |--------|------|-------|---------|
 | Text (txt, md, etc.) | ✅ | ✅ | Native |
-| PDF | ✅ | ❌ | pdfjs-dist |
-| DOCX | ✅ | ✅ | pandoc |
-| XLSX | ✅ | ✅ | pandoc |
-| PPTX | ✅ | ✅ | pandoc |
-| Images (PNG, JPG) | ✅ | ❌ | tesseract.js |
+| PDF | ✅ | ❌ | pdfjs-dist + pdf-inspector |
+| DOCX | ✅ | ✅ | anydoc + pandoc |
+| XLSX | ✅ | ✅ | anydoc + pandoc |
+| PPTX | ✅ | ✅ | anydoc + pandoc |
+| Images (PNG, JPG) | ✅ | ❌ | anydoc |
 
 PDF and image extraction are read-only. Office formats support full read/write cycle.
 

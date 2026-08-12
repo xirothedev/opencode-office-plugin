@@ -1,9 +1,15 @@
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs"
+import { classifyPdfAsync } from "@firecrawl/pdf-inspector"
 import { readFileSync } from "fs"
 
 export async function extractTextFromPDF(absolutePath: string): Promise<string> {
   const buffer = readFileSync(absolutePath)
   const data = new Uint8Array(buffer)
+
+  // Classify PDF (metadata only, for future OCR routing)
+  await classifyPdfAsync(buffer).catch(() => null)
+
+  // Extract text using pdfjs-dist (reliable for text-based PDFs)
   const pdf = await getDocument({ data }).promise
   let fullText = ""
 
