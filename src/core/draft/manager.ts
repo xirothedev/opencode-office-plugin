@@ -1,5 +1,5 @@
 import { getDraftsDir, getHistoryDir, getFilePathHash } from "../storage/paths.js"
-import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync, copyFileSync } from "fs"
+import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync, copyFileSync, readdirSync } from "fs"
 import { join, dirname, extname } from "path"
 import { releaseLock } from "./lock.js"
 import { detectFormat } from "../format/detect.js"
@@ -18,7 +18,7 @@ export function getDraftPath(filePathHash: string, sessionID: string, ext: strin
 export function draftExists(filePathHash: string, sessionID: string): boolean {
   const draftDir = join(getDraftsDir(), filePathHash)
   if (!existsSync(draftDir)) return false
-  const files = require("fs").readdirSync(draftDir)
+  const files = readdirSync(draftDir)
   return files.some((f: string) => f.startsWith(sessionID))
 }
 

@@ -114,21 +114,7 @@ export const officecliTool: ToolDefinition = tool({
       // Return draft if exists, else real file
       if (draftExists(filePathHash, sessionID)) {
         const draftPath = getDraftPath(filePathHash, sessionID, ext)
-        if (format === "pdf") {
-          const content = await extractTextFromPDF(draftPath)
-          return { output: content }
-        }
-        if (format === "docx" || format === "xlsx" || format === "pptx") {
-          const content = await extractTextFromOffice(draftPath)
-          return { output: content }
-        }
-        if (format === "image") {
-          const content = await extractTextFromImage(draftPath)
-          return { output: content }
-        }
-        if (format !== "text") {
-          return { output: "error: format conversion not implemented for binary files" }
-        }
+        // Draft is always markdown, return as-is
         const content = readFileSync(draftPath, "utf-8")
         return { output: content }
       }
