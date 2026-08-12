@@ -29,7 +29,7 @@ Single tool with action enum. Agent picks action.
 tool({
   description: "Office document automation",
   args: {
-    action: tool.schema.enum(["create", "edit", "read", "accept", "undo", "revert", "history"]),
+    action: tool.schema.enum(["create", "edit", "read", "accept", "undo", "revert", "history", "comment", "track-insert", "track-delete", "list-comments", "review"]),
     filePath: tool.schema.string().optional(),
     content: tool.schema.string().optional(),
     timestamp: tool.schema.number().optional(), // for revert
@@ -48,6 +48,11 @@ tool({
 - `undo()` → discard draft, release lock
 - `revert(filePath, timestamp)` → create draft from snapshot, route through accept
 - `history(filePath)` → return `[{timestamp, sessionID, acceptPointIndex}]`
+- `comment(filePath, commentId, author, commentText, rangeStartParagraph, rangeStartOffset, rangeEndParagraph, rangeEndOffset)` → add comment to DOCX draft
+- `track-insert(filePath, commentId, author, content, paragraph, offset)` → add insertion track change to DOCX draft
+- `track-delete(filePath, commentId, author, content, paragraph, offset)` → add deletion track change to DOCX draft
+- `list-comments(filePath)` → return comments from DOCX
+- `review(filePath)` → return summary of comments and track changes from DOCX
 
 **Structured errors**:
 opencode's `ToolResult` type = `string | {output: string}`. Errors returned as `{output: "error: message"}`. Agent parses error string. No structured error codes (opencode plugin API doesn't support them).
@@ -99,7 +104,7 @@ tool({
     {filePathHash}/
       {sessionID}.{ext}  # binary copy for binary files, text for text files
   locks/
-    {filePathHash}.json  # {sessionID, touchedAt}
+    {filePathHash}.json  # {sessionID, touchedAt, status}
   history/
     {filePathHash}.json  # [{timestamp, snapshot, sessionID}]
 ```
@@ -121,7 +126,7 @@ tool({
     core/               # pure logic, no opencode deps
       draft/
         manager.ts      # DraftManager: create, read, write, accept, undo
-        lock.ts         # Lock: acquire, release, stale check, override
+        lock.ts         # Lock: acquire, release, stale check, override, setLockStatus
         history.ts      # VersionHistory: record, list, revert
       office/
         officecli.ts    # action routing, format detection
@@ -129,6 +134,10 @@ tool({
           pdf.ts        # pdf-inspector delegate
           office.ts     # anydoc delegate
           ocr.ts        # oocr delegate
+      format/
+        ooxml/
+          comments.ts      # OOXML comment writer/reader (word/comments.xml)
+          trackchanges.ts  # OOXML track changes writer/reader (w:ins/w:del)
       storage/
         paths.ts        # ~/.local/share/opencode/plugins/openoffice/...
     plugin/             # opencode adapter

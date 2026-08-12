@@ -51,7 +51,7 @@ export async function writeTrackChange(docPath: string, trackChange: TrackChange
     targetPara["w:r"] = [targetPara["w:r"]]
   }
 
-  // Create track change element
+  // Create track change element - OOXML: <w:ins>/<w:del> is sibling of <w:r> inside <w:p>, not child of <w:r>
   if (trackChange.type === "insertion") {
     const insElement = {
       $: {
@@ -63,7 +63,8 @@ export async function writeTrackChange(docPath: string, trackChange: TrackChange
         "w:t": trackChange.text,
       },
     }
-    targetPara["w:r"].push({ "w:ins": insElement })
+    // Add as sibling of w:r at paragraph level
+    targetPara["w:ins"] = insElement
   } else if (trackChange.type === "deletion") {
     const delElement = {
       $: {
@@ -75,7 +76,7 @@ export async function writeTrackChange(docPath: string, trackChange: TrackChange
         "w:delText": trackChange.text,
       },
     }
-    targetPara["w:r"].push({ "w:del": delElement })
+    targetPara["w:del"] = delElement
   }
 
   // Write back
@@ -115,39 +116,35 @@ export async function readTrackChanges(docPath: string): Promise<TrackChange[]> 
   const paragraphs = body["w:p"] ? (Array.isArray(body["w:p"]) ? body["w:p"] : [body["w:p"]]) : []
 
   paragraphs.forEach((para: any, paraIndex: number) => {
-    const runs = para["w:r"] ? (Array.isArray(para["w:r"]) ? para["w:r"] : [para["w:r"]]) : []
+    // Check for insertion at paragraph level (sibling of w:r)
+    if (para["w:ins"]) {
+      const ins = para["w:ins"]
+      const text = ins["w:r"]?.["w:t"] || ""
+      changes.push({
+        id: ins.$?.["w:id"] || ins.$?.id || "",
+        type: "insertion",
+        author: ins.$?.["w:author"] || ins.$?.author || "",
+        timestamp: new Date(ins.$?.["w:date"] || ins.$?.date || new Date()),
+        text: typeof text === "string" ? text : "",
+        paragraph: paraIndex,
+        offset: 0, // Simplified - real impl needs to parse position
+      })
+    }
 
-    runs.forEach((run: any) => {
-      // Check for insertion
-      if (run["w:ins"]) {
-        const ins = run["w:ins"]
-        const text = ins["w:r"]?.["w:t"] || ""
-        changes.push({
-          id: ins.$["w:id"] || ins.$.id,
-          type: "insertion",
-          author: ins.$["w:author"] || ins.$.author,
-          timestamp: new Date(ins.$["w:date"] || ins.$.date),
-          text: typeof text === "string" ? text : "",
-          paragraph: paraIndex,
-          offset: 0, // Simplified - real impl needs to parse position
-        })
-      }
-
-      // Check for deletion
-      if (run["w:del"]) {
-        const del = run["w:del"]
-        const text = del["w:r"]?.["w:delText"] || ""
-        changes.push({
-          id: del.$["w:id"] || del.$.id,
-          type: "deletion",
-          author: del.$["w:author"] || del.$.author,
-          timestamp: new Date(del.$["w:date"] || del.$.date),
-          text: typeof text === "string" ? text : "",
-          paragraph: paraIndex,
-          offset: 0,
-        })
-      }
-    })
+    // Check for deletion at paragraph level (sibling of w:r)
+    if (para["w:del"]) {
+      const del = para["w:del"]
+      const text = del["w:r"]?.["w:delText"] || ""
+      changes.push({
+        id: del.$?.["w:id"] || del.$?.id || "",
+        type: "deletion",
+        author: del.$?.["w:author"] || del.$?.author || "",
+        timestamp: new Date(del.$?.["w:date"] || del.$?.date || new Date()),
+        text: typeof text === "string" ? text : "",
+        paragraph: paraIndex,
+        offset: 0,
+      })
+    }
   })
 
   return changes
