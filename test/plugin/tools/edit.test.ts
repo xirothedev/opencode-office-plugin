@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest"
 import { editTool } from "../../../src/plugin/tools/edit.js"
 import { getDraftsDir, getHistoryDir, getLocksDir } from "../../../src/core/storage/paths.js"
 import { mkdir, rm } from "fs/promises"
-import { readFileSync, writeFileSync, existsSync } from "fs"
+import { writeFileSync, existsSync } from "fs"
 
 describe("edit tool", () => {
   const testFile = "/tmp/edit-test.txt"

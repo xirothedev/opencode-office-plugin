@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest"
-import { writeTrackChange, readTrackChanges } from "/Users/xirothedev/workspace/opencode-office-plugin/src/core/format/ooxml/trackchanges"
+import { writeTrackChange, readTrackChanges } from "../../../../src/core/format/ooxml/trackchanges"
 import { Document, Packer, Paragraph, TextRun } from "docx"
 import { writeFileSync, unlinkSync, mkdirSync, existsSync } from "fs"
 import { join } from "path"

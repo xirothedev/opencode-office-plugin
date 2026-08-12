@@ -5,11 +5,18 @@
   "type": "module",
   "main": "dist/plugin/index.js",
   "types": "dist/plugin/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "packageManager": "pnpm@11.9.0",
   "scripts": {
     "build": "tsc",
+    "prepublishOnly": "pnpm build",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint"
   },
   "keywords": [
     "opencode",
@@ -25,11 +32,14 @@
     "@opencode-ai/plugin": "^1.18.16",
     "@types/xml2js": "^0.4.14",
     "docx": "^9.7.1",
+    "jszip": "^3.10.1",
     "pdfjs-dist": "^4.0.0",
     "xml2js": "^0.6.2"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "@vitest/coverage-v8": "^2.1.0",
+    "oxlint": "^0.16.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
   }

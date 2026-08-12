@@ -96,9 +96,7 @@ ${b1}
 `
 }
 
-async function generateB3(input, deps) {
-  const b1 = deps.B1
-  const b2 = deps.B2
+async function generateB3(input) {
   return `# Technical Specifications
 
 ## References

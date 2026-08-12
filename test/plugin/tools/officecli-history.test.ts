@@ -1,12 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest"
 import { officecliTool } from "../../../src/plugin/tools/officecli.js"
-import { getDraftsDir, getHistoryDir, getLocksDir, getFilePathHash } from "../../../src/core/storage/paths.js"
+import { getDraftsDir, getHistoryDir, getLocksDir } from "../../../src/core/storage/paths.js"
 import { mkdir, rm } from "fs/promises"
-import { acquireLock } from "../../../src/core/draft/lock.js"
 
 describe("officecli history action", () => {
   const testFile = "/tmp/history-test.docx"
-  const testHash = getFilePathHash(testFile)
   const mockContext = {
     agent: "test-agent",
     sessionID: "test-session",
