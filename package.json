@@ -23,7 +23,10 @@
     "@firecrawl/anydoc": "^0.1.8",
     "@firecrawl/pdf-inspector": "^1.13.0",
     "@opencode-ai/plugin": "^1.18.16",
-    "pdfjs-dist": "^4.0.0"
+    "@types/xml2js": "^0.4.14",
+    "docx": "^9.7.1",
+    "pdfjs-dist": "^4.0.0",
+    "xml2js": "^0.6.2"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
