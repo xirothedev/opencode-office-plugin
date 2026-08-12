@@ -128,6 +128,14 @@ Plugin data stored in `~/.local/share/opencode/plugins/openoffice/`:
 - `locks/` - Session locks
 - `history/` - Version snapshots
 
+## Documentation
+
+- [Design](docs/DESIGN.md) - Architecture and data schema
+- [Context](docs/CONTEXT.md) - Domain glossary
+- [Testing](docs/TESTING.md) - Local development guide
+- [Workflows](docs/WORKFLOWS.md) - Common usage patterns
+- [Full Flow](docs/FULL-FLOW.md) - End-to-end orchestration
+
 ## License
 
 MIT
