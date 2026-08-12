@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest"
-import { writeComment, readComments } from "../../../../src/core/format/ooxml/comments"
+import { writeComment, readComments } from "@/core/format/ooxml/comments"
 import { Document, Packer, Paragraph, TextRun } from "docx"
 import { writeFileSync, unlinkSync, mkdirSync, existsSync } from "fs"
 import { join } from "path"

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { detectFormat } from "../../../src/core/format/detect.js"
+import { detectFormat } from "@/core/format/detect.js"
 
 describe("format detection", () => {
   it("detects PDF", () => {

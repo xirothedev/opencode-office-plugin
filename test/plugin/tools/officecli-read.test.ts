@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest"
-import { officecliTool } from "../../../src/plugin/tools/officecli.js"
-import { getDraftsDir, getHistoryDir, getLocksDir } from "../../../src/core/storage/paths.js"
+import { officecliTool } from "@/plugin/tools/officecli.js"
+import { getDraftsDir, getHistoryDir, getLocksDir } from "@/core/storage/paths.js"
 import { mkdir, rm, writeFile } from "fs/promises"
 
 describe("officecli read action", () => {
