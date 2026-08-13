@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest"
-import { officecliTool } from "../../../src/plugin/tools/officecli.ts"
-import { getDraftsDir, getHistoryDir, getLocksDir, getFilePathHash } from "../../../src/core/storage/paths.ts"
+import { officecliTool } from "../../../src/plugin/tools/officecli"
+import { getDraftsDir, getHistoryDir, getLocksDir, getFilePathHash } from "../../../src/core/storage/paths"
 import { mkdir, rm, readFile } from "fs/promises"
-import { getDraftPath } from "../../../src/core/draft/manager.ts"
+import { getDraftPath } from "../../../src/core/draft/manager"
 
 describe("officecli edit action", () => {
   const testFile = "/tmp/edit-test.docx"

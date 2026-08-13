@@ -1,4 +1,4 @@
-import { getLocksDir } from "../storage/paths.ts"
+import { getLocksDir } from "../storage/paths"
 import { readFileSync, writeFileSync, existsSync, unlinkSync } from "fs"
 import { join } from "path"
 

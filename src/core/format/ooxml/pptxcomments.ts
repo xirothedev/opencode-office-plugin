@@ -1,7 +1,7 @@
 import JSZip from "jszip"
 import { readFileSync, writeFileSync } from "fs"
 import { parseStringPromise, Builder } from "xml2js"
-import { addRelationship, ensureContentType, partRelsPath, parseSuggestion, readRelationships, SUGGESTED_TEXT_PREFIX } from "./parts.ts"
+import { addRelationship, ensureContentType, partRelsPath, parseSuggestion, readRelationships, SUGGESTED_TEXT_PREFIX } from "./parts"
 
 export interface PptxComment {
   id: string

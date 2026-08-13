@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
 /**
  * Full Flow Demo: Prompt → 23 Documents
@@ -10,12 +10,12 @@
  * 4. Chain execution (B1→B2→...→B23)
  * 5. Output files (all documents generated)
  *
- * Run: node examples/full-flow-demo.js
+ * Run: bun examples/full-flow-demo.js
  */
 
-import { officecliTool } from "../dist/plugin/tools/officecli.js"
+import { officecliTool } from "../dist/plugin/tools/officecli"
 import { mkdir, rm } from "fs/promises"
-import { getDraftsDir, getHistoryDir, getLocksDir } from "../dist/core/storage/paths.js"
+import { getDraftsDir, getHistoryDir, getLocksDir } from "../dist/core/storage/paths"
 
 const mockContext = {
   agent: "orchestrator",

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { substituteTemplate } from "../../../src/core/template/substitute.ts"
+import { substituteTemplate } from "../../../src/core/template/substitute"
 
 describe("substituteTemplate", () => {
   it("substitutes a single placeholder", () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { getPluginDataDir, getDraftsDir, getLocksDir, getHistoryDir, getFilePathHash } from "../../../src/core/storage/paths.ts"
+import { getPluginDataDir, getDraftsDir, getLocksDir, getHistoryDir, getFilePathHash } from "../../../src/core/storage/paths"
 
 describe("paths", () => {
   it("computes plugin data dir", () => {

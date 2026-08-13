@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest"
-import { officecliTool } from "../../../src/plugin/tools/officecli.ts"
+import { officecliTool } from "../../../src/plugin/tools/officecli"
 import { copyFile, rm } from "fs/promises"
 import { join } from "path"
 

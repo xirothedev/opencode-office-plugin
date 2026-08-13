@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest"
-import { officecliTool } from "../../../src/plugin/tools/officecli.ts"
-import { getDraftsDir, getHistoryDir, getLocksDir, getFilePathHash } from "../../../src/core/storage/paths.ts"
+import { officecliTool } from "../../../src/plugin/tools/officecli"
+import { getDraftsDir, getHistoryDir, getLocksDir, getFilePathHash } from "../../../src/core/storage/paths"
 import { mkdir, rm } from "fs/promises"
-import { getLock } from "../../../src/core/draft/lock.ts"
+import { getLock } from "../../../src/core/draft/lock"
 
 describe("officecli undo action", () => {
   const testFile = "/tmp/undo-test.docx"

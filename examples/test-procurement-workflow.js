@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
 /**
  * Test: Procurement Workflow (3-step chain)
@@ -6,12 +6,12 @@
  * Demonstrates document chain generation:
  * B1: Purchase request → B2: Approval decision → B3: Technical specs
  *
- * Run: node examples/test-procurement-workflow.js
+ * Run: bun examples/test-procurement-workflow.js
  */
 
-import { officecliTool } from "../dist/plugin/tools/officecli.js"
+import { officecliTool } from "../dist/plugin/tools/officecli"
 import { mkdir, rm } from "fs/promises"
-import { getDraftsDir, getHistoryDir, getLocksDir } from "../dist/core/storage/paths.js"
+import { getDraftsDir, getHistoryDir, getLocksDir } from "../dist/core/storage/paths"
 import { existsSync } from "fs"
 
 const mockContext = {

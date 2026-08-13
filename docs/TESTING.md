@@ -83,7 +83,7 @@
 
 Run the example:
 ```bash
-node examples/basic-usage.js
+bun examples/basic-usage.js
 ```
 
 This test all actions without opencode.
@@ -105,10 +105,10 @@ This test all actions without opencode.
 
 ## Manual tool invocation
 
-Test tool directly in Node:
+Test tool directly in Bun:
 
 ```javascript
-import { officecliTool } from "./dist/plugin/tools/officecli.js"
+import { officecliTool } from "./dist/plugin/tools/officecli"
 
 const result = await officecliTool.execute(
   { action: "read", filePath: "/tmp/test.docx" },

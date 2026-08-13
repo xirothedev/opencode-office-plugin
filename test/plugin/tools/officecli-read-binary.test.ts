@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest"
-import { officecliTool } from "../../../src/plugin/tools/officecli.ts"
-import { getDraftsDir, getHistoryDir, getLocksDir } from "../../../src/core/storage/paths.ts"
+import { officecliTool } from "../../../src/plugin/tools/officecli"
+import { getDraftsDir, getHistoryDir, getLocksDir } from "../../../src/core/storage/paths"
 import { mkdir, rm, writeFile } from "fs/promises"
 
 describe("officecli read binary file", () => {

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
-import { officecliTool } from "../../../src/plugin/tools/officecli.ts"
-import { getDraftsDir, getHistoryDir, getLocksDir, getFilePathHash } from "../../../src/core/storage/paths.ts"
+import { officecliTool } from "../../../src/plugin/tools/officecli"
+import { getDraftsDir, getHistoryDir, getLocksDir, getFilePathHash } from "../../../src/core/storage/paths"
 import { mkdir, rm } from "fs/promises"
 import { existsSync } from "fs"
 import { tmpdir } from "os"

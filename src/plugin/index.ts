@@ -1,6 +1,6 @@
 import type { Plugin } from "@opencode-ai/plugin"
-import { officecliTool } from "./tools/officecli.ts"
-import { editTool } from "./tools/edit.ts"
+import { officecliTool } from "./tools/officecli"
+import { editTool } from "./tools/edit"
 
 export const OpenOfficePlugin: Plugin = async (_ctx) => {
   return {
