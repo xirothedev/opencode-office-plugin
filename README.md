@@ -115,7 +115,7 @@ Creates draft from historical snapshot. Must `accept` to write.
 
 **Lock system**: First mutating action (`create`/`edit`) acquires lock. Lock prevents concurrent edits from different sessions. Released on `accept` or `undo`.
 
-**Format conversion**: Binary formats (PDF/DOCX/XLSX/PPTX/images) automatically converted to markdown for reading, and from markdown for writing. Text files handled directly.
+**Format conversion**: Binary formats (PDF/DOCX/XLSX/PPTX/images) automatically converted to markdown for reading, and from markdown for writing (PDF via pandoc + xelatex). Text files handled directly.
 
 **Version history**: Each `accept` records snapshot with timestamp. Use `history` to view, `revert` to restore.
 
@@ -124,13 +124,13 @@ Creates draft from historical snapshot. Must `accept` to write.
 | Format | Read | Write | Backend |
 |--------|------|-------|---------|
 | Text (txt, md, etc.) | ✅ | ✅ | Native |
-| PDF | ✅ | ❌ | pdfjs-dist + pdf-inspector |
+| PDF | ✅ | ✅ | pandoc + xelatex (read: pdfjs-dist + pdf-inspector) |
 | DOCX | ✅ | ✅ | anydoc + pandoc |
 | XLSX | ✅ | ✅ | anydoc + pandoc |
 | PPTX | ✅ | ✅ | anydoc + pandoc |
 | Images (PNG, JPG) | ✅ | ❌ | anydoc |
 
-PDF and image extraction are read-only. Office formats support full read/write cycle.
+Image extraction is read-only. PDF and Office formats support full read/write cycle. PDF write requires a LaTeX engine (xelatex); override with the `OFFICECLI_PDF_ENGINE` environment variable (e.g. `typst`).
 
 ## Data storage
 
@@ -139,6 +139,7 @@ Plugin data stored in `~/.local/share/opencode/plugins/openoffice/`:
 - `drafts/` - Active draft files
 - `locks/` - Session locks
 - `history/` - Version snapshots
+- `registry/` - Registry of draft file paths keyed by hash (powers `list`)
 
 ## Documentation
 

@@ -17,7 +17,7 @@ Office document automation plugin for opencode. Transparent draft lifecycle, loc
 ## Language
 
 **Draft**:
-Working copy of file agent edits. Real file untouched until accept. Keyed by `filePathHash/sessionID.{ext}`. Binary files (docx/xlsx/pdf) stored as binary copy. Can exist without real file (new documents born as drafts).
+Working copy of file agent edits. Real file untouched until accept. Keyed by `filePathHash/sessionID.{ext}`. Stored as the agent's markdown content regardless of target format; binary formats (docx/xlsx/pptx/pdf) are produced at Accept by conversion. Can exist without real file (new documents born as drafts).
 _Avoid_: copy, working file, temp file
 
 **Lock**:
@@ -45,24 +45,40 @@ File's ordered list of accept-points. Keyed by `filePathHash`. Any session can l
 _Avoid_: log, audit trail
 
 **Preview**:
-Before/after screenshot comparison shown after mutating edit. Before = untouched real file. After = draft's current state. Cumulative since last accept, not incremental per edit.
-_Avoid_: diff, comparison
+Before/after screenshot comparison shown after mutating edit. Before = untouched real file. After = draft's current state. Cumulative since last accept, not incremental per edit. User-facing; agent-facing equivalent is Diff.
+_Avoid_: comparison, screenshot
 
 **Snapshot**:
 Recorded copy of file's state at accept-point. Source revert restores from. "Before" in previews.
 _Avoid_: copy, backup, old version
 
 **filePathHash**:
-SHA256 of absolute file path. Deterministic key for drafts/locks/history. Enables cross-session discovery.
+SHA256 of absolute file path. Deterministic key for drafts/locks/history. Enables cross-session discovery. One-way: the Registry maps hashes back to paths.
 _Avoid_: file ID, path key
+
+**Registry**:
+Storage index `registry/{filePathHash}.json` mapping hash → absolute path. Written when a Draft is created, pruned when the draft is accepted or undone. Exists because hashes are one-way and locks can be released while a draft survives (Orphaned draft), so the path must outlive the lock. Powers the `list` action.
+_Avoid_: path index, path map
 
 **Orphaned draft**:
 Draft whose session lost lock (stale override) or ended without accept/discard. Discoverable by file-keyed orphan scan. Resolvable only through accept-or-discard prompt. Never deleted silently.
 _Avoid_: abandoned draft, lost edits
 
 **officecli**:
-Single tool with action enum. Actions: create, edit, read, accept, undo, revert, history. `read` returns markdown (delegates to pdf-inspector/anydoc/oocr). `history` returns metadata list. Delegates to format-specific backends internally. Enforces draft lifecycle via edit tool override.
+Single tool with action enum. Actions: create, edit, read, accept, undo, revert, history, list, diff, generate (plus comment, track-change, review, approve). `read` returns markdown (delegates to pdf-inspector/anydoc/oocr). `history` returns metadata list. `list` returns active drafts across files. `diff` returns the markdown Diff. `generate` produces drafts from a Template. Delegates to format-specific backends internally. Enforces draft lifecycle via edit tool override.
 _Avoid_: office tool, document tool, doc tool
+
+**Template**:
+Ordinary markdown (or other readable) file containing `{{var}}` placeholders, used as input to `generate`. Not a plugin-managed library — a Template is any file on disk the agent points at.
+_Avoid_: template library, form
+
+**Generate**:
+`officecli(action="generate", templatePath, data|dataArray, filePath|filePaths)`. Loads a Template, substitutes `{{var}}` placeholders from structured data, and creates one Draft per data entry through the normal draft lifecycle. Missing key in data → error listing the missing keys; nothing silently empties.
+_Avoid_: render, instantiate, fill
+
+**Diff**:
+Markdown text comparison between Draft and real file, produced by `officecli(action="diff", filePath)`. Base = real file's current state, extracted to markdown for binary formats. Output = unified text. Called before Accept to review changes. Agent-facing; user-facing equivalent is Preview.
+_Avoid_: comparison, changes report
 
 **Edit override**:
 Plugin registers tool named `edit`, overrides opencode built-in. Checks lock, routes to draft transparently. Binary files (png/pdf/docx) → deny with error "use officecli for binary files". Agent thinks using `edit`, plugin enforces draft lifecycle.
