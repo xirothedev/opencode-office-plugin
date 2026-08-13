@@ -34,7 +34,7 @@ export const editTool: ToolDefinition = tool({
 
     // Acquire lock if needed
     if (!lock) {
-      acquireLock(filePathHash, sessionID)
+      acquireLock(filePathHash, sessionID, context.agent)
     }
 
     // Copy real file to draft if first edit

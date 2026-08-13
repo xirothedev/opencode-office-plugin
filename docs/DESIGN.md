@@ -29,7 +29,7 @@ Single tool with action enum. Agent picks action.
 tool({
   description: "Office document automation",
   args: {
-    action: tool.schema.enum(["create", "edit", "read", "accept", "undo", "revert", "history", "comment", "track-insert", "track-delete", "list-comments", "review"]),
+    action: tool.schema.enum(["create", "edit", "read", "accept", "undo", "revert", "history", "list", "diff", "generate", "preview", "validate", "lock-status", "force-release", "comment", "track-insert", "track-delete", "list-comments", "review", "approve"]),
     filePath: tool.schema.string().optional(),
     content: tool.schema.string().optional(),
     timestamp: tool.schema.number().optional(), // for revert
@@ -48,6 +48,13 @@ tool({
 - `undo()` → discard draft, release lock
 - `revert(filePath, timestamp)` → create draft from snapshot, route through accept
 - `history(filePath)` → return `[{timestamp, sessionID, acceptPointIndex}]`
+- `list(filePath?)` → return active drafts across files (with `lockStatus`, `orphaned`, `ageSeconds` per draft)
+- `diff(filePath)` → return markdown text comparison between draft and real file
+- `generate(templatePath, data|dataArray, filePath|filePaths)` → create drafts from template; batch mode validates all entries before creating any
+- `preview(filePath)` → render draft markdown to HTML via pandoc, return output path
+- `validate(filePath, rules)` → check draft content against `{type: "regex"|"required", pattern}` rules, return per-rule pass/fail report
+- `lock-status(filePath)` → return lock details (sessionID, owner, status, stale, touchedAt)
+- `force-release(filePath)` → take over a lock, only when it is stale
 - `comment(filePath, commentId, author, commentText, rangeStartParagraph, rangeStartOffset, rangeEndParagraph, rangeEndOffset)` → add comment to DOCX draft; for XLSX pass `cellRef` instead, for PPTX pass `slide` (optional `x`/`y` in EMU). Optional `suggestedText` turns it into a content-changing suggestion (marker stored in the comment text)
 - `approve(filePath, commentId)` → apply a suggestion to the draft content (DOCX: paragraph text, XLSX: cell value, PPTX: first text box) and remove the comment. Errors: comment not found / has no suggestion
 - `track-insert(filePath, commentId, author, content, paragraph, offset)` → add insertion track change to DOCX draft (DOCX only)
@@ -55,7 +62,7 @@ tool({
 - `list-comments(filePath)` → return comments from DOCX/XLSX/PPTX (with `suggestedText` when present)
 - `review(filePath)` → return summary of comments (all formats) and track changes (DOCX only)
 
-**Structured errors**:
+**String errors**:
 opencode's `ToolResult` type = `string | {output: string}`. Errors returned as `{output: "error: message"}`. Agent parses error string. No structured error codes (opencode plugin API doesn't support them).
 
 ```typescript
@@ -235,7 +242,7 @@ See CONTEXT.md for canonical terms: Draft, Lock, Accept, Undo, Revert, Accept-po
 - Single write path: real file written only by Accept
 - Lock = claim (not mutex)
 - Lazy acquire on first mutating command
-- Structured errors with codes
+- String errors returned as `error: message` (no structured codes)
 - Binary drafts for binary files
 - Hardcoded 24h stale threshold
 - history returns metadata list, not full snapshots
