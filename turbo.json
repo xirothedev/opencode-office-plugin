@@ -1,6 +1,10 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "cacheDir": ".turbo/cache",
+  "remoteCache": {
+    "enabled": true,
+    "signature": false
+  },
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
