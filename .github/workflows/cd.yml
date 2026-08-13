@@ -13,16 +13,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
       - uses: actions/setup-node@v7
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
+      - run: bun install --frozen-lockfile
       - name: Set version from tag
-        run: pnpm version ${GITHUB_REF_NAME#v} --no-git-tag-version
+        run: npm version ${GITHUB_REF_NAME#v} --no-git-tag-version
       - name: Publish to npm
-        run: pnpm publish --provenance --access public --no-git-checks
+        run: npm publish --provenance --access public --no-git-checks
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

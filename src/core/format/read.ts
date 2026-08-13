@@ -1,8 +1,8 @@
 import { readFileSync } from "fs"
-import { detectFormat } from "./detect"
-import { extractTextFromPDF } from "./backends/pdf"
-import { extractTextFromImage } from "./backends/image"
-import { extractTextFromOffice } from "./backends/office"
+import { detectFormat } from "@/core/format/detect"
+import { extractTextFromPDF } from "@/core/format/backends/pdf"
+import { extractTextFromImage } from "@/core/format/backends/image"
+import { extractTextFromOffice } from "@/core/format/backends/office"
 
 export async function readRealFileAsMarkdown(filePath: string): Promise<string> {
   const format = detectFormat(filePath)

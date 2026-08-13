@@ -1,11 +1,11 @@
-import { getDraftsDir, getHistoryDir, getFilePathHash } from "../storage/paths"
-import { registerDraft, unregisterDraft, getRegisteredPath } from "../storage/registry"
+import { getDraftsDir, getHistoryDir, getFilePathHash } from "@/core/storage/paths"
+import { registerDraft, unregisterDraft, getRegisteredPath } from "@/core/storage/registry"
 import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync, copyFileSync, readdirSync, statSync } from "fs"
 import { join, dirname, extname } from "path"
-import { releaseLock, getLock, isLockStale, type LockStatus } from "./lock"
-import { detectFormat } from "../format/detect"
-import { writeOfficeFromMarkdown } from "../format/backends/office"
-import { writePdfFromMarkdown } from "../format/backends/pdf"
+import { releaseLock, getLock, isLockStale, type LockStatus } from "@/core/draft/lock"
+import { detectFormat } from "@/core/format/detect"
+import { writeOfficeFromMarkdown } from "@/core/format/backends/office"
+import { writePdfFromMarkdown } from "@/core/format/backends/pdf"
 
 interface AcceptPoint {
   timestamp: number

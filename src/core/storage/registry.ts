@@ -1,4 +1,4 @@
-import { getRegistryDir, getFilePathHash } from "./paths"
+import { getRegistryDir, getFilePathHash } from "@/core/storage/paths"
 import { readFileSync, writeFileSync, existsSync, unlinkSync, mkdirSync } from "fs"
 import { join, dirname } from "path"
 

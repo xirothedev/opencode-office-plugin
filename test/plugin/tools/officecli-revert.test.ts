@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest"
-import { officecliTool } from "../../../src/plugin/tools/officecli"
-import { getDraftsDir, getHistoryDir, getLocksDir, getFilePathHash } from "../../../src/core/storage/paths"
+import { officecliTool } from "@/plugin/tools/officecli"
+import { getDraftsDir, getHistoryDir, getLocksDir, getFilePathHash } from "@/core/storage/paths"
 import { mkdir, rm, readFile } from "fs/promises"
-import { getDraftPath } from "../../../src/core/draft/manager"
+import { getDraftPath } from "@/core/draft/manager"
 
 describe("officecli revert action", () => {
   const testFile = "/tmp/revert-test.docx"

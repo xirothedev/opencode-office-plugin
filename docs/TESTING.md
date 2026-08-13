@@ -4,12 +4,12 @@
 
 1. **Build plugin**
    ```bash
-   pnpm build
+   bun run build
    ```
 
 2. **Create global link**
    ```bash
-   pnpm link --global
+   bun link --global
    ```
 
 3. **Configure opencode**
@@ -24,7 +24,7 @@
 4. **Link in opencode's directory**
    ```bash
    cd ~/.opencode
-   pnpm link @openoffice/plugin --global
+   bun link @openoffice/plugin --global
    ```
 
 5. **Start opencode**
@@ -65,7 +65,7 @@
 
 4. **Link plugin**
    ```bash
-   pnpm link @openoffice/plugin --global
+   bun link @openoffice/plugin --global
    ```
 
 5. **Start opencode**
@@ -92,7 +92,7 @@ This test all actions without opencode.
 
 **Plugin not loading?**
 - Check `opencode` output for plugin errors
-- Verify `pnpm build` succeeded
+- Verify `bun run build` succeeded
 - Check `dist/` directory exist
 
 **pandoc errors?**
@@ -122,15 +122,15 @@ console.log(result.output)
 
 Run test suite:
 ```bash
-pnpm test
+bun run test
 ```
 
 Watch mode:
 ```bash
-pnpm test:watch
+bun run test:watch
 ```
 
 Specific test:
 ```bash
-pnpm test officecli-read-pdf
+bun run test officecli-read-pdf
 ```

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest"
-import { getRegistryDir, getFilePathHash } from "../../../src/core/storage/paths"
-import { registerDraft, unregisterDraft, getRegisteredPath } from "../../../src/core/storage/registry"
+import { getRegistryDir, getFilePathHash } from "@/core/storage/paths"
+import { registerDraft, unregisterDraft, getRegisteredPath } from "@/core/storage/registry"
 import { mkdir, rm } from "fs/promises"
 
 describe("draft registry", () => {
