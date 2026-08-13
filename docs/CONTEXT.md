@@ -69,11 +69,11 @@ Plugin registers tool named `edit`, overrides opencode built-in. Checks lock, ro
 _Avoid_: edit interceptor, edit wrapper
 
 **Comment**:
-Annotation on document range. Stored in `word/comments.xml` with author, text, timestamp. Linked to document via `commentRangeStart`/`commentRangeEnd` markers. User sees in Word/Excel/PowerPoint comment panel. Agent adds via `officecli(action="comment")`.
+Annotation on a document range, cell, or slide. DOCX stored in `word/comments.xml` with author, text, timestamp, linked to document via `commentRangeStart`/`commentRangeEnd` markers. XLSX stored in `xl/comments1.xml` with VML note boxes anchored to a cell. PPTX stored in `ppt/comments/comment1.xml` anchored to a slide, authors in `ppt/commentAuthors.xml`. User sees in Word/Excel/PowerPoint comment panel. Agent adds via `officecli(action="comment")`.
 _Avoid_: annotation, note, remark
 
 **Track change**:
-Insertion or deletion with author attribution. Stored inline in `word/document.xml` as `<w:ins>`/`<w:del>` elements with author, timestamp, id. User accepts/rejects in Word's Review tab. Agent adds via `officecli(action="track-insert"|"track-delete")`.
+Insertion or deletion with author attribution. Stored inline in `word/document.xml` as `<w:ins>`/`<w:del>` elements with author, timestamp, id. DOCX only — the OOXML spec defines no track changes format for XLSX/PPTX (Excel's legacy Track Changes was removed, PowerPoint never had it). User accepts/rejects in Word's Review tab. Agent adds via `officecli(action="track-insert"|"track-delete")`; for XLSX/PPTX the action returns an error and `comment` is the review path.
 _Avoid_: revision, redline, edit marker
 
 **Review**:

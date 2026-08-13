@@ -14,12 +14,17 @@ Agent creates draft with **comments** (suggestions) and **track changes** (inser
 
 ## Supported Formats
 
-- **DOCX**: Full support (comments + track changes)
-- **XLSX/PPTX**: Planned (phase 2)
+- **DOCX**: Full support (comments + track changes via `w:ins`/`w:del`)
+- **XLSX**: Comments only (legacy `xl/comments1.xml` + VML note boxes; Excel has no track changes format)
+- **PPTX**: Comments only (`ppt/comments/comment1.xml` + `ppt/commentAuthors.xml`; PowerPoint has no track changes format)
+
+`track-insert`/`track-delete` return an error for XLSX/PPTX — use `comment` for review feedback there.
 
 ## API Actions
 
 ### Add Comment
+
+DOCX (range-based):
 
 ```javascript
 officecli({
@@ -32,6 +37,34 @@ officecli({
   rangeStartOffset: 10,
   rangeEndParagraph: 5,
   rangeEndOffset: 25,
+})
+```
+
+XLSX (cell-based):
+
+```javascript
+officecli({
+  action: "comment",
+  filePath: "/path/to/table.xlsx",
+  commentId: "comment-1",
+  author: "AI Agent",
+  commentText: "Amount exceeds budget",
+  cellRef: "B4",
+})
+```
+
+PPTX (slide-based):
+
+```javascript
+officecli({
+  action: "comment",
+  filePath: "/path/to/deck.pptx",
+  commentId: "comment-1",
+  author: "AI Agent",
+  commentText: "Add diagram to clarify",
+  slide: 0,
+  x: 100000,
+  y: 200000,
 })
 ```
 
@@ -166,7 +199,11 @@ Stakeholder reviews policies, comments on governance issues, tracks revisions.
 
 ### OOXML Structure
 
-**Comments** stored in `word/comments.xml`:
+**Comments** stored per format:
+- DOCX: `word/comments.xml` (as below)
+- XLSX: `xl/comments1.xml` + VML note shapes in `xl/drawings/vmlDrawing1.vml`, linked from the sheet via `<legacyDrawing/>` and rels
+- PPTX: `ppt/comments/comment1.xml` + author list in `ppt/commentAuthors.xml`, linked from the slide via rels
+
 ```xml
 <w:comments>
   <w:comment w:id="comment-1" w:author="AI Agent" w:date="2026-08-12T10:30:00Z">
@@ -208,8 +245,9 @@ Stakeholder reviews policies, comments on governance issues, tracks revisions.
 
 ## Limitations
 
-- DOCX only (XLSX/PPTX planned for phase 2)
+- Track changes are DOCX-only (`w:ins`/`w:del` is a Word OOXML feature; Excel/PowerPoint have no equivalent)
 - Character-level positioning simplified (paragraph-level accuracy)
+- XLSX/PPTX comments are cell/slide-anchored, not text-range-anchored
 - No real-time collaboration (lock-based)
 - Complex formatting may not round-trip perfectly
 
@@ -218,5 +256,4 @@ Stakeholder reviews policies, comments on governance issues, tracks revisions.
 - Threaded comment replies
 - Comment resolution tracking
 - Multi-author support with author filtering
-- XLSX/PPTX support
 - Real-time collaboration (CRDT-based)

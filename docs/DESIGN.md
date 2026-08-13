@@ -48,11 +48,11 @@ tool({
 - `undo()` → discard draft, release lock
 - `revert(filePath, timestamp)` → create draft from snapshot, route through accept
 - `history(filePath)` → return `[{timestamp, sessionID, acceptPointIndex}]`
-- `comment(filePath, commentId, author, commentText, rangeStartParagraph, rangeStartOffset, rangeEndParagraph, rangeEndOffset)` → add comment to DOCX draft
-- `track-insert(filePath, commentId, author, content, paragraph, offset)` → add insertion track change to DOCX draft
-- `track-delete(filePath, commentId, author, content, paragraph, offset)` → add deletion track change to DOCX draft
-- `list-comments(filePath)` → return comments from DOCX
-- `review(filePath)` → return summary of comments and track changes from DOCX
+- `comment(filePath, commentId, author, commentText, rangeStartParagraph, rangeStartOffset, rangeEndParagraph, rangeEndOffset)` → add comment to DOCX draft; for XLSX pass `cellRef` instead, for PPTX pass `slide` (optional `x`/`y` in EMU)
+- `track-insert(filePath, commentId, author, content, paragraph, offset)` → add insertion track change to DOCX draft (DOCX only)
+- `track-delete(filePath, commentId, author, content, paragraph, offset)` → add deletion track change to DOCX draft (DOCX only)
+- `list-comments(filePath)` → return comments from DOCX/XLSX/PPTX
+- `review(filePath)` → return summary of comments (all formats) and track changes (DOCX only)
 
 **Structured errors**:
 opencode's `ToolResult` type = `string | {output: string}`. Errors returned as `{output: "error: message"}`. Agent parses error string. No structured error codes (opencode plugin API doesn't support them).
@@ -136,8 +136,11 @@ tool({
           ocr.ts        # oocr delegate
       format/
         ooxml/
-          comments.ts      # OOXML comment writer/reader (word/comments.xml)
-          trackchanges.ts  # OOXML track changes writer/reader (w:ins/w:del)
+          parts.ts          # shared OOXML helpers (rels, content types, XML escaping)
+          comments.ts       # OOXML comment writer/reader (word/comments.xml)
+          trackchanges.ts   # OOXML track changes writer/reader (w:ins/w:del)
+          xlsxcomments.ts   # XLSX comment writer/reader (xl/comments1.xml + VML)
+          pptxcomments.ts   # PPTX comment writer/reader (ppt/comments + commentAuthors)
       storage/
         paths.ts        # ~/.local/share/opencode/plugins/openoffice/...
     plugin/             # opencode adapter
