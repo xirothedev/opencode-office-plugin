@@ -1,6 +1,7 @@
 import JSZip from "jszip"
 import { readFileSync, writeFileSync } from "fs"
 import { parseStringPromise, Builder } from "xml2js"
+import { SUGGESTED_TEXT_PREFIX, parseSuggestion } from "./parts.js"
 
 export interface Comment {
   id: string
@@ -11,7 +12,10 @@ export interface Comment {
   rangeEnd: { paragraph: number; offset: number }
   parentId: string | null
   resolved: boolean
+  suggestedText?: string | null
 }
+
+export type ApproveResult = "applied" | "not-found" | "no-suggestion"
 
 export async function writeComment(docPath: string, comment: Comment): Promise<void> {
   const data = readFileSync(docPath)
@@ -43,6 +47,9 @@ export async function writeComment(docPath: string, comment: Comment): Promise<v
   }
 
   // Add comment to comments.xml
+  const storedText = comment.suggestedText
+    ? `${SUGGESTED_TEXT_PREFIX}${comment.suggestedText}`
+    : comment.text
   const commentElement = {
     $: {
       "w:id": comment.id,
@@ -52,7 +59,7 @@ export async function writeComment(docPath: string, comment: Comment): Promise<v
     },
     "w:p": {
       "w:r": {
-        "w:t": comment.text,
+        "w:t": storedText,
       },
     },
   }
@@ -128,7 +135,7 @@ export async function writeComment(docPath: string, comment: Comment): Promise<v
       })
     }
 
-    const newDocXml = builder.buildObject(docObj)
+    const newDocXml = new Builder().buildObject(docObj)
     zip.file("word/document.xml", newDocXml)
   }
 
@@ -170,6 +177,75 @@ export async function readComments(docPath: string): Promise<Comment[]> {
       rangeEnd: { paragraph: 0, offset: 0 },
       parentId: null,
       resolved: false,
+      suggestedText: parseSuggestion(typeof text === "string" ? text : "", SUGGESTED_TEXT_PREFIX),
     }
   })
+}
+
+export async function applyCommentSuggestion(docPath: string, commentId: string): Promise<ApproveResult> {
+  const data = readFileSync(docPath)
+  const zip = await JSZip.loadAsync(data)
+
+  const commentsFile = zip.file("word/comments.xml")
+  if (!commentsFile) {
+    return "not-found"
+  }
+  const commentsContent = await commentsFile.async("string")
+  const commentsObj = await parseStringPromise(commentsContent, { explicitArray: false })
+  const commentsRoot = commentsObj.comments || commentsObj["w:comments"]
+  const commentElements = commentsRoot?.comment
+    ? Array.isArray(commentsRoot.comment)
+      ? commentsRoot.comment
+      : [commentsRoot.comment]
+    : []
+  const target = commentElements.find(
+    (c: any) => c.$?.["w:id"] === commentId || c.$?.id === commentId
+  )
+  if (!target) {
+    return "not-found"
+  }
+  const commentText = target["w:p"]?.["w:r"]?.["w:t"] || ""
+  const suggestion = parseSuggestion(commentText, SUGGESTED_TEXT_PREFIX)
+  if (suggestion === null) {
+    return "no-suggestion"
+  }
+
+  const documentXml = zip.file("word/document.xml")
+  if (!documentXml) {
+    throw new Error("document.xml not found in DOCX")
+  }
+  const docContent = await documentXml.async("string")
+  const docObj = await parseStringPromise(docContent, { explicitArray: false })
+  const root = docObj.document || docObj["w:document"]
+  const body = root?.body || root?.["w:body"]
+  const paragraphs = body?.["w:p"] ? (Array.isArray(body["w:p"]) ? body["w:p"] : [body["w:p"]]) : []
+  const targetPara = paragraphs.find((para: any) =>
+    (Array.isArray(para["w:r"]) ? para["w:r"] : para["w:r"] ? [para["w:r"]] : []).some(
+      (r: any) =>
+        r["w:commentRangeStart"] &&
+        (r["w:commentRangeStart"].$?.["w:id"] === commentId ||
+          r["w:commentRangeStart"].$?.id === commentId)
+    )
+  )
+  if (!targetPara) {
+    return "not-found"
+  }
+
+  targetPara["w:r"] = { "w:r": { "w:t": suggestion } }
+  const newDocXml = new Builder().buildObject(docObj)
+  zip.file("word/document.xml", newDocXml)
+
+  commentsRoot.comment = commentElements.filter(
+    (c: any) => c !== target
+  )
+  const newCommentsXml = new Builder({
+    rootName: "w:comments",
+    headless: false,
+    xmldec: { version: "1.0", encoding: "UTF-8", standalone: true },
+  }).buildObject(commentsRoot)
+  zip.file("word/comments.xml", newCommentsXml)
+
+  const buffer = await zip.generateAsync({ type: "nodebuffer" })
+  writeFileSync(docPath, buffer)
+  return "applied"
 }
