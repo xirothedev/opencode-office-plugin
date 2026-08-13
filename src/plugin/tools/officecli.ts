@@ -3,20 +3,21 @@ import { createDraft, acceptDraft, undoDraft, getHistory, getDraftPath, draftExi
 import { acquireLock, getLock, releaseLock } from "@/core/draft/lock.js"
 import { getFilePathHash } from "@/core/storage/paths.js"
 import { writeFileSync, readFileSync, existsSync } from "fs"
-import { extname } from "path"
+import { extname, resolve } from "path"
 import { detectFormat } from "@/core/format/detect.js"
-import { extractTextFromPDF } from "@/core/format/backends/pdf.js"
-import { extractTextFromImage } from "@/core/format/backends/image.js"
-import { extractTextFromOffice } from "@/core/format/backends/office.js"
 import { writeComment, readComments, applyCommentSuggestion, type Comment } from "@/core/format/ooxml/comments.js"
 import { writeTrackChange, readTrackChanges, type TrackChange } from "@/core/format/ooxml/trackchanges.js"
 import { writeComment as writeXlsxComment, readComments as readXlsxComments, applyCellSuggestion, type XlsxComment } from "@/core/format/ooxml/xlsxcomments.js"
 import { writeComment as writePptxComment, readComments as readPptxComments, applySlideSuggestion, type PptxComment } from "@/core/format/ooxml/pptxcomments.js"
+import { listActiveDrafts, getDraftSessions } from "@/core/draft/manager.js"
+import { diffTexts } from "@/core/draft/diff.js"
+import { substituteTemplate } from "@/core/template/substitute.js"
+import { readRealFileAsMarkdown } from "@/core/format/read.js"
 
 export const officecliTool: ToolDefinition = tool({
   description: "Office document automation. Create, edit, read, accept, undo, revert documents with draft lifecycle. Supports comments for DOCX, XLSX, PPTX, track changes for DOCX, and content-changing suggestions (comment with suggestedText, applied by approve action).",
   args: {
-    action: tool.schema.enum(["create", "edit", "read", "accept", "undo", "revert", "history", "comment", "track-insert", "track-delete", "list-comments", "review", "approve"]),
+    action: tool.schema.enum(["create", "edit", "read", "accept", "undo", "revert", "history", "list", "diff", "generate", "comment", "track-insert", "track-delete", "list-comments", "review", "approve"]),
     filePath: tool.schema.string().optional(),
     content: tool.schema.string().optional(),
     timestamp: tool.schema.number().optional(),
@@ -34,6 +35,10 @@ export const officecliTool: ToolDefinition = tool({
     slide: tool.schema.number().optional(),
     x: tool.schema.number().optional(),
     y: tool.schema.number().optional(),
+    templatePath: tool.schema.string().optional(),
+    data: tool.schema.string().optional(),
+    dataArray: tool.schema.string().optional(),
+    filePaths: tool.schema.string().optional(),
   },
   async execute(args, context) {
     const { action, filePath, content } = args
@@ -94,6 +99,121 @@ export const officecliTool: ToolDefinition = tool({
       return { output: `Draft edited for ${filePath}` }
     }
 
+    if (action === "list") {
+      const drafts = args.filePath
+        ? listActiveDrafts().filter(
+            (d) => d.filePath === args.filePath || resolve(d.filePath) === resolve(args.filePath as string)
+          )
+        : listActiveDrafts()
+      return { output: JSON.stringify(drafts, null, 2) }
+    }
+
+    if (action === "diff") {
+      if (!filePath) {
+        return { output: "error: diff requires filePath" }
+      }
+      const filePathHash = getFilePathHash(filePath)
+      if (!draftExists(filePathHash, sessionID)) {
+        const sessions = getDraftSessions(filePathHash)
+        if (sessions.length > 0) {
+          return { output: `error: no draft for this session; draft held by session ${sessions[0]}` }
+        }
+        return { output: "error: no active draft to diff" }
+      }
+      if (!existsSync(filePath)) {
+        return { output: `error: file not found: ${filePath}` }
+      }
+      if (detectFormat(filePath) === "image") {
+        return { output: "error: diff not supported for images" }
+      }
+      const ext = extname(filePath)
+      const draftPath = getDraftPath(filePathHash, sessionID, ext)
+      const draftContent = readFileSync(draftPath, "utf-8")
+      const realContent = await readRealFileAsMarkdown(filePath)
+      return { output: diffTexts(realContent, draftContent) }
+    }
+
+    if (action === "generate") {
+      if (!args.templatePath) {
+        return { output: "error: generate requires templatePath" }
+      }
+      if (!existsSync(args.templatePath)) {
+        return { output: `error: template not found: ${args.templatePath}` }
+      }
+      const templateFormat = detectFormat(args.templatePath)
+      if (templateFormat !== "text" && templateFormat !== "docx" && templateFormat !== "xlsx" && templateFormat !== "pptx") {
+        return { output: "error: template must be a text, docx, xlsx or pptx file" }
+      }
+      const template = await readRealFileAsMarkdown(args.templatePath)
+      const entries: Array<{ data: Record<string, string | number>; filePath: string }> = []
+      if (args.data && args.filePath) {
+        let parsed: unknown
+        try {
+          parsed = JSON.parse(args.data)
+        } catch {
+          return { output: "error: invalid data JSON" }
+        }
+        if (!isDataObject(parsed)) {
+          return { output: "error: data must be a JSON object with string or number values" }
+        }
+        entries.push({ data: parsed, filePath: args.filePath })
+      } else if (args.dataArray && args.filePaths) {
+        let dataArray: unknown
+        let filePaths: unknown
+        try {
+          dataArray = JSON.parse(args.dataArray)
+        } catch {
+          return { output: "error: invalid dataArray JSON" }
+        }
+        try {
+          filePaths = JSON.parse(args.filePaths)
+        } catch {
+          return { output: "error: invalid filePaths JSON" }
+        }
+        if (
+          !Array.isArray(dataArray) ||
+          !Array.isArray(filePaths) ||
+          dataArray.length !== filePaths.length
+        ) {
+          return { output: "error: dataArray and filePaths must be arrays of equal length" }
+        }
+        for (let i = 0; i < dataArray.length; i++) {
+          const d = dataArray[i]
+          const p = filePaths[i]
+          if (!isDataObject(d)) {
+            return { output: `error: dataArray entry ${i} must be a JSON object with string or number values` }
+          }
+          if (typeof p !== "string") {
+            return { output: `error: filePaths entry ${i} must be a string` }
+          }
+          entries.push({ data: d, filePath: p })
+        }
+      } else {
+        return { output: "error: generate requires data + filePath or dataArray + filePaths" }
+      }
+      // Validate every entry before creating anything: a missing key or a held
+      // lock must abort with no partial drafts
+      const prepared: Array<{ filePath: string; content: string }> = []
+      for (const entry of entries) {
+        const filePathHash = getFilePathHash(entry.filePath)
+        const lock = getLock(filePathHash)
+        if (lock && lock.sessionID !== sessionID) {
+          return { output: `error: lock on ${entry.filePath} held by session ${lock.sessionID}` }
+        }
+        try {
+          prepared.push({ filePath: entry.filePath, content: substituteTemplate(template, entry.data) })
+        } catch (error) {
+          return { output: `error: ${(error as Error).message}` }
+        }
+      }
+      for (const p of prepared) {
+        const filePathHash = getFilePathHash(p.filePath)
+        acquireLock(filePathHash, sessionID)
+        createDraft(p.filePath, sessionID, p.content)
+      }
+      return { output: `Generated ${prepared.length} drafts from ${args.templatePath}` }
+    }
+
     if (action === "history") {
       if (!filePath) {
         return { output: "error: history requires filePath" }
@@ -127,7 +247,6 @@ export const officecliTool: ToolDefinition = tool({
       }
       const filePathHash = getFilePathHash(filePath)
       const ext = extname(filePath)
-      const format = detectFormat(filePath)
 
       // Return draft if exists, else real file
       if (draftExists(filePathHash, sessionID)) {
@@ -139,22 +258,7 @@ export const officecliTool: ToolDefinition = tool({
       if (!existsSync(filePath)) {
         return { output: `error: file not found: ${filePath}` }
       }
-      if (format === "pdf") {
-        const content = await extractTextFromPDF(filePath)
-        return { output: content }
-      }
-      if (format === "docx" || format === "xlsx" || format === "pptx") {
-        const content = await extractTextFromOffice(filePath)
-        return { output: content }
-      }
-      if (format === "image") {
-        const content = await extractTextFromImage(filePath)
-        return { output: content }
-      }
-      if (format !== "text") {
-        return { output: "error: format conversion not implemented for binary files" }
-      }
-      const content = readFileSync(filePath, "utf-8")
+      const content = await readRealFileAsMarkdown(filePath)
       return { output: content }
     }
 
@@ -355,3 +459,10 @@ export const officecliTool: ToolDefinition = tool({
     return { output: `error: action ${action} not implemented` }
   },
 })
+
+function isDataObject(value: unknown): value is Record<string, string | number> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false
+  }
+  return Object.values(value).every((v) => typeof v === "string" || typeof v === "number")
+}

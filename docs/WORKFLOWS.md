@@ -40,17 +40,22 @@ officecli(action="accept", filePath="./procurement/B2-approval.docx")
 **Scenario**: Generate 50 similar documents from template (e.g., approval decisions for different departments).
 
 ```bash
-# Create template
-officecli(action="create", filePath="./templates/decision-template.docx", content="# Decision [NUMBER]\n\nDepartment: [DEPT]\nAmount: [AMOUNT]\n...")
-officecli(action="accept", filePath="./templates/decision-template.docx")
+# Create template (ordinary file with {{var}} placeholders)
+officecli(action="create", filePath="./templates/decision-template.md", content="# Decision {{NUMBER}}\n\nDepartment: {{DEPT}}\nAmount: {{AMOUNT}}\n...")
+officecli(action="accept", filePath="./templates/decision-template.md")
 
-# Generate variants
-for dept in ["Microbiology", "Radiology", "Cardiology"]:
-  template = officecli(action="read", filePath="./templates/decision-template.docx")
-  customized = template.replace("[DEPT]", dept).replace("[NUMBER]", generate_number())
-  officecli(action="create", filePath=f"./decisions/{dept}-decision.docx", content=customized)
-  officecli(action="accept", filePath=f"./decisions/{dept}-decision.docx")
+# Generate variants in one call (creates one draft per data entry)
+officecli(action="generate",
+  templatePath="./templates/decision-template.md",
+  filePaths=["./decisions/microbiology-decision.docx", "./decisions/radiology-decision.docx"],
+  dataArray=[{"DEPT": "Microbiology", "NUMBER": 1, "AMOUNT": 10000}, {"DEPT": "Radiology", "NUMBER": 2, "AMOUNT": 20000}])
+
+# Accept each generated draft
+for file in ["./decisions/microbiology-decision.docx", "./decisions/radiology-decision.docx"]:
+  officecli(action="accept", filePath=file)
 ```
+
+Missing keys in the data → `generate` errors listing them; nothing silently empties.
 
 ### Flow 3: Version Control + Audit Trail
 
@@ -164,20 +169,14 @@ officecli(action="create", filePath="./summary.docx", content=summary)
 officecli(action="accept", filePath="./summary.docx")
 ```
 
-### Pattern 4: Snapshot Comparison
+### Pattern 4: Draft Review
 
-Compare current draft with historical snapshot:
+Review changes between the draft and the real file before accepting:
 
 ```bash
-# Get historical version
-history = officecli(action="history", filePath="./budget.docx")
-old_snapshot = history[0]  # First version
-
-# Read current
-current = officecli(action="read", filePath="./budget.docx")
-
-# Diff (agent logic)
-changes = diff(old_snapshot, current)
+# Diff draft vs real file (markdown output)
+changes = officecli(action="diff", filePath="./budget.docx")
+# Returns the unified Diff between the real file and the draft
 ```
 
 ## Real-World Applications
@@ -223,15 +222,13 @@ changes = diff(old_snapshot, current)
 
 ## Limitations
 
-- PDF/Image = read-only (can't write back)
+- Image = read-only (can't write back)
 - Complex formatting may not round-trip perfectly (markdown intermediate)
 - Large files (>10MB) may be slow (pandoc conversion)
 - No real-time collaboration (lock-based, not CRDT)
 
 ## Future Enhancements
 
-- [ ] PDF write support (markdown → PDF via pandoc/pdflatex)
 - [ ] Image annotation (OCR + overlay)
 - [ ] Real-time collaboration (WebSocket locks)
-- [ ] Document comparison (diff viewer)
-- [ ] Template library (pre-built workflow templates)
+- [ ] Template library (plugin-managed template registry, shared across sessions)

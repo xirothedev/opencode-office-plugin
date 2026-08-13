@@ -1,6 +1,10 @@
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs"
 import { classifyPdfAsync } from "@firecrawl/pdf-inspector"
-import { readFileSync } from "fs"
+import { readFileSync, writeFileSync, unlinkSync } from "fs"
+import { exec } from "child_process"
+import { promisify } from "util"
+
+const execAsync = promisify(exec)
 
 export async function extractTextFromPDF(absolutePath: string): Promise<string> {
   const buffer = readFileSync(absolutePath)
@@ -21,4 +25,17 @@ export async function extractTextFromPDF(absolutePath: string): Promise<string> 
   }
 
   return fullText.trim()
+}
+
+export async function writePdfFromMarkdown(markdown: string, outputPath: string): Promise<void> {
+  const tempPath = `${outputPath}.tmp.md`
+  writeFileSync(tempPath, markdown)
+  const engine = process.env.OFFICECLI_PDF_ENGINE ?? "xelatex"
+  try {
+    await execAsync(`pandoc "${tempPath}" --pdf-engine=${engine} -o "${outputPath}"`)
+  } catch (error) {
+    throw new Error(`pandoc PDF conversion failed: ${(error as Error).message}`)
+  } finally {
+    unlinkSync(tempPath)
+  }
 }
