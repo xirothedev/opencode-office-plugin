@@ -4,17 +4,18 @@ import { join } from "path"
 
 export type LockStatus = "acquired" | "in-review" | "stale"
 
-interface Lock {
+export interface Lock {
   sessionID: string
+  owner: string
   touchedAt: number
   status: LockStatus
 }
 
 const STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000 // 24 hours
 
-export function acquireLock(filePathHash: string, sessionID: string): void {
+export function acquireLock(filePathHash: string, sessionID: string, owner: string): void {
   const lockPath = join(getLocksDir(), `${filePathHash}.json`)
-  const lock: Lock = { sessionID, touchedAt: Date.now(), status: "acquired" }
+  const lock: Lock = { sessionID, owner, touchedAt: Date.now(), status: "acquired" }
   writeFileSync(lockPath, JSON.stringify(lock))
 }
 
@@ -52,6 +53,6 @@ export function isLockStale(filePathHash: string): boolean {
   return Date.now() - lock.touchedAt > STALE_THRESHOLD_MS
 }
 
-export function overrideLock(filePathHash: string, sessionID: string): void {
-  acquireLock(filePathHash, sessionID)
+export function overrideLock(filePathHash: string, sessionID: string, owner: string): void {
+  acquireLock(filePathHash, sessionID, owner)
 }

@@ -18,21 +18,27 @@ describe("lock", () => {
   })
 
   it("acquires lock", () => {
-    acquireLock(testHash, sessionA)
+    acquireLock(testHash, sessionA, "agent-a")
     const lock = getLock(testHash)
     expect(lock).toBeDefined()
     expect(lock!.sessionID).toBe(sessionA)
   })
 
+  it("lock records owner at acquire", () => {
+    acquireLock(testHash, sessionA, "agent-a")
+    const lock = getLock(testHash)
+    expect(lock!.owner).toBe("agent-a")
+  })
+
   it("lock has touchedAt timestamp", () => {
-    acquireLock(testHash, sessionA)
+    acquireLock(testHash, sessionA, "agent-a")
     const lock = getLock(testHash)
     expect(lock!.touchedAt).toBeTypeOf("number")
     expect(lock!.touchedAt).toBeLessThan(Date.now() + 1000)
   })
 
   it("releases lock", () => {
-    acquireLock(testHash, sessionA)
+    acquireLock(testHash, sessionA, "agent-a")
     releaseLock(testHash)
     const lock = getLock(testHash)
     expect(lock).toBeNull()
@@ -44,14 +50,15 @@ describe("lock", () => {
   })
 
   it("isLockStale returns false for fresh lock", () => {
-    acquireLock(testHash, sessionA)
+    acquireLock(testHash, sessionA, "agent-a")
     expect(isLockStale(testHash)).toBe(false)
   })
 
   it("overrideLock replaces lock with new session", () => {
-    acquireLock(testHash, sessionA)
-    overrideLock(testHash, sessionB)
+    acquireLock(testHash, sessionA, "agent-a")
+    overrideLock(testHash, sessionB, "agent-b")
     const lock = getLock(testHash)
     expect(lock!.sessionID).toBe(sessionB)
+    expect(lock!.owner).toBe("agent-b")
   })
 })

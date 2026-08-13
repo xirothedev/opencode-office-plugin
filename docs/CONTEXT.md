@@ -12,7 +12,7 @@ Office document automation plugin for opencode. Transparent draft lifecycle, loc
 
 **Lazy acquire**: Lock acquired on first mutating command (edit/create). Explicit lock action not needed.
 
-**Structured errors**: `ToolResult` with `{success, output, data}` or `{success: false, error, code}`. Codes: `LOCK_HELD_BY_OTHER`, `FILE_NOT_FOUND`, `INVALID_ACTION`.
+**String errors**: Errors returned as `error: <message>` strings in the tool output. The opencode plugin API does not support structured error codes.
 
 ## Language
 
@@ -21,7 +21,7 @@ Working copy of file agent edits. Real file untouched until accept. Keyed by `fi
 _Avoid_: copy, working file, temp file
 
 **Lock**:
-Per-file claim granting one session right to hold active draft. Keyed by `filePathHash`. Touched by every mutating command. Stale >24h (hardcoded) → override by another session. Released on accept/undo/stale override. Session whose lock was overridden gets error on next mutating command.
+Per-file claim granting one session right to hold active draft. Keyed by `filePathHash`. Touched by every mutating command. Carries owner identity: sessionID and readable owner name, both recorded at acquire. Stale >24h (hardcoded) → override by another session. Released on accept/undo/stale override (or Force release). Session whose lock was overridden gets error on next mutating command.
 _Avoid_: mutex, session lock
 
 **Accept**:
@@ -40,12 +40,16 @@ _Avoid_: rollback, restore
 Recorded entry in file's version history: timestamp, snapshot, sessionID. Keyed by `filePathHash`. Any session can lookup or revert.
 _Avoid_: version, checkpoint
 
+**Batch**:
+Performing an action on multiple files in one call. `create` and `accept` accept `filePaths` (JSON array of paths); `create` applies one `content` to every path. All-or-nothing: any failed entry aborts the whole call, no partial creates or accepts.
+_Avoid_: bulk, loop
+
 **Version history**:
 File's ordered list of accept-points. Keyed by `filePathHash`. Any session can lookup without knowing which session last accepted. `officecli(action="history")` returns metadata list `[{timestamp, sessionID, acceptPointIndex}]`, not full snapshots.
 _Avoid_: log, audit trail
 
 **Preview**:
-Before/after screenshot comparison shown after mutating edit. Before = untouched real file. After = draft's current state. Cumulative since last accept, not incremental per edit. User-facing; agent-facing equivalent is Diff.
+User-facing: before/after screenshot comparison shown after mutating edit. Before = untouched real file. After = draft's current state. Cumulative since last accept, not incremental per edit. Agent-facing: `officecli(action="preview")` renders the draft's current state to a standalone HTML view for visual review before accept. Agent-facing comparison is Diff.
 _Avoid_: comparison, screenshot
 
 **Snapshot**:
@@ -65,7 +69,7 @@ Draft whose session lost lock (stale override) or ended without accept/discard. 
 _Avoid_: abandoned draft, lost edits
 
 **officecli**:
-Single tool with action enum. Actions: create, edit, read, accept, undo, revert, history, list, diff, generate (plus comment, track-change, review, approve). `read` returns markdown (delegates to pdf-inspector/anydoc/oocr). `history` returns metadata list. `list` returns active drafts across files. `diff` returns the markdown Diff. `generate` produces drafts from a Template. Delegates to format-specific backends internally. Enforces draft lifecycle via edit tool override.
+Single tool with action enum. Actions: create, edit, read, accept, undo, revert, history, list, diff, generate, preview, validate, lock-status, force-release (plus comment, track-change, review, approve). `create` and `accept` take `filePaths` for Batch calls. `read` returns markdown (delegates to pdf-inspector/anydoc/oocr). `history` returns metadata list. `list` returns active drafts across files. `diff` returns the markdown Diff. `generate` produces drafts from a Template. Delegates to format-specific backends internally. Enforces draft lifecycle via edit tool override.
 _Avoid_: office tool, document tool, doc tool
 
 **Template**:
@@ -83,6 +87,10 @@ _Avoid_: comparison, changes report
 **Edit override**:
 Plugin registers tool named `edit`, overrides opencode built-in. Checks lock, routes to draft transparently. Binary files (png/pdf/docx) → deny with error "use officecli for binary files". Agent thinks using `edit`, plugin enforces draft lifecycle.
 _Avoid_: edit interceptor, edit wrapper
+
+**Force release**:
+Releasing a file lock held by another session, via `officecli(action="force-release", filePath)`. Allowed only when the lock is stale (timeout exceeded); a fresh foreign lock cannot be force-released. The displaced session's draft becomes an Orphaned draft; that session gets an error on its next mutating command.
+_Avoid_: steal lock, take over, kick
 
 **Comment**:
 Annotation on a document range, cell, or slide. DOCX stored in `word/comments.xml` with author, text, timestamp, linked to document via `commentRangeStart`/`commentRangeEnd` markers. XLSX stored in `xl/comments1.xml` with VML note boxes anchored to a cell. PPTX stored in `ppt/comments/comment1.xml` anchored to a slide, authors in `ppt/commentAuthors.xml`. User sees in Word/Excel/PowerPoint comment panel. Agent adds via `officecli(action="comment")`.
@@ -104,8 +112,12 @@ _Avoid_: revision, redline, edit marker
 Read pending comments and track changes from document. Returns summary of all annotations and modifications awaiting user decision. Agent calls `officecli(action="review")` to see what user needs to review.
 _Avoid_: audit, check, inspection
 
+**Validate**:
+`officecli(action="validate", filePath, rules)` checks the draft's markdown content against rules before accept. A rule is `{type: "regex", pattern}` (pattern must match) or `{type: "required", pattern}` (marker must be present). Returns a per-rule pass/fail report; does not block accept on its own — the agent decides what the report means.
+_Avoid_: gate, lint, compliance check
+
 **Lock status**:
-State of file lock: `acquired` (agent editing), `in-review` (user reviewing in Office), `stale` (timeout exceeded). Prevents concurrent edits during review workflow. Set via `setLockStatus()`.
+State of file lock: `acquired` (agent editing), `in-review` (user reviewing in Office), `stale` (timeout exceeded). Prevents concurrent edits during review workflow. Queried via `officecli(action="lock-status", filePath)`; `list` shows it per draft.
 _Avoid_: lock state, lock mode
 
 **Release**:
