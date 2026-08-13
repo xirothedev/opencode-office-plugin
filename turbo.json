@@ -1,0 +1,16 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "cacheDir": ".turbo/cache",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"]
+    },
+    "lint": {},
+    "typecheck": {},
+    "test": {},
+    "test:coverage": {
+      "outputs": ["coverage/**"]
+    }
+  }
+}
