@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 
 /**
  * Example: Using @openoffice/plugin programmatically
@@ -7,9 +7,9 @@
  * In real usage, opencode calls these tools automatically.
  */
 
-import { officecliTool } from "../dist/plugin/tools/officecli.js"
+import { officecliTool } from "../dist/plugin/tools/officecli"
 import { mkdir } from "fs/promises"
-import { getDraftsDir, getHistoryDir, getLocksDir } from "../dist/core/storage/paths.js"
+import { getDraftsDir, getHistoryDir, getLocksDir } from "../dist/core/storage/paths"
 
 const mockContext = {
   agent: "example-agent",

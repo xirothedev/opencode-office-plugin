@@ -51,7 +51,7 @@ The agent should call `officecli(action="create", ...)`.
 
 ## Option 2: Local development install
 
-Use the published-package flow above when you consume the plugin. When you develop on the plugin itself, use `pnpm link` — see [docs/TESTING.md](TESTING.md) for the full local setup (build, link, configure, verify).
+Use the published-package flow above when you consume the plugin. When you develop on the plugin itself, use `bun link` — see [docs/TESTING.md](TESTING.md) for the full local setup (build, link, configure, verify).
 
 ## Verifying the plugin loaded
 
@@ -80,8 +80,8 @@ opencode 2 introduced a new plugin API (`plugins` field, `Plugin.define`) — **
 Releases are tag-driven. CI publishes to npm when a `v*` tag is pushed:
 
 ```bash
-pnpm build
-pnpm test
+bun run build
+bun run test
 git tag v0.1.0
 git push origin v0.1.0
 ```

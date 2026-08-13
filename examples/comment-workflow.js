@@ -7,7 +7,7 @@
  * - Reading comments back
  */
 
-import { officecliTool } from "../dist/plugin/tools/officecli.js"
+import { officecliTool } from "../dist/plugin/tools/officecli"
 
 async function main() {
   const filePath = "./examples/sample-contract.docx"

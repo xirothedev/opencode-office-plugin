@@ -1,7 +1,7 @@
 import { tool, type ToolDefinition } from "@opencode-ai/plugin"
-import { createDraft, draftExists, getDraftPath } from "@/core/draft/manager.js"
-import { acquireLock, getLock } from "@/core/draft/lock.js"
-import { getFilePathHash } from "@/core/storage/paths.js"
+import { createDraft, draftExists, getDraftPath } from "@/core/draft/manager"
+import { acquireLock, getLock } from "@/core/draft/lock"
+import { getFilePathHash } from "@/core/storage/paths"
 import { readFileSync, writeFileSync, existsSync } from "fs"
 import { extname } from "path"
 
