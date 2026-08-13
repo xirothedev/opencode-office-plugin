@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest"
 import JSZip from "jszip"
-import { writeComment, readComments, applyCommentSuggestion } from "@/core/format/ooxml/comments"
+import { writeComment, readComments, applyCommentSuggestion } from "../../../../src/core/format/ooxml/comments.ts"
 import { Document, Packer, Paragraph, TextRun } from "docx"
 import { writeFileSync, unlinkSync, mkdirSync, existsSync, readFileSync } from "fs"
 import { join } from "path"

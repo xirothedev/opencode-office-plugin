@@ -1,11 +1,11 @@
-import { getDraftsDir, getHistoryDir, getFilePathHash } from "../storage/paths.js"
-import { registerDraft, unregisterDraft, getRegisteredPath } from "../storage/registry.js"
+import { getDraftsDir, getHistoryDir, getFilePathHash } from "../storage/paths.ts"
+import { registerDraft, unregisterDraft, getRegisteredPath } from "../storage/registry.ts"
 import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync, copyFileSync, readdirSync, statSync } from "fs"
 import { join, dirname, extname } from "path"
-import { releaseLock, getLock, isLockStale, type LockStatus } from "./lock.js"
-import { detectFormat } from "../format/detect.js"
-import { writeOfficeFromMarkdown } from "../format/backends/office.js"
-import { writePdfFromMarkdown } from "../format/backends/pdf.js"
+import { releaseLock, getLock, isLockStale, type LockStatus } from "./lock.ts"
+import { detectFormat } from "../format/detect.ts"
+import { writeOfficeFromMarkdown } from "../format/backends/office.ts"
+import { writePdfFromMarkdown } from "../format/backends/pdf.ts"
 
 interface AcceptPoint {
   timestamp: number

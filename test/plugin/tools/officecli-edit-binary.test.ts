@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest"
-import { officecliTool } from "@/plugin/tools/officecli.js"
+import { officecliTool } from "../../../src/plugin/tools/officecli.ts"
 import { copyFile, rm, mkdir } from "fs/promises"
 import { join } from "path"
-import { getDraftsDir, getHistoryDir, getLocksDir } from "@/core/storage/paths.js"
+import { getDraftsDir, getHistoryDir, getLocksDir } from "../../../src/core/storage/paths.ts"
 
 describe("officecli edit binary (DOCX)", () => {
   const testFile = "/tmp/test-edit.docx"

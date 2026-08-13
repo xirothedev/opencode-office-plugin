@@ -1,7 +1,7 @@
 import JSZip from "jszip"
 import { readFileSync, writeFileSync } from "fs"
 import { parseStringPromise, Builder } from "xml2js"
-import { addRelationship, ensureContentType, escapeXml, partRelsPath, parseSuggestion, readRelationships, resolveTarget, SUGGESTED_VALUE_PREFIX } from "./parts.js"
+import { addRelationship, ensureContentType, escapeXml, partRelsPath, parseSuggestion, readRelationships, resolveTarget, SUGGESTED_VALUE_PREFIX } from "./parts.ts"
 
 export interface XlsxComment {
   id: string

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest"
-import { officecliTool } from "@/plugin/tools/officecli.js"
-import { getDraftsDir, getHistoryDir, getLocksDir, getFilePathHash } from "@/core/storage/paths.js"
+import { officecliTool } from "../../../src/plugin/tools/officecli.ts"
+import { getDraftsDir, getHistoryDir, getLocksDir, getFilePathHash } from "../../../src/core/storage/paths.ts"
 import { mkdir, rm } from "fs/promises"
 import { readFileSync, existsSync, writeFileSync } from "fs"
 import { join } from "path"

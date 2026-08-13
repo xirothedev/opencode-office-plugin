@@ -1,4 +1,4 @@
-import { getRegistryDir, getFilePathHash } from "./paths.js"
+import { getRegistryDir, getFilePathHash } from "./paths.ts"
 import { readFileSync, writeFileSync, existsSync, unlinkSync, mkdirSync } from "fs"
 import { join, dirname } from "path"
 

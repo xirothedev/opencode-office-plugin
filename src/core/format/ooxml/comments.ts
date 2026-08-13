@@ -1,7 +1,7 @@
 import JSZip from "jszip"
 import { readFileSync, writeFileSync } from "fs"
 import { parseStringPromise, Builder } from "xml2js"
-import { SUGGESTED_TEXT_PREFIX, parseSuggestion } from "./parts.js"
+import { SUGGESTED_TEXT_PREFIX, parseSuggestion } from "./parts.ts"
 
 export interface Comment {
   id: string

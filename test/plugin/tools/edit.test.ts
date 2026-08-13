@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest"
-import { editTool } from "@/plugin/tools/edit.js"
-import { getDraftsDir, getHistoryDir, getLocksDir } from "@/core/storage/paths.js"
+import { editTool } from "../../../src/plugin/tools/edit.ts"
+import { getDraftsDir, getHistoryDir, getLocksDir } from "../../../src/core/storage/paths.ts"
 import { mkdir, rm } from "fs/promises"
 import { writeFileSync, existsSync } from "fs"
 

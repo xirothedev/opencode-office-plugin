@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest"
-import { acquireLock, releaseLock, getLock, isLockStale, overrideLock } from "@/core/draft/lock.js"
-import { getLocksDir, getFilePathHash } from "@/core/storage/paths.js"
+import { acquireLock, releaseLock, getLock, isLockStale, overrideLock } from "../../../src/core/draft/lock.ts"
+import { getLocksDir, getFilePathHash } from "../../../src/core/storage/paths.ts"
 import { mkdir, rm } from "fs/promises"
 
 describe("lock", () => {
