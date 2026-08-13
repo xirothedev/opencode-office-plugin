@@ -1,7 +1,7 @@
 import JSZip from "jszip"
 import { readFileSync, writeFileSync } from "fs"
 import { parseStringPromise, Builder } from "xml2js"
-import { addRelationship, ensureContentType, partRelsPath, readRelationships } from "./parts.js"
+import { addRelationship, ensureContentType, partRelsPath, parseSuggestion, readRelationships, SUGGESTED_TEXT_PREFIX } from "./parts.js"
 
 export interface PptxComment {
   id: string
@@ -13,7 +13,10 @@ export interface PptxComment {
   y: number
   parentId: string | null
   resolved: boolean
+  suggestedText?: string | null
 }
+
+export type ApproveResult = "applied" | "not-found" | "no-suggestion"
 
 const PRESENTATION_NS = "http://schemas.openxmlformats.org/presentationml/2006/main"
 const COMMENTS_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments"
@@ -27,7 +30,10 @@ export async function writeComment(pptxPath: string, comment: PptxComment): Prom
   const zip = await JSZip.loadAsync(data)
 
   const authorId = await ensureAuthor(zip, comment.author)
-  await appendCommentElement(zip, comment, authorId)
+  const storedText = comment.suggestedText
+    ? `${SUGGESTED_TEXT_PREFIX}${comment.suggestedText}`
+    : comment.text
+  await appendCommentElement(zip, comment, authorId, storedText)
 
   const slidePart = await resolveSlidePart(zip, comment.slide)
   const slideRelsPath = partRelsPath(slidePart)
@@ -60,16 +66,18 @@ export async function readComments(pptxPath: string): Promise<PptxComment[]> {
   return elements.map((elem: any) => {
     const authorId = elem.$?.authorId ?? "0"
     const pos = elem["p:pos"] || elem.pos
+    const text = elem["p:text"] || elem.text || ""
     return {
       id: `slide-${slideOfComments}-cm-${elem.$.idx}`,
       author: authors[authorId] || "Unknown",
-      text: elem["p:text"] || elem.text || "",
+      text,
       timestamp: new Date(elem.$.dt || Date.now()),
       slide: slideOfComments,
       x: pos?.$?.x ? parseInt(pos.$.x, 10) : 0,
       y: pos?.$?.y ? parseInt(pos.$.y, 10) : 0,
       parentId: null,
       resolved: false,
+      suggestedText: parseSuggestion(text, SUGGESTED_TEXT_PREFIX),
     }
   })
 }
@@ -114,7 +122,12 @@ async function ensureAuthor(zip: JSZip, author: string): Promise<number> {
   return newId
 }
 
-async function appendCommentElement(zip: JSZip, comment: PptxComment, authorId: number): Promise<void> {
+async function appendCommentElement(
+  zip: JSZip,
+  comment: PptxComment,
+  authorId: number,
+  storedText: string
+): Promise<void> {
   const commentsPath = "ppt/comments/comment1.xml"
   const commentsFile = zip.file(commentsPath)
   let root: any
@@ -142,7 +155,7 @@ async function appendCommentElement(zip: JSZip, comment: PptxComment, authorId: 
       idx: String(idx),
     },
     "p:pos": { $: { x: String(comment.x), y: String(comment.y) } },
-    "p:text": comment.text,
+    "p:text": storedText,
   })
   const xml = new Builder({
     rootName: "p:cmLst",
@@ -251,4 +264,95 @@ async function readAuthors(zip: JSZip): Promise<Record<string, string>> {
     map[String(a.$.id)] = a.$.name || "Unknown"
   }
   return map
+}
+
+export async function applySlideSuggestion(pptxPath: string, commentId: string): Promise<ApproveResult> {
+  const match = commentId.match(/^slide-(\d+)-cm-(\d+)$/)
+  if (!match) {
+    return "not-found"
+  }
+  const slideIndex = parseInt(match[1], 10)
+  const idx = parseInt(match[2], 10)
+
+  const data = readFileSync(pptxPath)
+  const zip = await JSZip.loadAsync(data)
+
+  const commentsFile = zip.file("ppt/comments/comment1.xml")
+  if (!commentsFile) {
+    return "not-found"
+  }
+  const commentsContent = await commentsFile.async("string")
+  const commentsObj = await parseStringPromise(commentsContent, { explicitArray: false })
+  const commentsRoot = commentsObj["p:cmLst"] || commentsObj.cmLst
+  const commentElements = commentsRoot?.["p:cm"]
+    ? Array.isArray(commentsRoot["p:cm"])
+      ? commentsRoot["p:cm"]
+      : [commentsRoot["p:cm"]]
+    : []
+  const target = commentElements.find((c: any) => String(c.$?.idx) === String(idx))
+  if (!target) {
+    return "not-found"
+  }
+  const text = target["p:text"] || target.text || ""
+  const suggestion = parseSuggestion(text, SUGGESTED_TEXT_PREFIX)
+  if (suggestion === null) {
+    return "no-suggestion"
+  }
+
+  const slidePart = await resolveSlidePart(zip, slideIndex)
+  await replaceFirstTextBox(zip, slidePart, suggestion)
+
+  commentsRoot["p:cm"] = commentElements.filter((c: any) => c !== target)
+  const newCommentsXml = new Builder({
+    rootName: "p:cmLst",
+    headless: false,
+    xmldec: { version: "1.0", encoding: "UTF-8", standalone: true },
+  }).buildObject(commentsRoot)
+  zip.file("ppt/comments/comment1.xml", newCommentsXml)
+
+  const buffer = await zip.generateAsync({ type: "nodebuffer" })
+  writeFileSync(pptxPath, buffer)
+  return "applied"
+}
+
+async function replaceFirstTextBox(zip: JSZip, slidePart: string, suggestion: string): Promise<void> {
+  const slideFile = zip.file(slidePart)
+  if (!slideFile) {
+    throw new Error(`Slide part ${slidePart} not found`)
+  }
+  const content = await slideFile.async("string")
+  const obj = await parseStringPromise(content, { explicitArray: false })
+  const root = obj["p:sld"] || obj.sld
+  const spTree = root?.["p:cSld"]?.["p:spTree"]
+  const shapes = spTree?.["p:sp"] ? (Array.isArray(spTree["p:sp"]) ? spTree["p:sp"] : [spTree["p:sp"]]) : []
+  const target = shapes.find((s: any) => s["p:txBody"])
+  if (!target) {
+    throw new Error("No text box found on slide")
+  }
+  const txBody = target["p:txBody"]
+  const paras = txBody["a:p"] ? (Array.isArray(txBody["a:p"]) ? txBody["a:p"] : [txBody["a:p"]]) : []
+  if (paras.length === 0) {
+    txBody["a:p"] = { "a:r": { "a:t": suggestion } }
+  } else {
+    const firstPara = paras[0]
+    const runs = firstPara["a:r"]
+      ? Array.isArray(firstPara["a:r"])
+        ? firstPara["a:r"]
+        : [firstPara["a:r"]]
+      : []
+    if (runs.length === 0) {
+      firstPara["a:r"] = { "a:t": suggestion }
+    } else {
+      const firstRun = runs[0]
+      firstRun["a:t"] = suggestion
+      firstPara["a:r"] = firstRun
+      txBody["a:p"] = firstPara
+    }
+  }
+  const xml = new Builder({
+    rootName: "p:sld",
+    headless: false,
+    xmldec: { version: "1.0", encoding: "UTF-8", standalone: true },
+  }).buildObject(root)
+  zip.file(slidePart, xml)
 }

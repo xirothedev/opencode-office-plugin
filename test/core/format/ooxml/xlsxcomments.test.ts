@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest"
 import JSZip from "jszip"
-import { writeComment, readComments } from "@/core/format/ooxml/xlsxcomments"
+import { writeComment, readComments, applyCellSuggestion } from "@/core/format/ooxml/xlsxcomments"
 import { copyFileSync, unlinkSync, mkdirSync, existsSync, readFileSync, writeFileSync } from "fs"
 import { join } from "path"
 import { tmpdir } from "os"
@@ -148,5 +148,81 @@ describe("OOXML XLSX Comment Writer", () => {
     const vmlRels = (rels.match(/relationships\/vmlDrawing/g) || []).length
     expect(commentRels).toBe(1)
     expect(vmlRels).toBe(1)
+  })
+
+  it("writes value suggestion and reads it back", async () => {
+    await writeComment(testXlsxPath, {
+      id: "s1",
+      author: "AI Agent",
+      text: "Original note",
+      suggestedText: "42",
+      timestamp: new Date("2026-08-12T10:30:00Z"),
+      cellRef: "B2",
+      parentId: null,
+      resolved: false,
+    })
+
+    const comments = await readComments(testXlsxPath)
+    expect(comments).toHaveLength(1)
+    expect(comments[0].text).toBe("Suggested value: 42")
+    expect(comments[0].suggestedText).toBe("42")
+  })
+
+  it("approve writes numeric value into the cell and removes comment and note shape", async () => {
+    await writeComment(testXlsxPath, {
+      id: "s1",
+      author: "AI Agent",
+      text: "Original note",
+      suggestedText: "42",
+      timestamp: new Date("2026-08-12T10:30:00Z"),
+      cellRef: "B2",
+      parentId: null,
+      resolved: false,
+    })
+
+    const result = await applyCellSuggestion(testXlsxPath, "B2-0")
+    expect(result).toBe("applied")
+
+    expect(await readComments(testXlsxPath)).toHaveLength(0)
+    const zip = await JSZip.loadAsync(readFileSync(testXlsxPath))
+    const sheet = await zip.file("xl/worksheets/sheet1.xml")!.async("string")
+    expect(sheet).toMatch(/<c r="B2">\s*<v>42<\/v>\s*<\/c>/)
+    const vml = await zip.file("xl/drawings/vmlDrawing1.vml")!.async("string")
+    expect(vml).not.toContain("<v:shape")
+  })
+
+  it("approve writes string value as inline string into a new cell", async () => {
+    await writeComment(testXlsxPath, {
+      id: "s2",
+      author: "AI Agent",
+      text: "Original note",
+      suggestedText: "Pending approval",
+      timestamp: new Date("2026-08-12T10:30:00Z"),
+      cellRef: "D1",
+      parentId: null,
+      resolved: false,
+    })
+
+    const result = await applyCellSuggestion(testXlsxPath, "D1-0")
+    expect(result).toBe("applied")
+
+    const zip = await JSZip.loadAsync(readFileSync(testXlsxPath))
+    const sheet = await zip.file("xl/worksheets/sheet1.xml")!.async("string")
+    expect(sheet).toMatch(/<c r="D1" t="inlineStr">\s*<is>\s*<t>Pending approval<\/t>\s*<\/is>\s*<\/c>/)
+  })
+
+  it("approve rejects plain comments and unknown ids", async () => {
+    await writeComment(testXlsxPath, {
+      id: "c1",
+      author: "AI Agent",
+      text: "Just a note",
+      timestamp: new Date("2026-08-12T10:30:00Z"),
+      cellRef: "B2",
+      parentId: null,
+      resolved: false,
+    })
+
+    expect(await applyCellSuggestion(testXlsxPath, "B2-0")).toBe("no-suggestion")
+    expect(await applyCellSuggestion(testXlsxPath, "Z9-9")).toBe("not-found")
   })
 })

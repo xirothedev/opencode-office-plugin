@@ -48,10 +48,11 @@ tool({
 - `undo()` → discard draft, release lock
 - `revert(filePath, timestamp)` → create draft from snapshot, route through accept
 - `history(filePath)` → return `[{timestamp, sessionID, acceptPointIndex}]`
-- `comment(filePath, commentId, author, commentText, rangeStartParagraph, rangeStartOffset, rangeEndParagraph, rangeEndOffset)` → add comment to DOCX draft; for XLSX pass `cellRef` instead, for PPTX pass `slide` (optional `x`/`y` in EMU)
+- `comment(filePath, commentId, author, commentText, rangeStartParagraph, rangeStartOffset, rangeEndParagraph, rangeEndOffset)` → add comment to DOCX draft; for XLSX pass `cellRef` instead, for PPTX pass `slide` (optional `x`/`y` in EMU). Optional `suggestedText` turns it into a content-changing suggestion (marker stored in the comment text)
+- `approve(filePath, commentId)` → apply a suggestion to the draft content (DOCX: paragraph text, XLSX: cell value, PPTX: first text box) and remove the comment. Errors: comment not found / has no suggestion
 - `track-insert(filePath, commentId, author, content, paragraph, offset)` → add insertion track change to DOCX draft (DOCX only)
 - `track-delete(filePath, commentId, author, content, paragraph, offset)` → add deletion track change to DOCX draft (DOCX only)
-- `list-comments(filePath)` → return comments from DOCX/XLSX/PPTX
+- `list-comments(filePath)` → return comments from DOCX/XLSX/PPTX (with `suggestedText` when present)
 - `review(filePath)` → return summary of comments (all formats) and track changes (DOCX only)
 
 **Structured errors**:

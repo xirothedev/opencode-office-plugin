@@ -8,21 +8,22 @@ import { detectFormat } from "@/core/format/detect.js"
 import { extractTextFromPDF } from "@/core/format/backends/pdf.js"
 import { extractTextFromImage } from "@/core/format/backends/image.js"
 import { extractTextFromOffice } from "@/core/format/backends/office.js"
-import { writeComment, readComments, type Comment } from "@/core/format/ooxml/comments.js"
+import { writeComment, readComments, applyCommentSuggestion, type Comment } from "@/core/format/ooxml/comments.js"
 import { writeTrackChange, readTrackChanges, type TrackChange } from "@/core/format/ooxml/trackchanges.js"
-import { writeComment as writeXlsxComment, readComments as readXlsxComments, type XlsxComment } from "@/core/format/ooxml/xlsxcomments.js"
-import { writeComment as writePptxComment, readComments as readPptxComments, type PptxComment } from "@/core/format/ooxml/pptxcomments.js"
+import { writeComment as writeXlsxComment, readComments as readXlsxComments, applyCellSuggestion, type XlsxComment } from "@/core/format/ooxml/xlsxcomments.js"
+import { writeComment as writePptxComment, readComments as readPptxComments, applySlideSuggestion, type PptxComment } from "@/core/format/ooxml/pptxcomments.js"
 
 export const officecliTool: ToolDefinition = tool({
-  description: "Office document automation. Create, edit, read, accept, undo, revert documents with draft lifecycle. Supports comments for DOCX, XLSX, PPTX and track changes for DOCX.",
+  description: "Office document automation. Create, edit, read, accept, undo, revert documents with draft lifecycle. Supports comments for DOCX, XLSX, PPTX, track changes for DOCX, and content-changing suggestions (comment with suggestedText, applied by approve action).",
   args: {
-    action: tool.schema.enum(["create", "edit", "read", "accept", "undo", "revert", "history", "comment", "track-insert", "track-delete", "list-comments", "review"]),
+    action: tool.schema.enum(["create", "edit", "read", "accept", "undo", "revert", "history", "comment", "track-insert", "track-delete", "list-comments", "review", "approve"]),
     filePath: tool.schema.string().optional(),
     content: tool.schema.string().optional(),
     timestamp: tool.schema.number().optional(),
     commentId: tool.schema.string().optional(),
     author: tool.schema.string().optional(),
     commentText: tool.schema.string().optional(),
+    suggestedText: tool.schema.string().optional(),
     paragraph: tool.schema.number().optional(),
     offset: tool.schema.number().optional(),
     rangeStartParagraph: tool.schema.number().optional(),
@@ -190,6 +191,7 @@ export const officecliTool: ToolDefinition = tool({
           cellRef: args.cellRef as string,
           parentId: null,
           resolved: false,
+          suggestedText: args.suggestedText ?? null,
         }
         await writeXlsxComment(draftPath, comment)
         return { output: `Comment added to draft for ${filePath}` }
@@ -205,6 +207,7 @@ export const officecliTool: ToolDefinition = tool({
           y: args.y ?? 100000,
           parentId: null,
           resolved: false,
+          suggestedText: args.suggestedText ?? null,
         }
         await writePptxComment(draftPath, comment)
         return { output: `Comment added to draft for ${filePath}` }
@@ -218,9 +221,44 @@ export const officecliTool: ToolDefinition = tool({
         rangeEnd: { paragraph: args.rangeEndParagraph as number, offset: args.rangeEndOffset as number },
         parentId: null,
         resolved: false,
+        suggestedText: args.suggestedText ?? null,
       }
       await writeComment(draftPath, comment)
       return { output: `Comment added to draft for ${filePath}` }
+    }
+
+    if (action === "approve") {
+      if (!filePath || !args.commentId) {
+        return { output: "error: approve requires filePath and commentId" }
+      }
+      const ext = extname(filePath)
+      if (ext !== ".docx" && ext !== ".xlsx" && ext !== ".pptx") {
+        return { output: "error: suggestions only supported for DOCX, XLSX and PPTX files" }
+      }
+      const filePathHash = getFilePathHash(filePath)
+      const lock = getLock(filePathHash)
+      if (!lock || lock.sessionID !== sessionID) {
+        return { output: "error: no active draft to approve" }
+      }
+      const draftPath = getDraftPath(filePathHash, sessionID, ext)
+      if (!draftExists(filePathHash, sessionID)) {
+        return { output: "error: draft not found" }
+      }
+      let result: "applied" | "not-found" | "no-suggestion"
+      if (ext === ".xlsx") {
+        result = await applyCellSuggestion(draftPath, args.commentId)
+      } else if (ext === ".pptx") {
+        result = await applySlideSuggestion(draftPath, args.commentId)
+      } else {
+        result = await applyCommentSuggestion(draftPath, args.commentId)
+      }
+      if (result === "not-found") {
+        return { output: `error: comment ${args.commentId} not found` }
+      }
+      if (result === "no-suggestion") {
+        return { output: `error: comment ${args.commentId} has no suggestion to approve` }
+      }
+      return { output: `Approved comment ${args.commentId} on ${filePath}: suggestion applied` }
     }
 
     if (action === "track-insert" || action === "track-delete") {

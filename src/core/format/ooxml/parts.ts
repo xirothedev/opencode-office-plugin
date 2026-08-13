@@ -110,3 +110,13 @@ export function escapeXml(text: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
 }
+
+export const SUGGESTED_TEXT_PREFIX = "Suggested text: "
+export const SUGGESTED_VALUE_PREFIX = "Suggested value: "
+
+export function parseSuggestion(text: any, prefix: string): string | null {
+  if (typeof text !== "string" || !text.startsWith(prefix)) {
+    return null
+  }
+  return text.slice(prefix.length)
+}

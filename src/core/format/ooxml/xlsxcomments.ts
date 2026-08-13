@@ -1,7 +1,7 @@
 import JSZip from "jszip"
 import { readFileSync, writeFileSync } from "fs"
 import { parseStringPromise, Builder } from "xml2js"
-import { addRelationship, ensureContentType, escapeXml, partRelsPath, readRelationships, resolveTarget } from "./parts.js"
+import { addRelationship, ensureContentType, escapeXml, partRelsPath, parseSuggestion, readRelationships, resolveTarget, SUGGESTED_VALUE_PREFIX } from "./parts.js"
 
 export interface XlsxComment {
   id: string
@@ -11,7 +11,10 @@ export interface XlsxComment {
   cellRef: string
   parentId: string | null
   resolved: boolean
+  suggestedText?: string | null
 }
+
+export type ApproveResult = "applied" | "not-found" | "no-suggestion"
 
 const SHEET_MAIN_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 const COMMENTS_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments"
@@ -25,7 +28,10 @@ export async function writeComment(xlsxPath: string, comment: XlsxComment): Prom
   const zip = await JSZip.loadAsync(data)
 
   const authorId = await ensureAuthor(zip, comment.author)
-  await appendCommentElement(zip, comment, authorId)
+  const storedText = comment.suggestedText
+    ? `${SUGGESTED_VALUE_PREFIX}${comment.suggestedText}`
+    : comment.text
+  await appendCommentElement(zip, comment, authorId, storedText)
 
   const sheetPart = await resolveFirstSheetPart(zip)
   const sheetRelsPath = partRelsPath(sheetPart)
@@ -33,7 +39,7 @@ export async function writeComment(xlsxPath: string, comment: XlsxComment): Prom
   const vmlRelId = await addRelationship(zip, sheetRelsPath, VML_REL_TYPE, "../drawings/vmlDrawing1.vml")
   const vmlPath = await resolveVmlPath(zip, sheetPart, sheetRelsPath)
   await ensureLegacyDrawing(zip, sheetPart, vmlRelId)
-  await appendVmlShape(zip, vmlPath, comment)
+  await appendVmlShape(zip, vmlPath, comment, storedText)
   await ensureContentType(zip, "/xl/comments1.xml", COMMENTS_CONTENT_TYPE)
   await ensureContentType(zip, `/${vmlPath}`, VML_CONTENT_TYPE)
 
@@ -63,14 +69,16 @@ export async function readComments(xlsxPath: string): Promise<XlsxComment[]> {
 
   return commentList.map((elem: any) => {
     const authorId = parseInt(elem.$?.authorId ?? elem.$?.author, 10)
+    const text = extractCommentText(elem.text)
     return {
       id: elem.$.id || `${elem.$.ref}-${authorId}`,
       author: authorList[authorId] || "Unknown",
-      text: extractCommentText(elem.text),
+      text,
       timestamp: new Date(),
       cellRef: elem.$.ref || "",
       parentId: null,
       resolved: false,
+      suggestedText: parseSuggestion(text, SUGGESTED_VALUE_PREFIX),
     }
   })
 }
@@ -134,7 +142,12 @@ async function ensureAuthor(zip: JSZip, author: string): Promise<number> {
   return newIndex
 }
 
-async function appendCommentElement(zip: JSZip, comment: XlsxComment, authorId: number): Promise<void> {
+async function appendCommentElement(
+  zip: JSZip,
+  comment: XlsxComment,
+  authorId: number,
+  storedText: string
+): Promise<void> {
   const commentsFile = zip.file("xl/comments1.xml")
   let root: any
   if (commentsFile) {
@@ -156,7 +169,7 @@ async function appendCommentElement(zip: JSZip, comment: XlsxComment, authorId: 
   }
   root.commentList.comment.push({
     $: { ref: comment.cellRef, authorId: String(authorId) },
-    text: { t: comment.text },
+    text: { t: storedText },
   })
   const xml = new Builder({
     rootName: "comments",
@@ -245,14 +258,19 @@ async function resolveVmlPath(
   return `xl/drawings/vmlDrawing1.vml`
 }
 
-async function appendVmlShape(zip: JSZip, vmlPath: string, comment: XlsxComment): Promise<void> {
+async function appendVmlShape(
+  zip: JSZip,
+  vmlPath: string,
+  comment: XlsxComment,
+  storedText: string
+): Promise<void> {
   const existing = zip.file(vmlPath)
   let body = existing ? await existing.async("string") : ""
   const shapeCount = (body.match(/<v:shape /g) || []).length
   const ids = [...body.matchAll(/_x0000_s(\d+)/g)].map((m) => parseInt(m[1], 10))
   const shapeId = `_x0000_s${ids.length > 0 ? Math.max(...ids) + 1 : 1025}`
   const { row, col } = cellRefToIndices(comment.cellRef)
-  const shape = `<v:shape id="${shapeId}" type="#_x0000_t202" style="position:absolute;margin-left:0;margin-top:0;width:96pt;height:55.5pt;z-index:${shapeCount + 1};visibility:hidden" fillcolor="#ffffe1" o:insetmode="auto"><v:fill color2="#ffffe1"/><v:shadow on="t" color="black" obscured="t"/><v:path o:connecttype="none"/><v:textbox style="mso-direction-alt:auto"><div style="text-align:left">${escapeXml(comment.text)}</div></v:textbox><x:ClientData ObjectType="Note"><x:MoveWithCells/><x:SizeWithCells/><x:Anchor>1, 15, ${row}, 2, 3, 15, ${row + 4}, 16</x:Anchor><x:AutoFill>False</x:AutoFill><x:Row>${row}</x:Row><x:Column>${col}</x:Column></x:ClientData></v:shape>`
+  const shape = `<v:shape id="${shapeId}" type="#_x0000_t202" style="position:absolute;margin-left:0;margin-top:0;width:96pt;height:55.5pt;z-index:${shapeCount + 1};visibility:hidden" fillcolor="#ffffe1" o:insetmode="auto"><v:fill color2="#ffffe1"/><v:shadow on="t" color="black" obscured="t"/><v:path o:connecttype="none"/><v:textbox style="mso-direction-alt:auto"><div style="text-align:left">${escapeXml(storedText)}</div></v:textbox><x:ClientData ObjectType="Note"><x:MoveWithCells/><x:SizeWithCells/><x:Anchor>1, 15, ${row}, 2, 3, 15, ${row + 4}, 16</x:Anchor><x:AutoFill>False</x:AutoFill><x:Row>${row}</x:Row><x:Column>${col}</x:Column></x:ClientData></v:shape>`
   if (!body) {
     body = `<?xml version="1.0" encoding="UTF-8"?><xml xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">${shape}</xml>`
   } else {
@@ -272,4 +290,129 @@ function cellRefToIndices(cellRef: string): { row: number; col: number } {
     col = col * 26 + (ch.charCodeAt(0) - 64)
   }
   return { row: parseInt(match[2], 10) - 1, col: col - 1 }
+}
+
+export async function applyCellSuggestion(xlsxPath: string, commentId: string): Promise<ApproveResult> {
+  const match = commentId.match(/^([A-Z]+[0-9]+)-(\d+)$/)
+  if (!match) {
+    return "not-found"
+  }
+  const cellRef = match[1]
+  const authorId = parseInt(match[2], 10)
+
+  const data = readFileSync(xlsxPath)
+  const zip = await JSZip.loadAsync(data)
+
+  const commentsFile = zip.file("xl/comments1.xml")
+  if (!commentsFile) {
+    return "not-found"
+  }
+  const commentsContent = await commentsFile.async("string")
+  const commentsObj = await parseStringPromise(commentsContent, { explicitArray: false })
+  const commentsRoot = commentsObj.comments || commentsObj["x:comments"]
+  const commentElements = commentsRoot?.commentList?.comment
+    ? Array.isArray(commentsRoot.commentList.comment)
+      ? commentsRoot.commentList.comment
+      : [commentsRoot.commentList.comment]
+    : []
+  const target = commentElements.find(
+    (c: any) =>
+      (c.$?.ref ?? c.$?.cellRef) === cellRef && String(c.$?.authorId) === String(authorId)
+  )
+  if (!target) {
+    return "not-found"
+  }
+  const text = extractCommentText(target.text)
+  const suggestion = parseSuggestion(text, SUGGESTED_VALUE_PREFIX)
+  if (suggestion === null) {
+    return "no-suggestion"
+  }
+
+  const sheetPart = await resolveFirstSheetPart(zip)
+  await writeCellValue(zip, sheetPart, cellRef, suggestion)
+
+  commentsRoot.commentList.comment = commentElements.filter((c: any) => c !== target)
+  const newCommentsXml = new Builder({
+    rootName: "comments",
+    headless: false,
+    xmldec: { version: "1.0", encoding: "UTF-8", standalone: true },
+  }).buildObject(commentsRoot)
+  zip.file("xl/comments1.xml", newCommentsXml)
+
+  await removeVmlShapeForCell(zip, cellRef, text)
+
+  const buffer = await zip.generateAsync({ type: "nodebuffer" })
+  writeFileSync(xlsxPath, buffer)
+  return "applied"
+}
+
+async function writeCellValue(zip: JSZip, sheetPart: string, cellRef: string, value: string): Promise<void> {
+  const sheetFile = zip.file(sheetPart)
+  if (!sheetFile) {
+    throw new Error(`Sheet part ${sheetPart} not found`)
+  }
+  const content = await sheetFile.async("string")
+  const obj = await parseStringPromise(content, { explicitArray: false })
+  const root = obj.worksheet || obj["x:worksheet"]
+  if (!root) {
+    throw new Error("Could not find worksheet root element")
+  }
+  if (!root.sheetData) {
+    root.sheetData = { row: [] }
+  }
+  const rows = root.sheetData.row
+  const rowList = rows ? (Array.isArray(rows) ? rows : [rows]) : []
+  const { row } = cellRefToIndices(cellRef)
+  let targetRow = rowList.find((r: any) => String(r.$.r) === String(row + 1))
+  if (!targetRow) {
+    targetRow = { $: { r: String(row + 1) }, c: [] }
+    rowList.push(targetRow)
+    root.sheetData.row = rowList
+  }
+  const cells = targetRow.c
+  const cellList = cells ? (Array.isArray(cells) ? cells : [cells]) : []
+  const existingIndex = cellList.findIndex((c: any) => c.$.r === cellRef)
+  const isNumeric = /^-?\d+(\.\d+)?$/.test(value)
+  const newCell = isNumeric
+    ? { $: { r: cellRef }, v: value }
+    : { $: { r: cellRef, t: "inlineStr" }, is: { t: value } }
+  if (existingIndex >= 0) {
+    cellList.splice(existingIndex, 1, newCell)
+  } else {
+    cellList.push(newCell)
+  }
+  targetRow.c = cellList
+
+  const xml = new Builder({
+    rootName: "worksheet",
+    headless: false,
+    xmldec: { version: "1.0", encoding: "UTF-8", standalone: true },
+  }).buildObject(root)
+  zip.file(sheetPart, xml)
+}
+
+async function removeVmlShapeForCell(zip: JSZip, cellRef: string, commentText: string): Promise<void> {
+  const vmlPath = "xl/drawings/vmlDrawing1.vml"
+  const existing = zip.file(vmlPath)
+  if (!existing) {
+    return
+  }
+  const { row, col } = cellRefToIndices(cellRef)
+  const body = await existing.async("string")
+  const escapedText = escapeXml(commentText)
+  const kept = body
+    .split(/(?=<v:shape )/)
+    .filter((block: string) => {
+      if (!block.startsWith("<v:shape ")) {
+        return true
+      }
+      const hasRow = block.includes(`<x:Row>${row}</x:Row>`)
+      const hasCol = block.includes(`<x:Column>${col}</x:Column>`)
+      const hasText = block.includes(escapedText)
+      return !(hasRow && hasCol && hasText)
+    })
+    .join("")
+  if (kept !== body) {
+    zip.file(vmlPath, kept)
+  }
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest"
 import JSZip from "jszip"
-import { writeComment, readComments } from "@/core/format/ooxml/pptxcomments"
+import { writeComment, readComments, applySlideSuggestion } from "@/core/format/ooxml/pptxcomments"
 import { copyFileSync, unlinkSync, mkdirSync, existsSync, readFileSync } from "fs"
 import { join } from "path"
 import { tmpdir } from "os"
@@ -138,5 +138,66 @@ describe("OOXML PPTX Comment Writer", () => {
     const authorsXml = await zip.file("ppt/commentAuthors.xml")!.async("string")
     expect(authorsXml).toContain('id="0" name="AI Agent"')
     expect(authorsXml).toContain('lastIdx="2"')
+  })
+
+  it("writes text suggestion and reads it back", async () => {
+    await writeComment(testPptxPath, {
+      id: "s1",
+      author: "AI Agent",
+      text: "Original note",
+      suggestedText: "Revised slide heading",
+      timestamp: new Date("2026-08-12T10:30:00Z"),
+      slide: 0,
+      x: 100000,
+      y: 100000,
+      parentId: null,
+      resolved: false,
+    })
+
+    const comments = await readComments(testPptxPath)
+    expect(comments).toHaveLength(1)
+    expect(comments[0].text).toBe("Suggested text: Revised slide heading")
+    expect(comments[0].suggestedText).toBe("Revised slide heading")
+  })
+
+  it("approve replaces first text box and removes the comment", async () => {
+    await writeComment(testPptxPath, {
+      id: "s1",
+      author: "AI Agent",
+      text: "Original note",
+      suggestedText: "Approved slide text",
+      timestamp: new Date("2026-08-12T10:30:00Z"),
+      slide: 0,
+      x: 100000,
+      y: 100000,
+      parentId: null,
+      resolved: false,
+    })
+
+    const result = await applySlideSuggestion(testPptxPath, "slide-0-cm-1")
+    expect(result).toBe("applied")
+
+    expect(await readComments(testPptxPath)).toHaveLength(0)
+    const zip = await JSZip.loadAsync(readFileSync(testPptxPath))
+    const slide = await zip.file("ppt/slides/slide1.xml")!.async("string")
+    expect(slide).toContain("Approved slide text")
+    expect(slide).not.toContain("Hello from slide 1")
+  })
+
+  it("approve rejects plain comments and unknown ids", async () => {
+    await writeComment(testPptxPath, {
+      id: "c1",
+      author: "AI Agent",
+      text: "Just a note",
+      timestamp: new Date("2026-08-12T10:30:00Z"),
+      slide: 0,
+      x: 100000,
+      y: 100000,
+      parentId: null,
+      resolved: false,
+    })
+
+    expect(await applySlideSuggestion(testPptxPath, "slide-0-cm-1")).toBe("no-suggestion")
+    expect(await applySlideSuggestion(testPptxPath, "slide-5-cm-9")).toBe("not-found")
   })
 })

@@ -72,6 +72,14 @@ _Avoid_: edit interceptor, edit wrapper
 Annotation on a document range, cell, or slide. DOCX stored in `word/comments.xml` with author, text, timestamp, linked to document via `commentRangeStart`/`commentRangeEnd` markers. XLSX stored in `xl/comments1.xml` with VML note boxes anchored to a cell. PPTX stored in `ppt/comments/comment1.xml` anchored to a slide, authors in `ppt/commentAuthors.xml`. User sees in Word/Excel/PowerPoint comment panel. Agent adds via `officecli(action="comment")`.
 _Avoid_: annotation, note, remark
 
+**Suggestion**:
+Comment that carries a proposed content change, added with `suggestedText`. Stored in the comment text with a marker prefix (`Suggested text: ...` for DOCX/PPTX, `Suggested value: ...` for XLSX) so it survives Office round-trips. Applied to the file content by `officecli(action="approve")` — DOCX replaces the anchored paragraph text, XLSX writes the cell value, PPTX replaces the first text box. The comment is removed once applied.
+_Avoid_: suggested change, review note
+
+**Approve**:
+Applying a Suggestion to the draft content via `officecli(action="approve", commentId)`. Mutating action (requires lock + draft). Comment id comes from `list-comments`/`review` output. After approve the agent continues the normal accept flow to write the real file.
+_Avoid_: accept, apply
+
 **Track change**:
 Insertion or deletion with author attribution. Stored inline in `word/document.xml` as `<w:ins>`/`<w:del>` elements with author, timestamp, id. DOCX only — the OOXML spec defines no track changes format for XLSX/PPTX (Excel's legacy Track Changes was removed, PowerPoint never had it). User accepts/rejects in Word's Review tab. Agent adds via `officecli(action="track-insert"|"track-delete")`; for XLSX/PPTX the action returns an error and `comment` is the review path.
 _Avoid_: revision, redline, edit marker

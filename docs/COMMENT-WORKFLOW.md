@@ -14,11 +14,48 @@ Agent creates draft with **comments** (suggestions) and **track changes** (inser
 
 ## Supported Formats
 
-- **DOCX**: Full support (comments + track changes via `w:ins`/`w:del`)
-- **XLSX**: Comments only (legacy `xl/comments1.xml` + VML note boxes; Excel has no track changes format)
-- **PPTX**: Comments only (`ppt/comments/comment1.xml` + `ppt/commentAuthors.xml`; PowerPoint has no track changes format)
+- **DOCX**: Full support (comments + track changes via `w:ins`/`w:del` + text suggestions)
+- **XLSX**: Comments + value suggestions (legacy `xl/comments1.xml` + VML note boxes; Excel has no track changes format)
+- **PPTX**: Comments + text suggestions (`ppt/comments/comment1.xml` + `ppt/commentAuthors.xml`; PowerPoint has no track changes format)
 
-`track-insert`/`track-delete` return an error for XLSX/PPTX — use `comment` for review feedback there.
+`track-insert`/`track-delete` return an error for XLSX/PPTX — use `comment` with `suggestedText` for review feedback there.
+
+## Suggestions (content-changing comments)
+
+A comment with `suggestedText` carries a proposed content change instead of a plain note:
+
+- **DOCX**: comment on a paragraph with `suggestedText` → `approve` replaces the paragraph text
+- **XLSX**: comment on a cell with `suggestedText` → `approve` writes the value into the cell (numeric if the suggestion is a number, otherwise inline string)
+- **PPTX**: comment on a slide with `suggestedText` → `approve` replaces the first text box text
+
+The suggestion is stored inside the comment text with a marker prefix (`Suggested text: ...` / `Suggested value: ...`) so it survives Office round-trips and is visible to the user reviewing in Word/Excel/PowerPoint.
+
+### Add Suggestion
+
+```javascript
+officecli({
+  action: "comment",
+  filePath: "/path/to/table.xlsx",
+  commentId: "comment-1",
+  author: "AI Agent",
+  commentText: "Amount exceeds budget",
+  suggestedText: "42",          // proposed content change
+  cellRef: "B4",
+})
+```
+
+### Approve
+
+```javascript
+officecli({
+  action: "approve",
+  filePath: "/path/to/table.xlsx",
+  commentId: "B4-0",            // id from list-comments / review
+})
+// Applies the suggestion to the file content and removes the comment
+```
+
+Approving a plain comment returns an error; `commentId` values come from `list-comments`/`review` output (`B2-0`, `slide-0-cm-1`, or the DOCX `commentId`).
 
 ## API Actions
 
@@ -246,8 +283,8 @@ Stakeholder reviews policies, comments on governance issues, tracks revisions.
 ## Limitations
 
 - Track changes are DOCX-only (`w:ins`/`w:del` is a Word OOXML feature; Excel/PowerPoint have no equivalent)
-- Character-level positioning simplified (paragraph-level accuracy)
-- XLSX/PPTX comments are cell/slide-anchored, not text-range-anchored
+- Suggestions are paragraph/cell/slide-anchored, not text-range-anchored; approving a DOCX suggestion replaces the whole paragraph text (inline formatting lost)
+- PPTX suggestions replace the first text box on the slide
 - No real-time collaboration (lock-based)
 - Complex formatting may not round-trip perfectly
 
