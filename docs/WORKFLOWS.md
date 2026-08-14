@@ -181,7 +181,38 @@ changes = officecli(action="diff", filePath="./budget.docx")
 
 ## Real-World Applications
 
-### 1. Legal Document Packages
+### 1. Vietnamese Hospital Procurement (23-Document Chain)
+
+Hospital procurement follows strict sequential workflow with 23 document types:
+
+**Form templates** (from Bệnh viện internal docs):
+- `01. Mẫu chỉ định thầu DV và MSHH dưới 50 triệu` — 8 forms (Đơn đề xuất, Yêu cầu báo giá, Dự toán, etc.)
+- `02. Mẫu chỉ định thầu DỊCH VỤ 50-500 triệu` — 13 forms
+- `03. Mẫu chỉ định thầu MUA SẮM HÀNG HOÁ 50-500 triệu` — 13 forms
+
+**Workflow**:
+```bash
+# Step 1: Read existing form template
+template = officecli(action="read",
+  filePath="./Bệnh viện/01. Mẫu chỉ định thầu DV và MSHH dưới 50 triệu/01. Đơn đề xuất.doc")
+
+# Step 2: Generate purchase request from template
+officecli(action="create", filePath="./procurement/B1-request.docx",
+  content="# Đơn đề xuất mua sắm\n\nKhoa: {{DEPT}}\n\nNội dung: {{ITEMS}}")
+officecli(action="accept", filePath="./procurement/B1-request.docx")
+
+# Step 3: Read B1, generate approval decision (B2)
+b1 = officecli(action="read", filePath="./procurement/B1-request.docx")
+officecli(action="create", filePath="./procurement/B2-approval.docx",
+  content="# Quyết định phê duyệt\n\nCăn cứ: ${b1}\n\nPhê duyệt...")
+officecli(action="accept", filePath="./procurement/B2-approval.docx")
+
+# Continue B3→B23...
+```
+
+**Benefits**: Version history for audit, lock prevents concurrent edits, format conversion automatic.
+
+### 2. Legal Document Packages
 - Contract templates → customized per client
 - Appendices with client-specific data
 - Version control for negotiations

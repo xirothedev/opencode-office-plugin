@@ -14,6 +14,51 @@ graph LR
     F --> G[Version History]
 ```
 
+## Quick Start
+
+1. **Install plugin** (see [Install](#install) below)
+
+2. **Start opencode** in your project directory
+
+3. **Try a document operation**:
+   ```
+   Create a Word document at /tmp/report.docx with a project summary table
+   ```
+
+4. **Agent calls officecli**:
+   - `create` → draft born (real file not yet written)
+   - `accept` → draft flushed to real file, version recorded
+   - `read` → extract text from any format as markdown
+   - `history` → see all versions
+   - `revert` → restore old version
+
+5. **Binary files** (DOCX/XLSX/PPTX/PDF/images) require `officecli`. Text files work with both `edit` and `officecli`.
+
+## Real-World Example: Hospital Procurement
+
+Vietnamese hospitals require 23 sequential procurement documents (purchase request → approval → technical specs → budget → contract → payment). This plugin automates the chain:
+
+```
+B1: Purchase request → B2: Approval decision → B3: Technical specs minutes
+→ ... → B23: Payment settlement
+```
+
+**Template-based batch generation**:
+```bash
+# Create template with {{var}} placeholders
+officecli(action="create", filePath="./templates/decision-template.md",
+  content="# Decision {{NUMBER}}\n\nDepartment: {{DEPT}}\n\nAmount: {{AMOUNT}}")
+officecli(action="accept", filePath="./templates/decision-template.md")
+
+# Generate 50 decisions in one call
+officecli(action="generate",
+  templatePath="./templates/decision-template.md",
+  filePaths=["./decisions/dept-001.docx", "./decisions/dept-002.docx", ...],
+  dataArray=[{DEPT: "Microbiology", NUMBER: 1, AMOUNT: 10000}, ...])
+```
+
+See [WORKFLOWS.md](docs/WORKFLOWS.md) for full procurement workflow examples.
+
 ## Install
 
 Add the package to the `plugin` array in opencode configuration — `opencode.json` in your project, or `~/.config/opencode/config.json` for all projects:
