@@ -6,6 +6,8 @@ import { releaseLock, getLock, isLockStale, type LockStatus } from "@/core/draft
 import { detectFormat } from "@/core/format/detect"
 import { writeOfficeFromMarkdown } from "@/core/format/backends/office"
 import { writePdfFromMarkdown } from "@/core/format/backends/pdf"
+import { writeXlsxFromMarkdown } from "@/core/format/backends/xlsx"
+import { writeDocxFromMarkdown } from "@/core/format/backends/docx"
 import { readSidecar, deleteSidecar, type Sidecar } from "@/core/draft/sidecar"
 import { applyMetadataToFile } from "@/core/format/metadata"
 import { applyWatermarkToFile } from "@/core/format/watermark"
@@ -54,9 +56,15 @@ export async function acceptDraft(absolutePath: string, sessionID: string, times
   const sidecar = readSidecar(filePathHash, sessionID)
 
   // Copy draft to real file (with conversion for binary formats)
-  if (format === "docx" || format === "xlsx" || format === "pptx") {
+  if (format === "docx") {
+    const markdown = readFileSync(draftPath, "utf-8")
+    await writeDocxFromMarkdown(markdown, absolutePath)
+  } else if (format === "pptx") {
     const markdown = readFileSync(draftPath, "utf-8")
     await writeOfficeFromMarkdown(markdown, absolutePath)
+  } else if (format === "xlsx") {
+    const markdown = readFileSync(draftPath, "utf-8")
+    await writeXlsxFromMarkdown(markdown, absolutePath)
   } else if (format === "pdf") {
     const markdown = readFileSync(draftPath, "utf-8")
     await writePdfFromMarkdown(markdown, absolutePath)
