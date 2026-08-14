@@ -1,4 +1,4 @@
-import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, BorderStyle } from "docx"
+import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType } from "docx"
 import { writeFileSync } from "fs"
 
 export async function writeDocxFromMarkdown(markdown: string, outputPath: string): Promise<void> {

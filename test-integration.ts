@@ -6,7 +6,6 @@
 
 import { officecliTool } from "./src/plugin/tools/officecli"
 import { mkdir, writeFile, readFile } from "fs/promises"
-import { join } from "path"
 
 const TEST_DIR = "/tmp/orca-office-tests-direct"
 const HOSPITAL_DIR = "/Users/xirothedev/workspace/Tài liệu làm việc/Tài liệu nội bộ/Bệnh viện"

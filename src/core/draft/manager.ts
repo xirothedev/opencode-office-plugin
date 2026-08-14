@@ -7,7 +7,6 @@ import { detectFormat } from "@/core/format/detect"
 import { writeOfficeFromMarkdown } from "@/core/format/backends/office"
 import { writePdfFromMarkdown } from "@/core/format/backends/pdf"
 import { writeXlsxFromMarkdown } from "@/core/format/backends/xlsx"
-import { writeImageFromMarkdown } from "@/core/format/backends/image"
 import { writeDocxFromMarkdown } from "@/core/format/backends/docx"
 import { readSidecar, deleteSidecar, type Sidecar } from "@/core/draft/sidecar"
 import { applyMetadataToFile } from "@/core/format/metadata"
@@ -70,11 +69,11 @@ export async function acceptDraft(absolutePath: string, sessionID: string, times
     const markdown = readFileSync(draftPath, "utf-8")
     await writePdfFromMarkdown(markdown, absolutePath)
   } else if (format === "image") {
-    const markdown = readFileSync(draftPath, "utf-8")
-    await writeImageFromMarkdown(markdown, absolutePath)
     if (sidecar?.annotations && sidecar.annotations.length > 0) {
       await renderAnnotationsToImage(absolutePath, sidecar.annotations)
     }
+    // Without annotations the image draft holds OCR text, not image content:
+    // the real file is left untouched rather than overwritten with markdown.
   } else {
     copyFileSync(draftPath, absolutePath)
   }

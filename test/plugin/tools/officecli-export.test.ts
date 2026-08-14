@@ -85,9 +85,9 @@ describe("officecli export", () => {
       mockContext
     )
     expect(result.output).toContain("Exported")
-    expect(pandocCalls).toHaveLength(1)
-    expect(pandocCalls[0]).toContain(`-o "${docxTarget}"`)
-    expect(tmpMarkdownContents[0].length).toBeGreaterThan(0)
+    // DOCX now uses docx library, not pandoc — check file created
+    const { existsSync } = await import("fs")
+    expect(existsSync(docxTarget)).toBe(true)
   })
 
   it("errors when targetPath is the same file as filePath", async () => {

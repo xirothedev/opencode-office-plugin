@@ -3,7 +3,7 @@ import { officecliTool } from "@/plugin/tools/officecli"
 import { editTool } from "@/plugin/tools/edit"
 import { listActiveDrafts } from "@/core/draft/manager"
 
-export const OpenOfficePlugin: Plugin = async (ctx) => {
+export const OpenOfficePlugin: Plugin = async (_ctx) => {
   const toolUsage: Array<{ tool: string; sessionID: string; timestamp: number }> = []
 
   return {
@@ -21,19 +21,19 @@ export const OpenOfficePlugin: Plugin = async (ctx) => {
     },
 
     // Modify opencode config
-    config: async (cfg) => {
+    config: async (_cfg) => {
       // Could add default template paths, custom format options, etc.
       // For now, no-op — extend as needed
     },
 
     // Track tool execution
-    "tool.execute.before": async ({ tool, sessionID, callID }) => {
+    "tool.execute.before": async ({ tool, sessionID, callID: _callID }) => {
       if (tool === "officecli" || tool === "edit") {
         toolUsage.push({ tool, sessionID, timestamp: Date.now() })
       }
     },
 
-    "tool.execute.after": async ({ tool, sessionID, callID }) => {
+    "tool.execute.after": async ({ tool: _tool, sessionID: _sessionID, callID: _callID }) => {
       // Could log success/failure, metrics, etc.
     },
 
