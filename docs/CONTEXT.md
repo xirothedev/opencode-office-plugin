@@ -69,7 +69,7 @@ Draft whose session lost lock (stale override) or ended without accept/discard. 
 _Avoid_: abandoned draft, lost edits
 
 **officecli**:
-Single tool with action enum. Actions: create, edit, read, accept, undo, revert, history, list, diff, generate, preview, validate, lock-status, force-release (plus comment, track-change, review, approve). `create` and `accept` take `filePaths` for Batch calls. `read` returns markdown (delegates to pdf-inspector/anydoc/oocr). `history` returns metadata list. `list` returns active drafts across files. `diff` returns the markdown Diff. `generate` produces drafts from a Template. Delegates to format-specific backends internally. Enforces draft lifecycle via edit tool override.
+Single tool with action enum. Actions: create, edit, read, accept, undo, revert, history, list, diff, generate, preview, validate, lock-status, force-release, export, metadata, annotate, watermark (plus comment, track-change, review, approve). `create` and `accept` take `filePaths` for Batch calls. `read` returns markdown (delegates to pdf-inspector/anydoc/oocr). `history` returns metadata list. `list` returns active drafts across files. `diff` returns the markdown Diff. `generate` produces drafts from a Template. Delegates to format-specific backends internally. Enforces draft lifecycle via edit tool override.
 _Avoid_: office tool, document tool, doc tool
 
 **Template**:
@@ -91,6 +91,38 @@ _Avoid_: edit interceptor, edit wrapper
 **Force release**:
 Releasing a file lock held by another session, via `officecli(action="force-release", filePath)`. Allowed only when the lock is stale (timeout exceeded); a fresh foreign lock cannot be force-released. The displaced session's draft becomes an Orphaned draft; that session gets an error on its next mutating command.
 _Avoid_: steal lock, take over, kick
+
+**Derived file**:
+File produced by Export. New file at an explicit target path, converted from a document to another format. The document's real file, lock, draft, and version history are untouched. Written outside the single write path by design.
+_Avoid_: exported copy, output file
+
+**Image annotation**:
+Pixel-space overlay on an image: text notes, rectangular highlights, and text stamps. Distinct from Comment, which is anchored to a document range, cell, or slide. A mutation — routes through the draft lifecycle.
+_Avoid_: markup, image comment
+
+**Annotate**:
+`officecli(action="annotate", filePath, annotations)`. Adds Image annotations to an image draft: text notes, rectangular highlights, and Stamps. Overlay operations live in the draft Sidecar; rendered into the image at Accept.
+_Avoid_: mark up, draw on
+
+**Stamp**:
+Text stamp from a fixed palette (DRAFT, APPROVED, CONFIDENTIAL), rendered onto an image as an Image annotation. No custom stamp images in v1.
+_Avoid_: rubber stamp, seal
+
+**Sidecar**:
+JSON file stored beside a Draft, holding non-content mutations: Metadata values, Watermark configuration, Image annotation overlays. Merged or rendered into the real file at Accept. Exists because the Draft is markdown and cannot carry binary-format properties.
+_Avoid_: meta file, companion file
+
+**Metadata**:
+Document properties: title, author, subject, keywords, custom fields (Office formats); info dict (PDF). Read via `officecli(action="metadata", filePath)`; write via the same action with `properties`. A metadata write is a mutation — pending values live in the draft Sidecar, merged at Accept.
+_Avoid_: properties, document info
+
+**Watermark**:
+Text overlay marking a document, e.g. "DRAFT" or "FINAL". Configurable text, position (diagonal-center, top-center, bottom-center), optional size and opacity. Set via `officecli(action="watermark")`. A mutation — configuration lives in the draft Sidecar, rendered into the binary at Accept.
+_Avoid_: draft mark, label
+
+**Export**:
+`officecli(action="export", filePath, targetPath)`. Converts the document to another format and writes a Derived file at targetPath. Reads the Draft's current state if a draft exists, else the real file. No lock, no draft, no history entry — the document is untouched.
+_Avoid_: convert, save as
 
 **Comment**:
 Annotation on a document range, cell, or slide. DOCX stored in `word/comments.xml` with author, text, timestamp, linked to document via `commentRangeStart`/`commentRangeEnd` markers. XLSX stored in `xl/comments1.xml` with VML note boxes anchored to a cell. PPTX stored in `ppt/comments/comment1.xml` anchored to a slide, authors in `ppt/commentAuthors.xml`. User sees in Word/Excel/PowerPoint comment panel. Agent adds via `officecli(action="comment")`.

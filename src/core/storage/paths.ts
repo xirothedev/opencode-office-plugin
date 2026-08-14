@@ -22,6 +22,10 @@ export function getRegistryDir(): string {
   return join(getPluginDataDir(), "registry")
 }
 
+export function getSidecarsDir(): string {
+  return join(getPluginDataDir(), "sidecars")
+}
+
 export function getFilePathHash(absolutePath: string): string {
   return createHash("sha256").update(absolutePath).digest("hex")
 }
