@@ -6,11 +6,16 @@ import { releaseLock, getLock, isLockStale, type LockStatus } from "@/core/draft
 import { detectFormat } from "@/core/format/detect"
 import { writeOfficeFromMarkdown } from "@/core/format/backends/office"
 import { writePdfFromMarkdown } from "@/core/format/backends/pdf"
+import { readSidecar, deleteSidecar, type Sidecar } from "@/core/draft/sidecar"
+import { applyMetadataToFile } from "@/core/format/metadata"
+import { applyWatermarkToFile } from "@/core/format/watermark"
+import { renderAnnotationsToImage } from "@/core/format/annotate"
 
 interface AcceptPoint {
   timestamp: number
   snapshot: string
   sessionID: string
+  sidecar: Sidecar | null
 }
 
 export interface ActiveDraft {
@@ -46,6 +51,7 @@ export async function acceptDraft(absolutePath: string, sessionID: string, times
   const ext = extname(absolutePath)
   const draftPath = getDraftPath(filePathHash, sessionID, ext)
   const format = detectFormat(absolutePath)
+  const sidecar = readSidecar(filePathHash, sessionID)
 
   // Copy draft to real file (with conversion for binary formats)
   if (format === "docx" || format === "xlsx" || format === "pptx") {
@@ -54,8 +60,25 @@ export async function acceptDraft(absolutePath: string, sessionID: string, times
   } else if (format === "pdf") {
     const markdown = readFileSync(draftPath, "utf-8")
     await writePdfFromMarkdown(markdown, absolutePath)
+  } else if (format === "image") {
+    if (sidecar?.annotations && sidecar.annotations.length > 0) {
+      await renderAnnotationsToImage(absolutePath, sidecar.annotations)
+    }
+    // Without annotations the image draft holds OCR text, not image content:
+    // the real file is left untouched rather than overwritten with markdown.
   } else {
     copyFileSync(draftPath, absolutePath)
+  }
+
+  // Apply non-content mutations from the sidecar
+  if (sidecar) {
+    if (sidecar.metadata) {
+      await applyMetadataToFile(absolutePath, sidecar.metadata)
+    }
+    if (sidecar.watermark) {
+      await applyWatermarkToFile(absolutePath, sidecar.watermark)
+    }
+    deleteSidecar(filePathHash, sessionID)
   }
 
   // Record accept-point
@@ -64,6 +87,7 @@ export async function acceptDraft(absolutePath: string, sessionID: string, times
     timestamp: timestamp ?? Date.now(),
     snapshot,
     sessionID,
+    sidecar,
   }
   const historyPath = join(getHistoryDir(), `${filePathHash}.json`)
   let history: AcceptPoint[] = []
@@ -90,6 +114,7 @@ export function undoDraft(absolutePath: string, sessionID: string): void {
   if (existsSync(draftPath)) {
     unlinkSync(draftPath)
   }
+  deleteSidecar(filePathHash, sessionID)
   unregisterDraft(filePathHash)
 }
 
@@ -154,4 +179,10 @@ export function getSnapshot(filePathHash: string, timestamp: number): string | n
   const history = getHistory(filePathHash)
   const acceptPoint = history.find((ap) => ap.timestamp === timestamp)
   return acceptPoint ? acceptPoint.snapshot : null
+}
+
+export function getSnapshotSidecar(filePathHash: string, timestamp: number): Sidecar | null {
+  const history = getHistory(filePathHash)
+  const acceptPoint = history.find((ap) => ap.timestamp === timestamp)
+  return acceptPoint ? acceptPoint.sidecar : null
 }

@@ -35,7 +35,9 @@
     "diff": "^9.0.0",
     "docx": "^9.7.1",
     "jszip": "^3.10.1",
+    "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.2.108",
+    "sharp": "^0.35.3",
     "xml2js": "^0.6.2"
   },
   "devDependencies": {

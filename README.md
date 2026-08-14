@@ -132,6 +132,8 @@ Creates draft from historical snapshot. Must `accept` to write.
 
 Image extraction is read-only. PDF and Office formats support full read/write cycle. PDF write requires a LaTeX engine (xelatex); override with the `OFFICECLI_PDF_ENGINE` environment variable (e.g. `typst`).
 
+**Export fidelity**: `export` converts between PDF/DOCX/XLSX/PPTX through the markdown pipeline, so layout, tables, and styling are approximate — text content is preserved, fine formatting is not. Layout-sensitive conversions (e.g. PDF → DOCX) are best-effort; use them for text extraction and lightweight editing, not for pixel-perfect round-trips.
+
 ## Data storage
 
 Plugin data stored in `~/.local/share/opencode/plugins/openoffice/`:

@@ -1,5 +1,5 @@
 import { tool, type ToolDefinition } from "@opencode-ai/plugin"
-import { createDraft, acceptDraft, undoDraft, getHistory, getDraftPath, draftExists, getSnapshot } from "@/core/draft/manager"
+import { createDraft, acceptDraft, undoDraft, getHistory, getDraftPath, draftExists, getSnapshot, getSnapshotSidecar } from "@/core/draft/manager"
 import { acquireLock, getLock, releaseLock, isLockStale, overrideLock } from "@/core/draft/lock"
 import { getFilePathHash } from "@/core/storage/paths"
 import { writeFileSync, readFileSync, existsSync } from "fs"
@@ -14,13 +14,18 @@ import { diffTexts } from "@/core/draft/diff"
 import { substituteTemplate } from "@/core/template/substitute"
 import { readRealFileAsMarkdown } from "@/core/format/read"
 import { renderMarkdownFileToHtml } from "@/core/format/render"
+import { writeDerivedFile, EXPORT_EXTENSIONS } from "@/core/format/export"
+import { readMetadata, METADATA_EXTENSIONS, type FileMetadata } from "@/core/format/metadata"
+import { readSidecar, writeSidecar, type WatermarkConfig, type WatermarkPosition, type AnnotationOp } from "@/core/draft/sidecar"
+import { normalizeStampText } from "@/core/format/annotate"
 import { tmpdir } from "os"
 
 export const officecliTool: ToolDefinition = tool({
   description: "Office document automation. Create, edit, read, accept, undo, revert documents with draft lifecycle. Preview renders a draft to HTML, validate checks draft content against rules, lock-status queries lock state, force-release takes over a stale lock. Supports comments for DOCX, XLSX, PPTX, track changes for DOCX, and content-changing suggestions (comment with suggestedText, applied by approve action).",
   args: {
-    action: tool.schema.enum(["create", "edit", "read", "accept", "undo", "revert", "history", "list", "diff", "generate", "preview", "validate", "lock-status", "force-release", "comment", "track-insert", "track-delete", "list-comments", "review", "approve"]),
+    action: tool.schema.enum(["create", "edit", "read", "accept", "undo", "revert", "history", "list", "diff", "generate", "preview", "validate", "lock-status", "force-release", "comment", "track-insert", "track-delete", "list-comments", "review", "approve", "export", "metadata", "watermark", "annotate"]),
     filePath: tool.schema.string().optional(),
+    targetPath: tool.schema.string().optional(),
     content: tool.schema.string().optional(),
     timestamp: tool.schema.number().optional(),
     commentId: tool.schema.string().optional(),
@@ -42,6 +47,12 @@ export const officecliTool: ToolDefinition = tool({
     dataArray: tool.schema.string().optional(),
     filePaths: tool.schema.string().optional(),
     rules: tool.schema.string().optional(),
+    properties: tool.schema.string().optional(),
+    text: tool.schema.string().optional(),
+    position: tool.schema.string().optional(),
+    size: tool.schema.number().optional(),
+    opacity: tool.schema.number().optional(),
+    annotations: tool.schema.string().optional(),
   },
   async execute(args, context) {
     const { action, filePath, content } = args
@@ -322,7 +333,198 @@ export const officecliTool: ToolDefinition = tool({
       }
       acquireLock(filePathHash, sessionID, owner)
       createDraft(filePath, sessionID, snapshot)
+      const sidecar = getSnapshotSidecar(filePathHash, args.timestamp)
+      if (sidecar) {
+        writeSidecar(filePathHash, sessionID, sidecar)
+      }
       return { output: `Reverted to snapshot for ${filePath}` }
+    }
+
+    if (action === "metadata") {
+      if (!filePath) {
+        return { output: "error: metadata requires filePath" }
+      }
+      const ext = extname(filePath).toLowerCase()
+      if (!METADATA_EXTENSIONS.includes(ext)) {
+        return { output: "error: metadata only supported for DOCX, XLSX, PPTX and PDF files" }
+      }
+      const filePathHash = getFilePathHash(filePath)
+      if (args.properties !== undefined) {
+        const draftError = requireDraftFor(filePath, sessionID)
+        if (draftError) {
+          return { output: draftError }
+        }
+        let parsed: unknown
+        try {
+          parsed = JSON.parse(args.properties)
+        } catch {
+          return { output: "error: invalid properties JSON" }
+        }
+        if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+          return { output: "error: properties must be a JSON object" }
+        }
+        for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+          if (key === "custom") {
+            if (typeof value !== "object" || value === null || Array.isArray(value) ||
+                !Object.values(value as Record<string, unknown>).every((v) => typeof v === "string")) {
+              return { output: "error: custom must be an object with string values" }
+            }
+          } else if (typeof value !== "string") {
+            return { output: `error: property "${key}" must be a string` }
+          }
+        }
+        const sidecar = readSidecar(filePathHash, sessionID) ?? {}
+        sidecar.metadata = parsed as FileMetadata
+        writeSidecar(filePathHash, sessionID, sidecar)
+        return { output: `Metadata set for ${filePath}` }
+      }
+      if (!existsSync(filePath)) {
+        return { output: `error: file not found: ${filePath}` }
+      }
+      let real: FileMetadata
+      try {
+        real = await readMetadata(filePath)
+      } catch (error) {
+        return { output: `error: ${(error as Error).message}` }
+      }
+      const sidecar = readSidecar(filePathHash, sessionID)
+      const merged: FileMetadata = { ...real, ...(sidecar?.metadata) }
+      return { output: JSON.stringify(merged, null, 2) }
+    }
+
+    if (action === "watermark") {
+      if (!filePath || args.text === undefined) {
+        return { output: "error: watermark requires filePath and text" }
+      }
+      const ext = extname(filePath).toLowerCase()
+      if (ext !== ".docx" && ext !== ".pdf") {
+        return { output: "error: watermark only supported for DOCX and PDF files" }
+      }
+      const draftError = requireDraftFor(filePath, sessionID)
+      if (draftError) {
+        return { output: draftError }
+      }
+      const filePathHash = getFilePathHash(filePath)
+      const sidecar = readSidecar(filePathHash, sessionID) ?? {}
+      if (args.text === "") {
+        delete sidecar.watermark
+        writeSidecar(filePathHash, sessionID, sidecar)
+        return { output: `Watermark removed for ${filePath}` }
+      }
+      const defaultPosition: WatermarkPosition = ext === ".docx" ? "top-center" : "diagonal-center"
+      const position = (args.position as WatermarkPosition | undefined) ?? defaultPosition
+      const validPositions: WatermarkPosition[] = ["diagonal-center", "top-center", "bottom-center"]
+      if (!validPositions.includes(position)) {
+        return { output: `error: invalid position "${position}" (supported: diagonal-center, top-center, bottom-center)` }
+      }
+      if (ext === ".docx" && position === "diagonal-center") {
+        return { output: "error: diagonal-center watermark not supported for DOCX (supported: top-center, bottom-center)" }
+      }
+      if (ext === ".docx" && args.opacity !== undefined) {
+        return { output: "error: opacity not supported for DOCX watermarks (supported: PDF only)" }
+      }
+      const config: WatermarkConfig = { text: args.text, position }
+      if (args.size !== undefined) config.size = args.size
+      if (args.opacity !== undefined) config.opacity = args.opacity
+      sidecar.watermark = config
+      writeSidecar(filePathHash, sessionID, sidecar)
+      return { output: `Watermark set for ${filePath}: "${args.text}"` }
+    }
+
+    if (action === "annotate") {
+      if (!filePath || !args.annotations) {
+        return { output: "error: annotate requires filePath and annotations" }
+      }
+      const ext = extname(filePath).toLowerCase()
+      if (ext !== ".png" && ext !== ".jpg" && ext !== ".jpeg") {
+        return { output: "error: annotate only supported for PNG and JPG images" }
+      }
+      const filePathHash = getFilePathHash(filePath)
+      const draftError = requireDraftFor(filePath, sessionID)
+      if (draftError) {
+        return { output: draftError }
+      }
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(args.annotations)
+      } catch {
+        return { output: "error: invalid annotations JSON" }
+      }
+      if (!Array.isArray(parsed)) {
+        return { output: "error: annotations must be an array" }
+      }
+      if (parsed.length === 0) {
+        const clearingSidecar = readSidecar(filePathHash, sessionID) ?? {}
+        delete clearingSidecar.annotations
+        writeSidecar(filePathHash, sessionID, clearingSidecar)
+        return { output: `Annotations cleared for ${filePath}` }
+      }
+      const ops: AnnotationOp[] = []
+      for (let i = 0; i < parsed.length; i++) {
+        const entry = parsed[i] as { type?: unknown; text?: unknown; position?: unknown; rect?: unknown; size?: unknown }
+        if (entry.type !== "note" && entry.type !== "highlight" && entry.type !== "stamp") {
+          return { output: `error: annotation ${i} has unknown type ${String(entry.type)}` }
+        }
+        if (entry.type === "note") {
+          if (typeof entry.text !== "string" || entry.text === "" || !isFractionPoint(entry.position)) {
+            return { output: `error: note ${i} requires text and position {x, y} between 0 and 1` }
+          }
+          const op: AnnotationOp = { type: "note", text: entry.text, position: entry.position as AnnotationOp["position"] }
+          if (typeof entry.size === "number") op.size = entry.size
+          ops.push(op)
+        } else if (entry.type === "highlight") {
+          if (!isFractionRect(entry.rect)) {
+            return { output: `error: highlight ${i} requires rect {x, y, width, height} between 0 and 1` }
+          }
+          ops.push({ type: "highlight", rect: entry.rect as AnnotationOp["rect"] })
+        } else {
+          if (typeof entry.text !== "string" || !isFractionPoint(entry.position)) {
+            return { output: `error: stamp ${i} requires text and position {x, y} between 0 and 1` }
+          }
+          const stampText = normalizeStampText(entry.text)
+          if (!stampText) {
+            return { output: `error: stamp ${i} text must be one of: DRAFT, APPROVED, CONFIDENTIAL` }
+          }
+          const op: AnnotationOp = { type: "stamp", text: stampText, position: entry.position as AnnotationOp["position"] }
+          if (typeof entry.size === "number") op.size = entry.size
+          ops.push(op)
+        }
+      }
+      const sidecar = readSidecar(filePathHash, sessionID) ?? {}
+      sidecar.annotations = [...(sidecar.annotations ?? []), ...ops]
+      writeSidecar(filePathHash, sessionID, sidecar)
+      return { output: `Annotations added to draft for ${filePath}: ${ops.length}` }
+    }
+
+    if (action === "export") {
+      if (!filePath || !args.targetPath) {
+        return { output: "error: export requires filePath and targetPath" }
+      }
+      const filePathHash = getFilePathHash(filePath)
+      const hasDraft = draftExists(filePathHash, sessionID)
+      if (!hasDraft && !existsSync(filePath)) {
+        return { output: `error: file not found: ${filePath}` }
+      }
+      const sourceExt = extname(filePath).toLowerCase()
+      if (!EXPORT_EXTENSIONS.includes(sourceExt)) {
+        return { output: `error: export source format not supported: ${sourceExt} (supported: pdf, docx, xlsx, pptx)` }
+      }
+      const targetExt = extname(args.targetPath).toLowerCase()
+      if (!EXPORT_EXTENSIONS.includes(targetExt)) {
+        return { output: `error: export target format not supported: ${targetExt} (supported: pdf, docx, xlsx, pptx)` }
+      }
+      if (resolve(args.targetPath) === resolve(filePath)) {
+        return { output: "error: targetPath must differ from filePath" }
+      }
+      const markdown = hasDraft
+        ? readFileSync(getDraftPath(filePathHash, sessionID, sourceExt), "utf-8")
+        : await readRealFileAsMarkdown(filePath)
+      try {
+        await writeDerivedFile(markdown, args.targetPath)
+      } catch (error) {
+        return { output: `error: ${(error as Error).message}` }
+      }
+      return { output: `Exported ${filePath} to ${args.targetPath}` }
     }
 
     if (action === "read") {
@@ -345,8 +547,6 @@ export const officecliTool: ToolDefinition = tool({
       const content = await readRealFileAsMarkdown(filePath)
       return { output: content }
     }
-
-    // Comment and track changes actions
     if (action === "comment") {
       if (!filePath || !args.commentId || !args.author || !args.commentText) {
         return { output: "error: comment requires filePath, commentId, author, commentText" }
@@ -619,6 +819,38 @@ function isDataObject(value: unknown): value is Record<string, string | number> 
     return false
   }
   return Object.values(value).every((v) => typeof v === "string" || typeof v === "number")
+}
+
+function isFraction(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1
+}
+
+function requireDraftFor(filePath: string, sessionID: string): string | null {
+  const filePathHash = getFilePathHash(filePath)
+  const lock = getLock(filePathHash)
+  if (!lock || lock.sessionID !== sessionID) {
+    return "error: no active draft"
+  }
+  if (!draftExists(filePathHash, sessionID)) {
+    return "error: draft not found"
+  }
+  return null
+}
+
+function isFractionPoint(value: unknown): value is { x: number; y: number } {
+  if (typeof value !== "object" || value === null) {
+    return false
+  }
+  const point = value as { x?: unknown; y?: unknown }
+  return isFraction(point.x) && isFraction(point.y)
+}
+
+function isFractionRect(value: unknown): value is { x: number; y: number; width: number; height: number } {
+  if (typeof value !== "object" || value === null) {
+    return false
+  }
+  const rect = value as { x?: unknown; y?: unknown; width?: unknown; height?: unknown }
+  return isFraction(rect.x) && isFraction(rect.y) && isFraction(rect.width) && isFraction(rect.height)
 }
 
 function parseFilePaths(filePaths: string | undefined): string[] | string {
