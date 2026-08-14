@@ -170,14 +170,31 @@ Creates draft from historical snapshot. Must `accept` to write.
 |--------|------|-------|---------|
 | Text (txt, md, etc.) | ✅ | ✅ | Native |
 | PDF | ✅ | ✅ | pandoc + xelatex (read: pdfjs-dist + pdf-inspector) |
-| DOCX | ✅ | ✅ | anydoc + pandoc |
-| XLSX | ✅ | ✅ | anydoc + pandoc |
+| DOCX | ✅ | ✅ | anydoc + docx library |
+| XLSX | ✅ | ✅ | anydoc + exceljs |
 | PPTX | ✅ | ✅ | anydoc + pandoc |
-| Images (PNG, JPG) | ✅ | ❌ | anydoc |
+| Images (PNG, JPG) | ✅ | ✅ | anydoc + sharp |
 
-Image extraction is read-only. PDF and Office formats support full read/write cycle. PDF write requires a LaTeX engine (xelatex); override with the `OFFICECLI_PDF_ENGINE` environment variable (e.g. `typst`).
+All formats support full read/write cycle. PDF write requires a LaTeX engine (xelatex); override with the `OFFICECLI_PDF_ENGINE` environment variable (e.g. `typst`).
 
 **Export fidelity**: `export` converts between PDF/DOCX/XLSX/PPTX through the markdown pipeline, so layout, tables, and styling are approximate — text content is preserved, fine formatting is not. Layout-sensitive conversions (e.g. PDF → DOCX) are best-effort; use them for text extraction and lightweight editing, not for pixel-perfect round-trips.
+
+## New Features
+
+### Plugin Hooks
+
+Plugin integrates with opencode lifecycle:
+
+- `event` — subscribe to opencode events (message updates, etc.)
+- `config` — modify opencode config (extend for custom defaults)
+- `tool.execute.before/after` — track tool usage
+- `dispose` — cleanup on shutdown
+
+Hooks defined in `src/plugin/index.ts`. Extend as needed for custom integrations.
+
+### Enhanced Formatting
+
+DOCX writes now use `docx` library instead of pandoc for explicit table formatting (borders, cell widths, heading styles). Better round-trip fidelity for simple documents.
 
 ## Data storage
 
