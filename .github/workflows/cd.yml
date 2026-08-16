@@ -24,6 +24,10 @@ jobs:
       - name: Set version from tag
         run: npm version ${GITHUB_REF_NAME#v} --no-git-tag-version --allow-same-version
       - name: Publish to npm
+        # Trusted publishing (OIDC): GitHub Actions authenticates to npm
+        # directly via the id-token permission — no NPM_TOKEN secret needed.
+        # Requires the @openoffice scope to have trusted publishing enabled
+        # (npm web UI: Settings -> Trusted Publishing, OIDC provider
+        # https://token.actions.githubusercontent.com, repo
+        # xirothedev/opencode-office-plugin).
         run: npm publish --provenance --access public --no-git-checks
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

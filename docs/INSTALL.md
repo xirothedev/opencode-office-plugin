@@ -99,5 +99,5 @@ git push origin v0.2.0
 ```
 
 - The npm version is taken from the tag (`v0.2.0` → `0.2.0`); do not bump `package.json` by hand.
-- Required GitHub secret: `NPM_TOKEN` (npm granular access token, publish-only, no OTP).
-- The npm account must enable trusted publishing (OIDC) on the `@openoffice` scope for `--provenance` to work.
+- Publishing uses **Trusted Publishing (OIDC)** — no npm token secret in CI. The `@openoffice` scope must have trusted publishing enabled in the npm web UI (Settings → Trusted Publishing): OIDC provider `https://token.actions.githubusercontent.com`, allowed repo `xirothedev/opencode-office-plugin`. CI authenticates via the workflow's `id-token: write` permission and signs with `--provenance`.
+- Until the scope has trusted publishing configured, a publish fails with `E403`/`EOTP`; run `npm publish --provenance --access public` locally once (with `--otp=<code>` if 2FA-protected) to claim the scope, then enable trusted publishing.
