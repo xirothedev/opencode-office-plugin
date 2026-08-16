@@ -23,14 +23,14 @@
    or reference the linked package directly:
    ```json
    {
-     "plugins": ["@openoffice/plugin"]
+     "plugins": ["@xirothedev/openoffice-plugin-opencode"]
    }
    ```
 
 4. **Link in the config directory** so opencode 2 can resolve the package
    ```bash
    cd ~/.config/opencode
-   bun link @openoffice/plugin --global
+   bun link @xirothedev/openoffice-plugin-opencode --global
    ```
 
 5. **Start opencode 2**
@@ -65,14 +65,14 @@
    Edit `opencode.json`:
    ```json
    {
-     "plugins": ["@openoffice/plugin"]
+     "plugins": ["@xirothedev/openoffice-plugin-opencode"]
    }
    ```
 
 4. **Link plugin**
    ```bash
    cd ~/.opencode
-   bun link @openoffice/plugin --global
+   bun link @xirothedev/openoffice-plugin-opencode --global
    ```
 
 5. **Start opencode 2**

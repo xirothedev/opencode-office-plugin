@@ -1,5 +1,5 @@
 {
-  "name": "@openoffice/plugin",
+  "name": "@xirothedev/openoffice-plugin-opencode",
   "version": "0.2.0",
   "description": "Office document automation for opencode: draft lifecycle, version history, format conversion, template batch generation.",
   "type": "module",

@@ -1,4 +1,4 @@
-# @openoffice/plugin
+# @xirothedev/openoffice-plugin-opencode
 
 Office document automation plugin for opencode. Manage documents with draft lifecycle, version history, and format conversion.
 
@@ -65,7 +65,7 @@ Add the package to the `plugins` array in opencode 2 configuration — `opencode
 
 ```json
 {
-  "plugins": ["@openoffice/plugin"]
+  "plugins": ["@xirothedev/openoffice-plugin-opencode"]
 }
 ```
 
@@ -207,7 +207,7 @@ Configure via the `plugins` entry's `options` object in opencode config:
 {
   "plugins": [
     {
-      "package": "@openoffice/plugin",
+      "package": "@xirothedev/openoffice-plugin-opencode",
       "options": {
         "pdfEngine": "typst",
         "staleLockHours": 48,

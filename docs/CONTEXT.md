@@ -153,7 +153,7 @@ State of file lock: `acquired` (agent editing), `in-review` (user reviewing in O
 _Avoid_: lock state, lock mode
 
 **Release**:
-Version of the plugin published to the npm registry. Identified by a `v<semver>` git tag on the repository. Installing users reference a Release by name (`@openoffice/plugin@0.1.0`).
+Version of the plugin published to the npm registry. Identified by a `v<semver>` git tag on the repository. Installing users reference a Release by name (`@xirothedev/openoffice-plugin-opencode@0.2.0`).
 _Avoid_: version, build
 
 **Publish**:

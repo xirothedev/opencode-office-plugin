@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 
 /**
- * Example: Using @openoffice/plugin programmatically
+ * Example: Using @xirothedev/openoffice-plugin-opencode programmatically
  *
  * This script demonstrates how the plugin works internally.
  * In real usage, opencode calls these tools automatically.

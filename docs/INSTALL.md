@@ -23,7 +23,7 @@ Add the package to the `plugins` array in opencode 2 configuration:
 
 ```json
 {
-  "plugins": ["@openoffice/plugin"]
+  "plugins": ["@xirothedev/openoffice-plugin-opencode"]
 }
 ```
 
@@ -31,7 +31,7 @@ Add the package to the `plugins` array in opencode 2 configuration:
 
 ```json
 {
-  "plugins": ["@openoffice/plugin"]
+  "plugins": ["@xirothedev/openoffice-plugin-opencode"]
 }
 ```
 
@@ -41,7 +41,7 @@ To pin a version and pass options:
 {
   "plugins": [
     {
-      "package": "@openoffice/plugin@0.2.0",
+      "package": "@xirothedev/openoffice-plugin-opencode@0.2.0",
       "options": {
         "pdfEngine": "typst",
         "staleLockHours": 48,
@@ -81,7 +81,7 @@ opencode2 api get /api/plugin
 
 | Symptom | Fix |
 | --- | --- |
-| Plugin not loading | Confirm the config file is `opencode.json` (project or global), the field is `plugins` (V2, not V1's `plugin`), and the package name is spelled `@openoffice/plugin`. Check the server log for load errors. |
+| Plugin not loading | Confirm the config file is `opencode.json` (project or global), the field is `plugins` (V2, not V1's `plugin`), and the package name is spelled `@xirothedev/openoffice-plugin-opencode`. Check the server log for load errors. |
 | `officecli` not available in chat | Restart opencode 2 after changing config. Check startup logs for load errors. |
 | Plugin loads but tools are invisible to the model | Tools are registered with `codemode: false` for direct provider exposure — verify you are not on a version where the plugin package mismatch prevents registration. |
 | pandoc errors on DOCX/XLSX/PPTX | Install pandoc, verify with `pandoc --version`. |
@@ -99,5 +99,5 @@ git push origin v0.2.0
 ```
 
 - The npm version is taken from the tag (`v0.2.0` → `0.2.0`); do not bump `package.json` by hand.
-- Publishing uses **Trusted Publishing (OIDC)** — no npm token secret in CI. The `@openoffice` scope must have trusted publishing enabled in the npm web UI (Settings → Trusted Publishing): OIDC provider `https://token.actions.githubusercontent.com`, allowed repo `xirothedev/opencode-office-plugin`. CI authenticates via the workflow's `id-token: write` permission and signs with `--provenance`.
+- Publishing uses **Trusted Publishing (OIDC)** — no npm token secret in CI. The `@xirothedev` scope must have trusted publishing enabled in the npm web UI (Settings → Trusted Publishing): OIDC provider `https://token.actions.githubusercontent.com`, allowed repo `xirothedev/opencode-office-plugin`. CI authenticates via the workflow's `id-token: write` permission and signs with `--provenance`.
 - Until the scope has trusted publishing configured, a publish fails with `E403`/`EOTP`; run `npm publish --provenance --access public` locally once (with `--otp=<code>` if 2FA-protected) to claim the scope, then enable trusted publishing.

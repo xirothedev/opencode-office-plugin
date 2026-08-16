@@ -4,7 +4,7 @@ Office document automation plugin for opencode. Transparent draft lifecycle, loc
 
 ## Plugin Scope
 
-**Full plugin, no daemon**. Drop standalone daemon, wire protocol, binary release. Plugin = npm package `@openoffice/plugin`. Installed by adding it to the `plugins` array in opencode 2 config (see docs/INSTALL.md). Targets the opencode V2 plugin API (ADR-0010, supersedes ADR-0002): `Plugin.define({ id: "openoffice", effect })` from `@opencode-ai/plugin/effect`, pinned to `@opencode-ai/plugin@0.0.0-next-17444`.
+**Full plugin, no daemon**. Drop standalone daemon, wire protocol, binary release. Plugin = npm package `@xirothedev/openoffice-plugin-opencode`. Installed by adding it to the `plugins` array in opencode 2 config (see docs/INSTALL.md). Targets the opencode V2 plugin API (ADR-0010, supersedes ADR-0002): `Plugin.define({ id: "openoffice", effect })` from `@opencode-ai/plugin/effect`, pinned to `@opencode-ai/plugin@0.0.0-next-17444`.
 
 **Standalone**. This folder = plugin root. No monorepo, no symlinks to old openoffice project. Greenfield.
 
@@ -115,7 +115,7 @@ Plugin registers a tool named `edit` via `tools.add`. Empirically verified at ne
 
 ```
 ./
-  package.json          # @openoffice/plugin, depends on @opencode-ai/plugin@0.0.0-next-17444 + effect@4.0.0-beta.101
+  package.json          # @xirothedev/openoffice-plugin-opencode, depends on @opencode-ai/plugin@0.0.0-next-17444 + effect@4.0.0-beta.101
   src/
     core/               # pure logic, no opencode deps
       draft/
