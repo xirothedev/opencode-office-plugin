@@ -1,7 +1,7 @@
 {
   "name": "@openoffice/plugin",
   "version": "0.2.0",
-  "description": "Office document automation plugin for opencode",
+  "description": "Office document automation for opencode: draft lifecycle, version history, format conversion, template batch generation.",
   "type": "module",
   "main": "dist/plugin/index.js",
   "types": "dist/plugin/index.d.ts",
