@@ -21,4 +21,13 @@ describe("officecli tool", () => {
     const content = readFileSync(testFile, "utf-8")
     expect(content).toBe("draft content")
   })
+
+  it("rejects empty content", async () => {
+    await expect(runTool(officecliTool, { action: "create", filePath: testFile, content: "" })).rejects.toThrow(
+      /length of at least 1/
+    )
+    await expect(
+      runTool(officecliTool, { action: "create", filePath: testFile })
+    ).rejects.toThrow()
+  })
 })
