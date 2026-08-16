@@ -1,32 +1,14 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest"
+import { describe, it, expect } from "vitest"
 import { officecliTool } from "@/plugin/tools/officecli"
-import { getDraftsDir, getHistoryDir, getLocksDir, getFilePathHash } from "@/core/storage/paths"
-import { mkdir, rm } from "fs/promises"
-import { readFileSync, existsSync, writeFileSync } from "fs"
+import { runTool, setupHermeticDirs, cleanupTestFile } from "./harness"
+import { getLocksDir, getFilePathHash } from "@/core/storage/paths"
+import { readFileSync, writeFileSync } from "fs"
 import { join } from "path"
 
 describe("officecli lock-status action", () => {
   const testFile = "/tmp/officecli-lock-status.txt"
-  const mockContext = {
-    agent: "test-agent",
-    sessionID: "test-session",
-    messageID: "test-message",
-    directory: "/tmp",
-    worktree: "/tmp",
-  }
-
-  beforeEach(async () => {
-    await mkdir(getDraftsDir(), { recursive: true })
-    await mkdir(getHistoryDir(), { recursive: true })
-    await mkdir(getLocksDir(), { recursive: true })
-  })
-
-  afterEach(async () => {
-    await rm(getDraftsDir(), { recursive: true, force: true })
-    await rm(getHistoryDir(), { recursive: true, force: true })
-    await rm(getLocksDir(), { recursive: true, force: true })
-    if (existsSync(testFile)) await rm(testFile)
-  })
+  setupHermeticDirs()
+  cleanupTestFile(testFile)
 
   function writeStaleLock(sessionID: string, owner: string): void {
     const lockPath = join(getLocksDir(), `${getFilePathHash(testFile)}.json`)
@@ -37,12 +19,9 @@ describe("officecli lock-status action", () => {
   }
 
   it("returns lock details including owner and staleness", async () => {
-    await officecliTool.execute(
-      { action: "create", filePath: testFile, content: "content" },
-      mockContext
-    )
-    const result = await officecliTool.execute({ action: "lock-status", filePath: testFile }, mockContext)
-    const lock = JSON.parse(result.output as string)
+    await runTool(officecliTool, { action: "create", filePath: testFile, content: "content" })
+    const result = await runTool(officecliTool, { action: "lock-status", filePath: testFile })
+    const lock = JSON.parse(result)
     expect(lock.sessionID).toBe("test-session")
     expect(lock.owner).toBe("test-agent")
     expect(lock.status).toBe("acquired")
@@ -51,35 +30,36 @@ describe("officecli lock-status action", () => {
   })
 
   it("reports no lock for an unlocked file", async () => {
-    const result = await officecliTool.execute({ action: "lock-status", filePath: testFile }, mockContext)
-    expect(result.output).toContain("no lock")
+    const result = await runTool(officecliTool, { action: "lock-status", filePath: testFile })
+    expect(result).toContain("no lock")
   })
 
   it("requires filePath", async () => {
-    const result = await officecliTool.execute({ action: "lock-status" }, mockContext)
-    expect(result.output).toContain("error")
+    await expect(runTool(officecliTool, { action: "lock-status" })).rejects.toThrow(/filePath/)
   })
 
   it("force-release refuses when there is no lock", async () => {
-    const result = await officecliTool.execute({ action: "force-release", filePath: testFile }, mockContext)
-    expect(result.output).toContain("error")
+    await expect(runTool(officecliTool, { action: "force-release", filePath: testFile })).rejects.toThrow(
+      /no lock on \/tmp\/officecli-lock-status\.txt to force release/
+    )
   })
 
   it("force-release refuses a fresh foreign lock", async () => {
-    await officecliTool.execute(
-      { action: "create", filePath: testFile, content: "content" },
-      { ...mockContext, sessionID: "other-session", agent: "other-agent" }
+    await runTool(officecliTool, { action: "create", filePath: testFile, content: "content" }, {
+      sessionID: "other-session",
+      agent: "other-agent",
+    })
+    await expect(runTool(officecliTool, { action: "force-release", filePath: testFile })).rejects.toThrow(
+      /lock on \/tmp\/officecli-lock-status\.txt is not stale/
     )
-    const result = await officecliTool.execute({ action: "force-release", filePath: testFile }, mockContext)
-    expect(result.output).toContain("error")
     const lockPath = join(getLocksDir(), `${getFilePathHash(testFile)}.json`)
     expect(JSON.parse(readFileSync(lockPath, "utf-8")).sessionID).toBe("other-session")
   })
 
   it("force-release takes over a stale foreign lock", async () => {
     writeStaleLock("other-session", "other-agent")
-    const result = await officecliTool.execute({ action: "force-release", filePath: testFile }, mockContext)
-    expect(result.output).toContain("Force released")
+    const result = await runTool(officecliTool, { action: "force-release", filePath: testFile })
+    expect(result).toContain("Force released")
     const lockPath = join(getLocksDir(), `${getFilePathHash(testFile)}.json`)
     const lock = JSON.parse(readFileSync(lockPath, "utf-8"))
     expect(lock.sessionID).toBe("test-session")
@@ -87,7 +67,6 @@ describe("officecli lock-status action", () => {
   })
 
   it("force-release requires filePath", async () => {
-    const result = await officecliTool.execute({ action: "force-release" }, mockContext)
-    expect(result.output).toContain("error")
+    await expect(runTool(officecliTool, { action: "force-release" })).rejects.toThrow(/filePath/)
   })
 })

@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest"
+import { describe, it, expect } from "vitest"
 import { officecliTool } from "@/plugin/tools/officecli"
-import { getDraftsDir, getHistoryDir, getLocksDir, getFilePathHash } from "@/core/storage/paths"
-import { mkdir, rm } from "fs/promises"
+import { runTool, setupHermeticDirs, cleanupTestFile } from "./harness"
+import { getLocksDir, getFilePathHash } from "@/core/storage/paths"
 import { readFileSync, existsSync, writeFileSync } from "fs"
 import { join } from "path"
 
@@ -9,123 +9,86 @@ describe("officecli batch create/accept", () => {
   const fileA = "/tmp/officecli-batch-a.txt"
   const fileB = "/tmp/officecli-batch-b.txt"
   const fileC = "/tmp/officecli-batch-c.txt"
-  const mockContext = {
-    agent: "test-agent",
-    sessionID: "test-session",
-    messageID: "test-message",
-    directory: "/tmp",
-    worktree: "/tmp",
-  }
-
-  beforeEach(async () => {
-    await mkdir(getDraftsDir(), { recursive: true })
-    await mkdir(getHistoryDir(), { recursive: true })
-    await mkdir(getLocksDir(), { recursive: true })
-  })
-
-  afterEach(async () => {
-    await rm(getDraftsDir(), { recursive: true, force: true })
-    await rm(getHistoryDir(), { recursive: true, force: true })
-    await rm(getLocksDir(), { recursive: true, force: true })
-    for (const f of [fileA, fileB, fileC]) {
-      if (existsSync(f)) await rm(f)
-    }
-  })
+  setupHermeticDirs()
+  cleanupTestFile(fileA)
+  cleanupTestFile(fileB)
+  cleanupTestFile(fileC)
 
   it("create with filePaths creates a draft for every path with the same content", async () => {
-    const result = await officecliTool.execute(
-      {
-        action: "create",
-        filePaths: JSON.stringify([fileA, fileB]),
-        content: "shared content",
-      },
-      mockContext
-    )
-    expect(result).toEqual({ output: expect.stringContaining("2 drafts") })
-    const readA = await officecliTool.execute({ action: "read", filePath: fileA }, mockContext)
-    const readB = await officecliTool.execute({ action: "read", filePath: fileB }, mockContext)
-    expect(readA.output).toBe("shared content")
-    expect(readB.output).toBe("shared content")
+    const result = await runTool(officecliTool, {
+      action: "create",
+      filePaths: JSON.stringify([fileA, fileB]),
+      content: "shared content",
+    })
+    expect(result).toContain("2 drafts")
+    const readA = await runTool(officecliTool, { action: "read", filePath: fileA })
+    const readB = await runTool(officecliTool, { action: "read", filePath: fileB })
+    expect(readA).toBe("shared content")
+    expect(readB).toBe("shared content")
   })
 
   it("create with filePaths aborts with no partial drafts when another session holds a lock", async () => {
-    await officecliTool.execute(
-      { action: "create", filePath: fileB, content: "held" },
-      { ...mockContext, sessionID: "other-session" }
-    )
-    const result = await officecliTool.execute(
-      {
+    await runTool(officecliTool, { action: "create", filePath: fileB, content: "held" }, {
+      sessionID: "other-session",
+    })
+    await expect(
+      runTool(officecliTool, {
         action: "create",
         filePaths: JSON.stringify([fileA, fileB]),
         content: "shared content",
-      },
-      mockContext
-    )
-    expect(result.output).toContain("error: lock on /tmp/officecli-batch-b.txt held by session other-session")
-    const list = await officecliTool.execute({ action: "list" }, mockContext)
-    const drafts = JSON.parse(list.output as string)
+      })
+    ).rejects.toThrow(/lock on \/tmp\/officecli-batch-b\.txt held by session other-session/)
+    const list = await runTool(officecliTool, { action: "list" })
+    const drafts = JSON.parse(list)
     expect(drafts).toHaveLength(1)
     expect(drafts[0].filePath).toBe(fileB)
   })
 
   it("create with invalid filePaths JSON errors", async () => {
-    const result = await officecliTool.execute(
-      { action: "create", filePaths: "{not json", content: "x" },
-      mockContext
-    )
-    expect(result.output).toContain("error: invalid filePaths JSON")
+    await expect(
+      runTool(officecliTool, { action: "create", filePaths: "{not json", content: "x" })
+    ).rejects.toThrow(/invalid filePaths JSON/)
   })
 
   it("create with a non-array filePaths errors", async () => {
-    const result = await officecliTool.execute(
-      { action: "create", filePaths: JSON.stringify("x"), content: "x" },
-      mockContext
-    )
-    expect(result.output).toContain("error: filePaths must be a non-empty array of strings")
+    await expect(
+      runTool(officecliTool, { action: "create", filePaths: JSON.stringify("x"), content: "x" })
+    ).rejects.toThrow(/filePaths must be a non-empty array of strings/)
   })
 
   it("accept with filePaths accepts all drafts", async () => {
-    await officecliTool.execute(
-      {
-        action: "create",
-        filePaths: JSON.stringify([fileA, fileB]),
-        content: "batch content",
-      },
-      mockContext
-    )
-    const result = await officecliTool.execute(
-      { action: "accept", filePaths: JSON.stringify([fileA, fileB]) },
-      mockContext
-    )
-    expect(result).toEqual({ output: expect.stringContaining("2 drafts") })
+    await runTool(officecliTool, {
+      action: "create",
+      filePaths: JSON.stringify([fileA, fileB]),
+      content: "batch content",
+    })
+    const result = await runTool(officecliTool, { action: "accept", filePaths: JSON.stringify([fileA, fileB]) })
+    expect(result).toContain("2 drafts")
     expect(readFileSync(fileA, "utf-8")).toBe("batch content")
     expect(readFileSync(fileB, "utf-8")).toBe("batch content")
   })
 
   it("accept with filePaths aborts with no partial accepts when one path has no draft", async () => {
-    await officecliTool.execute({ action: "create", filePath: fileA, content: "content" }, mockContext)
-    const result = await officecliTool.execute(
-      { action: "accept", filePaths: JSON.stringify([fileA, fileB]) },
-      mockContext
-    )
-    expect(result.output).toContain("error")
+    await runTool(officecliTool, { action: "create", filePath: fileA, content: "content" })
+    await expect(
+      runTool(officecliTool, { action: "accept", filePaths: JSON.stringify([fileA, fileB]) })
+    ).rejects.toThrow(/no active draft to accept for \/tmp\/officecli-batch-b\.txt/)
     expect(existsSync(fileA)).toBe(false)
     expect(existsSync(fileB)).toBe(false)
-    const list = await officecliTool.execute({ action: "list" }, mockContext)
-    expect(JSON.parse(list.output as string)).toHaveLength(1)
+    const list = await runTool(officecliTool, { action: "list" })
+    expect(JSON.parse(list)).toHaveLength(1)
   })
 
   it("create with empty filePaths array errors", async () => {
-    const result = await officecliTool.execute(
-      { action: "create", filePaths: "[]", content: "x" },
-      mockContext
-    )
-    expect(result.output).toContain("error: filePaths must be a non-empty array of strings")
+    await expect(
+      runTool(officecliTool, { action: "create", filePaths: "[]", content: "x" })
+    ).rejects.toThrow(/filePaths must be a non-empty array of strings/)
   })
 
   it("accept with empty filePaths array errors", async () => {
-    const result = await officecliTool.execute({ action: "accept", filePaths: "[]" }, mockContext)
-    expect(result.output).toContain("error: filePaths must be a non-empty array of strings")
+    await expect(runTool(officecliTool, { action: "accept", filePaths: "[]" })).rejects.toThrow(
+      /filePaths must be a non-empty array of strings/
+    )
   })
 
   it("create with filePaths acquires over a stale foreign lock", async () => {
@@ -139,24 +102,19 @@ describe("officecli batch create/accept", () => {
         status: "acquired",
       })
     )
-    const result = await officecliTool.execute(
-      {
-        action: "create",
-        filePaths: JSON.stringify([fileA, fileB]),
-        content: "shared content",
-      },
-      mockContext
-    )
-    expect(result).toEqual({ output: expect.stringContaining("2 drafts") })
-    const lockStatus = await officecliTool.execute({ action: "lock-status", filePath: fileB }, mockContext)
-    expect(JSON.parse(lockStatus.output as string).sessionID).toBe("test-session")
+    const result = await runTool(officecliTool, {
+      action: "create",
+      filePaths: JSON.stringify([fileA, fileB]),
+      content: "shared content",
+    })
+    expect(result).toContain("2 drafts")
+    const lockStatus = await runTool(officecliTool, { action: "lock-status", filePath: fileB })
+    expect(JSON.parse(lockStatus).sessionID).toBe("test-session")
   })
 
   it("accept with invalid filePaths JSON errors", async () => {
-    const result = await officecliTool.execute(
-      { action: "accept", filePaths: "{not json" },
-      mockContext
+    await expect(runTool(officecliTool, { action: "accept", filePaths: "{not json" })).rejects.toThrow(
+      /invalid filePaths JSON/
     )
-    expect(result.output).toContain("error: invalid filePaths JSON")
   })
 })

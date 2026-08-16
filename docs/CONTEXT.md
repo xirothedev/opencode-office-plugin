@@ -6,13 +6,13 @@ Office document automation plugin for opencode. Transparent draft lifecycle, loc
 
 **Single write path**: Real file written only by Accept. All edits route through draft. `edit` tool override enforces this transparently.
 
-**Lock = claim**: Not mutex. Per-file claim granting one session right to hold active draft. Stale >24h → override. Released on accept/undo/stale override.
+**Lock = claim**: Not mutex. Per-file claim granting one session right to hold active draft. Stale beyond the configured threshold (default 24h) → override. Released on accept/undo/stale override.
 
 **filePathHash = SHA256**: Deterministic key for drafts/locks/history. Cross-session discovery.
 
 **Lazy acquire**: Lock acquired on first mutating command (edit/create). Explicit lock action not needed.
 
-**String errors**: Errors returned as `error: <message>` strings in the tool output. The opencode plugin API does not support structured error codes.
+**Typed errors**: Real failures are thrown as the tool's typed error (message only) — the agent sees a failed tool call. Informational output (e.g. lock-status "no lock on X") stays a plain string in the result. No `error: <message>` prefixes inside success output. (Replaces the V1-era "string errors" rule — the V2 plugin API has a typed failure channel.)
 
 ## Language
 
@@ -21,7 +21,7 @@ Working copy of file agent edits. Real file untouched until accept. Keyed by `fi
 _Avoid_: copy, working file, temp file
 
 **Lock**:
-Per-file claim granting one session right to hold active draft. Keyed by `filePathHash`. Touched by every mutating command. Carries owner identity: sessionID and readable owner name, both recorded at acquire. Stale >24h (hardcoded) → override by another session. Released on accept/undo/stale override (or Force release). Session whose lock was overridden gets error on next mutating command.
+Per-file claim granting one session right to hold active draft. Keyed by `filePathHash`. Touched by every mutating command. Carries owner identity: sessionID and readable owner name, both recorded at acquire. Stale beyond the configured threshold (default 24h) → override by another session. Released on accept/undo/stale override (or Force release). Session whose lock was overridden gets error on next mutating command.
 _Avoid_: mutex, session lock
 
 **Accept**:
@@ -69,7 +69,7 @@ Draft whose session lost lock (stale override) or ended without accept/discard. 
 _Avoid_: abandoned draft, lost edits
 
 **officecli**:
-Single tool with action enum. Actions: create, edit, read, accept, undo, revert, history, list, diff, generate, preview, validate, lock-status, force-release, export, metadata, annotate, watermark (plus comment, track-change, review, approve). `create` and `accept` take `filePaths` for Batch calls. `read` returns markdown (delegates to pdf-inspector/anydoc/oocr). `history` returns metadata list. `list` returns active drafts across files. `diff` returns the markdown Diff. `generate` produces drafts from a Template. Delegates to format-specific backends internally. Enforces draft lifecycle via edit tool override.
+Single tool with action enum. Actions: create, edit, read, accept, undo, revert, history, list, diff, generate, preview, validate, lock-status, force-release, export, metadata, annotate, watermark, comment, track-insert, track-delete, list-comments, review, approve. `create` and `accept` take `filePaths` for Batch calls. `read` returns markdown (delegates to pdf-inspector/anydoc/oocr). `history` returns metadata list. `list` returns active drafts across files. `diff` returns the markdown Diff. `generate` produces drafts from a Template. Registered via `ctx.tool.transform` with `codemode: false` (direct provider exposure); input is a tagged union on `action` so each action declares its required args. Delegates to format-specific backends internally. Enforces draft lifecycle via edit tool override.
 _Avoid_: office tool, document tool, doc tool
 
 **Template**:
@@ -85,7 +85,7 @@ Markdown text comparison between Draft and real file, produced by `officecli(act
 _Avoid_: comparison, changes report
 
 **Edit override**:
-Plugin registers tool named `edit`, overrides opencode built-in. Checks lock, routes to draft transparently. Binary files (png/pdf/docx) → deny with error "use officecli for binary files". Agent thinks using `edit`, plugin enforces draft lifecycle.
+Plugin registers tool named `edit` via `ctx.tool.transform`; a plugin tool whose name collides with a builtin replaces it in the catalog (verified at next-17444 — no session-hook deletion needed). Checks lock, routes to draft transparently. Binary files (png/pdf/docx) → error "use officecli for binary files". Agent thinks using `edit`, plugin enforces draft lifecycle.
 _Avoid_: edit interceptor, edit wrapper
 
 **Force release**:

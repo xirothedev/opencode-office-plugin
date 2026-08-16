@@ -1,35 +1,18 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest"
+import { describe, it, expect } from "vitest"
 import { officecliTool } from "@/plugin/tools/officecli"
-import { copyFile, rm } from "fs/promises"
+import { runTool, setupHermeticDirs, cleanupTestFile } from "./harness"
+import { copyFile } from "fs/promises"
 import { join } from "path"
 
 describe("officecli read PDF", () => {
   const testFile = "/tmp/test-read.pdf"
   const fixturePath = join(process.cwd(), "test/fixtures/sample.pdf")
-  const mockContext = {
-    agent: "test-agent",
-    sessionID: "test-session",
-    messageID: "test-message",
-    directory: "/tmp",
-    worktree: "/tmp",
-    abort: new AbortController().signal,
-    metadata: () => {},
-    ask: async () => {},
-  }
-
-  beforeEach(async () => {
-    await copyFile(fixturePath, testFile)
-  })
-
-  afterEach(async () => {
-    await rm(testFile, { force: true })
-  })
+  setupHermeticDirs()
+  cleanupTestFile(testFile)
 
   it("read PDF returns markdown with extracted text", async () => {
-    const result = await officecliTool.execute(
-      { action: "read", filePath: testFile },
-      mockContext
-    )
-    expect(result.output).toContain("Hello PDF")
+    await copyFile(fixturePath, testFile)
+    const result = await runTool(officecliTool, { action: "read", filePath: testFile })
+    expect(result).toContain("Hello PDF")
   })
 })

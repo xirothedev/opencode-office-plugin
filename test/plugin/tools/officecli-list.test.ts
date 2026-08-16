@@ -1,44 +1,26 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest"
+import { describe, it, expect } from "vitest"
 import { officecliTool } from "@/plugin/tools/officecli"
 import { editTool } from "@/plugin/tools/edit"
-import { getDraftsDir, getHistoryDir, getLocksDir } from "@/core/storage/paths"
-import { mkdir, rm, writeFile } from "fs/promises"
-import { readdirSync, existsSync, rmSync } from "fs"
+import { runTool, setupHermeticDirs, cleanupTestFile } from "./harness"
+import { writeFile } from "fs/promises"
+import { readdirSync, rmSync } from "fs"
 import { join } from "path"
+import { getLocksDir } from "@/core/storage/paths"
 
 describe("officecli list action", () => {
   const testFileA = "/tmp/officecli-list-a.txt"
   const testFileB = "/tmp/officecli-list-b.txt"
-  const mockContext = {
-    agent: "test-agent",
-    sessionID: "test-session",
-    messageID: "test-message",
-    directory: "/tmp",
-    worktree: "/tmp",
-  }
-
-  beforeEach(async () => {
-    await mkdir(getDraftsDir(), { recursive: true })
-    await mkdir(getHistoryDir(), { recursive: true })
-    await mkdir(getLocksDir(), { recursive: true })
-  })
-
-  afterEach(async () => {
-    await rm(getDraftsDir(), { recursive: true, force: true })
-    await rm(getHistoryDir(), { recursive: true, force: true })
-    await rm(getLocksDir(), { recursive: true, force: true })
-    for (const f of [testFileA, testFileB]) {
-      if (existsSync(f)) await rm(f)
-    }
-  })
+  setupHermeticDirs()
+  cleanupTestFile(testFileA)
+  cleanupTestFile(testFileB)
 
   async function list(): Promise<unknown> {
-    const result = await officecliTool.execute({ action: "list" }, mockContext)
-    return JSON.parse(result.output as string)
+    const result = await runTool(officecliTool, { action: "list" })
+    return JSON.parse(result)
   }
 
   it("returns one entry per active draft with path, session, age and lock status", async () => {
-    await officecliTool.execute({ action: "create", filePath: testFileA, content: "a" }, mockContext)
+    await runTool(officecliTool, { action: "create", filePath: testFileA, content: "a" })
     const drafts = await list()
     expect(drafts).toEqual([
       {
@@ -56,14 +38,14 @@ describe("officecli list action", () => {
   })
 
   it("shows drafts across multiple files", async () => {
-    await officecliTool.execute({ action: "create", filePath: testFileA, content: "a" }, mockContext)
-    await officecliTool.execute({ action: "create", filePath: testFileB, content: "b" }, mockContext)
+    await runTool(officecliTool, { action: "create", filePath: testFileA, content: "a" })
+    await runTool(officecliTool, { action: "create", filePath: testFileB, content: "b" })
     const drafts = await list()
     expect(drafts.map((d: any) => d.filePath).sort()).toEqual([testFileA, testFileB].sort())
   })
 
   it("marks a draft without a lock as orphaned", async () => {
-    await officecliTool.execute({ action: "create", filePath: testFileA, content: "a" }, mockContext)
+    await runTool(officecliTool, { action: "create", filePath: testFileA, content: "a" })
     const lockFiles = readdirSync(getLocksDir())
     for (const lockFile of lockFiles) {
       rmSync(join(getLocksDir(), lockFile))
@@ -81,51 +63,39 @@ describe("officecli list action", () => {
   })
 
   it("filters to one file when filePath is given", async () => {
-    await officecliTool.execute({ action: "create", filePath: testFileA, content: "a" }, mockContext)
-    await officecliTool.execute({ action: "create", filePath: testFileB, content: "b" }, mockContext)
-    const result = await officecliTool.execute(
-      { action: "list", filePath: testFileA },
-      mockContext
-    )
-    const drafts = JSON.parse(result.output as string)
+    await runTool(officecliTool, { action: "create", filePath: testFileA, content: "a" })
+    await runTool(officecliTool, { action: "create", filePath: testFileB, content: "b" })
+    const result = await runTool(officecliTool, { action: "list", filePath: testFileA })
+    const drafts = JSON.parse(result)
     expect(drafts).toHaveLength(1)
     expect(drafts[0].filePath).toBe(testFileA)
   })
 
   it("removes the entry when the draft is accepted", async () => {
-    await officecliTool.execute({ action: "create", filePath: testFileA, content: "a" }, mockContext)
-    await officecliTool.execute({ action: "accept", filePath: testFileA }, mockContext)
+    await runTool(officecliTool, { action: "create", filePath: testFileA, content: "a" })
+    await runTool(officecliTool, { action: "accept", filePath: testFileA })
     expect(await list()).toEqual([])
   })
 
   it("removes the entry when the draft is undone", async () => {
-    await officecliTool.execute({ action: "create", filePath: testFileA, content: "a" }, mockContext)
-    await officecliTool.execute({ action: "undo", filePath: testFileA }, mockContext)
+    await runTool(officecliTool, { action: "create", filePath: testFileA, content: "a" })
+    await runTool(officecliTool, { action: "undo", filePath: testFileA })
     expect(await list()).toEqual([])
   })
 
   it("registers the path when the edit override lazily creates a draft", async () => {
     await writeFile(testFileA, "original content")
-    const result = await editTool.execute(
-      { filePath: testFileA, oldString: "original", newString: "changed" },
-      mockContext
-    )
-    expect(result).toEqual({ output: expect.stringContaining("Edit applied") })
+    const result = await runTool(editTool, { filePath: testFileA, oldString: "original", newString: "changed" })
+    expect(result).toContain("Edit applied")
     const drafts = await list()
     expect(drafts).toHaveLength(1)
     expect(drafts[0].filePath).toBe(testFileA)
   })
 
   it("matches the filter across path forms via resolve", async () => {
-    await officecliTool.execute(
-      { action: "create", filePath: "./tmp/officecli-list-rel.txt", content: "a" },
-      mockContext
-    )
-    const result = await officecliTool.execute(
-      { action: "list", filePath: "tmp/officecli-list-rel.txt" },
-      mockContext
-    )
-    const drafts = JSON.parse(result.output as string)
+    await runTool(officecliTool, { action: "create", filePath: "./tmp/officecli-list-rel.txt", content: "a" })
+    const result = await runTool(officecliTool, { action: "list", filePath: "tmp/officecli-list-rel.txt" })
+    const drafts = JSON.parse(result)
     expect(drafts).toHaveLength(1)
   })
 })

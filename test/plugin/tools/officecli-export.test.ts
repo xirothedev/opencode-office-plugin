@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
+import { describe, it, expect, beforeEach, vi } from "vitest"
 import { officecliTool } from "@/plugin/tools/officecli"
-import { getDraftsDir, getHistoryDir, getLocksDir } from "@/core/storage/paths"
-import { copyFile, rm, mkdir } from "fs/promises"
+import { runTool, setupHermeticDirs, cleanupTestFile } from "./harness"
+import { copyFile } from "fs/promises"
 import { join } from "path"
 
 const { pandocCalls, tmpMarkdownContents } = vi.hoisted(() => {
@@ -34,45 +34,23 @@ describe("officecli export", () => {
   const docxTarget = "/tmp/test-export-target.docx"
   const fixturePath = join(process.cwd(), "test/fixtures/sample.docx")
   const pdfFixturePath = join(process.cwd(), "test/fixtures/sample.pdf")
-  const mockContext = {
-    agent: "test-agent",
-    sessionID: "test-session",
-    messageID: "test-message",
-    directory: "/tmp",
-    worktree: "/tmp",
-    abort: new AbortController().signal,
-    metadata: () => {},
-    ask: async () => {},
-  }
+  setupHermeticDirs()
+  cleanupTestFile(testFile)
+  cleanupTestFile(pdfTarget)
+  cleanupTestFile(docxTarget)
+  cleanupTestFile("/tmp/test-export-source.pdf")
+  cleanupTestFile("/tmp/test-export-image.png")
 
   beforeEach(async () => {
     await copyFile(fixturePath, testFile)
     pandocCalls.length = 0
     tmpMarkdownContents.length = 0
-    await mkdir(getDraftsDir(), { recursive: true })
-    await mkdir(getHistoryDir(), { recursive: true })
-    await mkdir(getLocksDir(), { recursive: true })
-  })
-
-  afterEach(async () => {
-    await rm(testFile, { force: true })
-    await rm(pdfTarget, { force: true })
-    await rm(docxTarget, { force: true })
-    await rm(getDraftsDir(), { recursive: true, force: true })
-    await rm(getHistoryDir(), { recursive: true, force: true })
-    await rm(getLocksDir(), { recursive: true, force: true })
   })
 
   it("export docx draft to pdf converts the draft content, not the real file", async () => {
-    await officecliTool.execute(
-      { action: "create", filePath: testFile, content: "# Draft content\n\nExported marker text" },
-      mockContext
-    )
-    const result = await officecliTool.execute(
-      { action: "export", filePath: testFile, targetPath: pdfTarget },
-      mockContext
-    )
-    expect(result.output).toContain(`Exported ${testFile} to ${pdfTarget}`)
+    await runTool(officecliTool, { action: "create", filePath: testFile, content: "# Draft content\n\nExported marker text" })
+    const result = await runTool(officecliTool, { action: "export", filePath: testFile, targetPath: pdfTarget })
+    expect(result).toContain(`Exported ${testFile} to ${pdfTarget}`)
     expect(pandocCalls).toHaveLength(1)
     expect(pandocCalls[0]).toContain(`-o "${pdfTarget}"`)
     expect(tmpMarkdownContents[0]).toContain("Exported marker text")
@@ -80,46 +58,39 @@ describe("officecli export", () => {
 
   it("export pdf to docx without a draft converts the real file", async () => {
     await copyFile(pdfFixturePath, "/tmp/test-export-source.pdf")
-    const result = await officecliTool.execute(
-      { action: "export", filePath: "/tmp/test-export-source.pdf", targetPath: docxTarget },
-      mockContext
-    )
-    expect(result.output).toContain("Exported")
+    const result = await runTool(officecliTool, {
+      action: "export",
+      filePath: "/tmp/test-export-source.pdf",
+      targetPath: docxTarget,
+    })
+    expect(result).toContain("Exported")
     // DOCX now uses docx library, not pandoc — check file created
     const { existsSync } = await import("fs")
     expect(existsSync(docxTarget)).toBe(true)
   })
 
   it("errors when targetPath is the same file as filePath", async () => {
-    const result = await officecliTool.execute(
-      { action: "export", filePath: testFile, targetPath: testFile },
-      mockContext
+    await expect(runTool(officecliTool, { action: "export", filePath: testFile, targetPath: testFile })).rejects.toThrow(
+      /targetPath must differ from filePath/
     )
-    expect(result.output).toContain("error: targetPath must differ from filePath")
   })
 
   it("errors when the source format is an image", async () => {
     await copyFile(fixturePath, "/tmp/test-export-image.png")
-    const result = await officecliTool.execute(
-      { action: "export", filePath: "/tmp/test-export-image.png", targetPath: pdfTarget },
-      mockContext
-    )
-    expect(result.output).toContain("error: export source format not supported: .png")
+    await expect(
+      runTool(officecliTool, { action: "export", filePath: "/tmp/test-export-image.png", targetPath: pdfTarget })
+    ).rejects.toThrow(/export source format not supported: \.png/)
   })
 
   it("errors when the target format is an image", async () => {
-    const result = await officecliTool.execute(
-      { action: "export", filePath: testFile, targetPath: "/tmp/test-export-target.png" },
-      mockContext
-    )
-    expect(result.output).toContain("error: export target format not supported: .png")
+    await expect(
+      runTool(officecliTool, { action: "export", filePath: testFile, targetPath: "/tmp/test-export-target.png" })
+    ).rejects.toThrow(/export target format not supported: \.png/)
   })
 
   it("errors when the source file does not exist and no draft exists", async () => {
-    const result = await officecliTool.execute(
-      { action: "export", filePath: "/tmp/test-export-missing.docx", targetPath: pdfTarget },
-      mockContext
-    )
-    expect(result.output).toContain("error: file not found")
+    await expect(
+      runTool(officecliTool, { action: "export", filePath: "/tmp/test-export-missing.docx", targetPath: pdfTarget })
+    ).rejects.toThrow(/file not found/)
   })
 })

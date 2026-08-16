@@ -1,62 +1,28 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest"
+import { describe, it, expect } from "vitest"
 import { officecliTool } from "@/plugin/tools/officecli"
-import { getDraftsDir, getHistoryDir, getLocksDir, getFilePathHash } from "@/core/storage/paths"
-import { mkdir, rm, readFile } from "fs/promises"
+import { runTool, setupHermeticDirs, cleanupTestFile } from "./harness"
+import { getFilePathHash } from "@/core/storage/paths"
+import { readFile } from "fs/promises"
 import { getDraftPath } from "@/core/draft/manager"
 
 describe("officecli revert action", () => {
   const testFile = "/tmp/revert-test.docx"
   const testHash = getFilePathHash(testFile)
-  const mockContext = {
-    agent: "test-agent",
-    sessionID: "test-session",
-    messageID: "test-message",
-    directory: "/tmp",
-    worktree: "/tmp",
-    abort: new AbortController().signal,
-    metadata: () => {},
-    ask: async () => {},
-  }
-
-  beforeEach(async () => {
-    await mkdir(getDraftsDir(), { recursive: true })
-    await mkdir(getHistoryDir(), { recursive: true })
-    await mkdir(getLocksDir(), { recursive: true })
-  })
-
-  afterEach(async () => {
-    await rm(getDraftsDir(), { recursive: true, force: true })
-    await rm(getHistoryDir(), { recursive: true, force: true })
-    await rm(getLocksDir(), { recursive: true, force: true })
-  })
+  setupHermeticDirs()
+  cleanupTestFile(testFile)
 
   it("revert creates draft from snapshot", async () => {
     // Create + accept with timestamp
-    await officecliTool.execute(
-      { action: "create", filePath: testFile, content: "v1" },
-      mockContext
-    )
-    await officecliTool.execute(
-      { action: "accept", filePath: testFile, timestamp: 1000 },
-      mockContext
-    )
+    await runTool(officecliTool, { action: "create", filePath: testFile, content: "v1" })
+    await runTool(officecliTool, { action: "accept", filePath: testFile, timestamp: 1000 })
 
     // Create + accept with different content
-    await officecliTool.execute(
-      { action: "create", filePath: testFile, content: "v2" },
-      mockContext
-    )
-    await officecliTool.execute(
-      { action: "accept", filePath: testFile, timestamp: 2000 },
-      mockContext
-    )
+    await runTool(officecliTool, { action: "create", filePath: testFile, content: "v2" })
+    await runTool(officecliTool, { action: "accept", filePath: testFile, timestamp: 2000 })
 
     // Revert to v1
-    const result = await officecliTool.execute(
-      { action: "revert", filePath: testFile, timestamp: 1000 },
-      mockContext
-    )
-    expect(result.output).toContain("Reverted")
+    const result = await runTool(officecliTool, { action: "revert", filePath: testFile, timestamp: 1000 })
+    expect(result).toContain("Reverted")
 
     // Verify draft created with v1 content
     const draftPath = getDraftPath(testHash, "test-session", ".docx")
@@ -65,20 +31,12 @@ describe("officecli revert action", () => {
   })
 
   it("revert requires valid timestamp", async () => {
-    await officecliTool.execute(
-      { action: "create", filePath: testFile, content: "v1" },
-      mockContext
-    )
-    await officecliTool.execute(
-      { action: "accept", filePath: testFile, timestamp: 1000 },
-      mockContext
-    )
+    await runTool(officecliTool, { action: "create", filePath: testFile, content: "v1" })
+    await runTool(officecliTool, { action: "accept", filePath: testFile, timestamp: 1000 })
 
     // Try revert with non-existent timestamp
-    const result = await officecliTool.execute(
-      { action: "revert", filePath: testFile, timestamp: 9999 },
-      mockContext
-    )
-    expect(result.output).toContain("error")
+    await expect(
+      runTool(officecliTool, { action: "revert", filePath: testFile, timestamp: 9999 })
+    ).rejects.toThrow(/snapshot not found for timestamp/)
   })
 })

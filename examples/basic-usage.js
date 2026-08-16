@@ -5,62 +5,54 @@
  *
  * This script demonstrates how the plugin works internally.
  * In real usage, opencode calls these tools automatically.
+ *
+ * Run with: bun examples/basic-usage.js
  */
 
+import { Effect, Schema } from "effect"
 import { officecliTool } from "../dist/plugin/tools/officecli"
-import { mkdir } from "fs/promises"
-import { getDraftsDir, getHistoryDir, getLocksDir } from "../dist/core/storage/paths"
+import { configureOptions } from "../dist/core/options"
+import { tmpdir } from "os"
+import { join } from "path"
 
 const mockContext = {
   agent: "example-agent",
   sessionID: "example-session",
   messageID: "example-message",
-  directory: "/tmp",
-  worktree: "/tmp",
-  abort: new AbortController().signal,
-  metadata: () => {},
-  ask: async () => {},
+  id: "example-call",
+  progress: () => Effect.void,
+}
+
+async function call(args) {
+  const input = Schema.decodeUnknownSync(officecliTool.input)(args)
+  const result = await Effect.runPromise(officecliTool.execute(input, mockContext))
+  return result.output
 }
 
 async function main() {
-  // Setup directories
-  await mkdir(getDraftsDir(), { recursive: true })
-  await mkdir(getHistoryDir(), { recursive: true })
-  await mkdir(getLocksDir(), { recursive: true })
+  configureOptions({ dataDir: join(tmpdir(), "openoffice-example") })
 
   const testFile = "/tmp/example-doc.docx"
 
   console.log("1. Create draft document")
-  await officecliTool.execute(
-    { action: "create", filePath: testFile, content: "# Example Document\n\nThis is a test." },
-    mockContext
-  )
+  await call({ action: "create", filePath: testFile, content: "# Example Document\n\nThis is a test." })
   console.log("   ✓ Draft created")
 
   console.log("\n2. Read draft")
-  const readResult = await officecliTool.execute(
-    { action: "read", filePath: testFile },
-    mockContext
-  )
-  console.log("   Content:", readResult.output.substring(0, 50) + "...")
+  const readResult = await call({ action: "read", filePath: testFile })
+  console.log("   Content:", readResult.substring(0, 50) + "...")
 
   console.log("\n3. Accept changes")
-  await officecliTool.execute({ action: "accept", filePath: testFile }, mockContext)
+  await call({ action: "accept", filePath: testFile })
   console.log("   ✓ Document written to", testFile)
 
   console.log("\n4. View history")
-  const historyResult = await officecliTool.execute(
-    { action: "history", filePath: testFile },
-    mockContext
-  )
-  console.log("   History:", historyResult.output)
+  const historyResult = await call({ action: "history", filePath: testFile })
+  console.log("   History:", historyResult)
 
   console.log("\n5. Read real file (extract text from DOCX)")
-  const finalRead = await officecliTool.execute(
-    { action: "read", filePath: testFile },
-    mockContext
-  )
-  console.log("   Extracted:", finalRead.output.substring(0, 50) + "...")
+  const finalRead = await call({ action: "read", filePath: testFile })
+  console.log("   Extracted:", finalRead.substring(0, 50) + "...")
 
   console.log("\n✅ Example complete!")
   console.log("   Real file created:", testFile)

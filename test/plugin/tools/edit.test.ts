@@ -1,52 +1,25 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest"
+import { describe, it, expect } from "vitest"
 import { editTool } from "@/plugin/tools/edit"
-import { getDraftsDir, getHistoryDir, getLocksDir } from "@/core/storage/paths"
-import { mkdir, rm } from "fs/promises"
-import { writeFileSync, existsSync } from "fs"
+import { runTool, setupHermeticDirs, cleanupTestFile } from "./harness"
+import { writeFileSync } from "fs"
 
 describe("edit tool", () => {
   const testFile = "/tmp/edit-test.txt"
   const binaryFile = "/tmp/edit-test.docx"
-  const mockContext = {
-    agent: "test-agent",
-    sessionID: "test-session",
-    messageID: "test-message",
-    directory: "/tmp",
-    worktree: "/tmp",
-    abort: new AbortController().signal,
-    metadata: () => {},
-    ask: async () => {},
-  }
-
-  beforeEach(async () => {
-    await mkdir(getDraftsDir(), { recursive: true })
-    await mkdir(getHistoryDir(), { recursive: true })
-    await mkdir(getLocksDir(), { recursive: true })
-  })
-
-  afterEach(async () => {
-    await rm(getDraftsDir(), { recursive: true, force: true })
-    await rm(getHistoryDir(), { recursive: true, force: true })
-    await rm(getLocksDir(), { recursive: true, force: true })
-    if (existsSync(testFile)) await rm(testFile)
-    if (existsSync(binaryFile)) await rm(binaryFile)
-  })
+  setupHermeticDirs()
+  cleanupTestFile(testFile)
+  cleanupTestFile(binaryFile)
 
   it("denies binary files", async () => {
     writeFileSync(binaryFile, "binary content")
-    const result = await editTool.execute(
-      { filePath: binaryFile, oldString: "old", newString: "new" },
-      mockContext
+    await expect(runTool(editTool, { filePath: binaryFile, oldString: "old", newString: "new" })).rejects.toThrow(
+      /use officecli tool for binary files/
     )
-    expect(result.output).toContain("use officecli")
   })
 
   it("edits text files via draft", async () => {
     writeFileSync(testFile, "hello world")
-    const result = await editTool.execute(
-      { filePath: testFile, oldString: "world", newString: "opencode" },
-      mockContext
-    )
-    expect(result.output).toContain("applied to draft")
+    const result = await runTool(editTool, { filePath: testFile, oldString: "world", newString: "opencode" })
+    expect(result).toContain("applied to draft")
   })
 })

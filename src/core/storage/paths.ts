@@ -1,10 +1,6 @@
-import { homedir } from "os"
 import { join } from "path"
 import { createHash } from "crypto"
-
-export function getPluginDataDir(): string {
-  return join(homedir(), ".local", "share", "opencode", "plugins", "openoffice")
-}
+import { getPluginDataDir } from "@/core/options"
 
 export function getDraftsDir(): string {
   return join(getPluginDataDir(), "drafts")

@@ -1,55 +1,31 @@
-import type { Plugin } from "@opencode-ai/plugin"
+import { Effect } from "effect"
+import { Plugin } from "@opencode-ai/plugin/effect"
 import { officecliTool } from "@/plugin/tools/officecli"
 import { editTool } from "@/plugin/tools/edit"
 import { listActiveDrafts } from "@/core/draft/manager"
+import { configureOptions } from "@/core/options"
 
-export const OpenOfficePlugin: Plugin = async (_ctx) => {
-  const toolUsage: Array<{ tool: string; sessionID: string; timestamp: number }> = []
+export const OpenOfficePlugin = Plugin.define({
+  id: "openoffice",
+  effect: (ctx) =>
+    Effect.gen(function* () {
+      configureOptions(ctx.options)
 
-  return {
-    tool: {
-      officecli: officecliTool,
-      edit: editTool,
-    },
+      yield* ctx.tool.transform((tools) => {
+        tools.add(officecliTool)
+        tools.add(editTool)
+      })
 
-    // Subscribe to opencode events
-    event: async ({ event }) => {
-      // Log message events for tracking document-related conversations
-      if (event.type === "message.updated") {
-        console.log(`[office-plugin] Message updated`)
-      }
-    },
-
-    // Modify opencode config
-    config: async (_cfg) => {
-      // Could add default template paths, custom format options, etc.
-      // For now, no-op — extend as needed
-    },
-
-    // Track tool execution
-    "tool.execute.before": async ({ tool, sessionID, callID: _callID }) => {
-      if (tool === "officecli" || tool === "edit") {
-        toolUsage.push({ tool, sessionID, timestamp: Date.now() })
-      }
-    },
-
-    "tool.execute.after": async ({ tool: _tool, sessionID: _sessionID, callID: _callID }) => {
-      // Could log success/failure, metrics, etc.
-    },
-
-    // Cleanup on shutdown
-    dispose: async () => {
-      // Log orphaned drafts
-      const drafts = listActiveDrafts()
-      for (const draft of drafts) {
-        if (draft.orphaned) {
-          console.log(`[office-plugin] Orphaned draft: ${draft.filePath}`)
-        }
-      }
-
-      console.log(`[office-plugin] Disposed. Tool usage count: ${toolUsage.length}`)
-    },
-  }
-}
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          for (const draft of listActiveDrafts()) {
+            if (draft.orphaned) {
+              console.log(`[office-plugin] Orphaned draft: ${draft.filePath}`)
+            }
+          }
+        })
+      )
+    }),
+})
 
 export default OpenOfficePlugin

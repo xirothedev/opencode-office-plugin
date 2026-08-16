@@ -1,41 +1,18 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest"
+import { describe, it, expect } from "vitest"
 import { officecliTool } from "@/plugin/tools/officecli"
-import { getDraftsDir, getHistoryDir, getLocksDir } from "@/core/storage/paths"
-import { mkdir, rm, writeFile } from "fs/promises"
+import { runTool, setupHermeticDirs, cleanupTestFile } from "./harness"
+import { writeFile } from "fs/promises"
 
 describe("officecli read binary file", () => {
   const testFile = "/tmp/read-binary-test.bin"
-  const mockContext = {
-    agent: "test-agent",
-    sessionID: "test-session",
-    messageID: "test-message",
-    directory: "/tmp",
-    worktree: "/tmp",
-    abort: new AbortController().signal,
-    metadata: () => {},
-    ask: async () => {},
-  }
-
-  beforeEach(async () => {
-    await mkdir(getDraftsDir(), { recursive: true })
-    await mkdir(getHistoryDir(), { recursive: true })
-    await mkdir(getLocksDir(), { recursive: true })
-  })
-
-  afterEach(async () => {
-    await rm(getDraftsDir(), { recursive: true, force: true })
-    await rm(getHistoryDir(), { recursive: true, force: true })
-    await rm(getLocksDir(), { recursive: true, force: true })
-  })
+  setupHermeticDirs()
+  cleanupTestFile(testFile)
 
   it("read unknown extension treats as text", async () => {
     // Write binary file
     await writeFile(testFile, "fake binary content", "utf-8")
 
-    const result = await officecliTool.execute(
-      { action: "read", filePath: testFile },
-      mockContext
-    )
-    expect(result.output).toContain("fake binary content")
+    const result = await runTool(officecliTool, { action: "read", filePath: testFile })
+    expect(result).toContain("fake binary content")
   })
 })

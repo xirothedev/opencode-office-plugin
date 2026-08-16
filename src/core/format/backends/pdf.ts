@@ -3,6 +3,7 @@ import { classifyPdfAsync } from "@firecrawl/pdf-inspector"
 import { readFileSync, writeFileSync, unlinkSync } from "fs"
 import { exec } from "child_process"
 import { promisify } from "util"
+import { getPdfEngine } from "@/core/options"
 
 const execAsync = promisify(exec)
 
@@ -30,7 +31,7 @@ export async function extractTextFromPDF(absolutePath: string): Promise<string> 
 export async function writePdfFromMarkdown(markdown: string, outputPath: string): Promise<void> {
   const tempPath = `${outputPath}.tmp.md`
   writeFileSync(tempPath, markdown)
-  const engine = process.env.OFFICECLI_PDF_ENGINE ?? "xelatex"
+  const engine = getPdfEngine()
   try {
     await execAsync(`pandoc "${tempPath}" --pdf-engine=${engine} -o "${outputPath}"`)
   } catch (error) {
