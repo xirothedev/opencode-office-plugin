@@ -41,7 +41,7 @@ To pin a version and pass options:
 {
   "plugins": [
     {
-      "package": "@xirothedev/openoffice-plugin-opencode@0.2.0",
+      "package": "@xirothedev/openoffice-plugin-opencode@0.2.1",
       "options": {
         "pdfEngine": "typst",
         "staleLockHours": 48,
@@ -94,8 +94,8 @@ Releases are tag-driven. CI publishes to npm when a `v*` tag is pushed:
 ```bash
 bun run build
 bun run test
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.2.1
+git push origin v0.2.1
 ```
 
 - The npm version is taken from the tag (`v0.2.0` → `0.2.0`); do not bump `package.json` by hand.
