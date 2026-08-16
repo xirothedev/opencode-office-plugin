@@ -27,7 +27,7 @@ const createArgs = S.Struct({
   action: S.Literal("create"),
   filePath: S.optional(S.String),
   filePaths: S.optional(S.String),
-  content: S.String,
+  content: S.NonEmptyString,
 })
 const acceptArgs = S.Struct({
   action: S.Literal("accept"),
@@ -36,7 +36,7 @@ const acceptArgs = S.Struct({
   timestamp: S.optional(S.Number),
 })
 const undoArgs = S.Struct({ action: S.Literal("undo"), filePath: S.String })
-const editArgs = S.Struct({ action: S.Literal("edit"), filePath: S.String, content: S.String })
+const editArgs = S.Struct({ action: S.Literal("edit"), filePath: S.String, content: S.NonEmptyString })
 const lockStatusArgs = S.Struct({ action: S.Literal("lock-status"), filePath: S.String })
 const forceReleaseArgs = S.Struct({ action: S.Literal("force-release"), filePath: S.String })
 const listArgs = S.Struct({ action: S.Literal("list"), filePath: S.optional(S.String) })
