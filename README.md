@@ -61,17 +61,17 @@ See [WORKFLOWS.md](docs/WORKFLOWS.md) for full procurement workflow examples.
 
 ## Install
 
-Add the package to the `plugin` array in opencode configuration — `opencode.json` in your project, or `~/.config/opencode/config.json` for all projects:
+Add the package to the `plugins` array in opencode 2 configuration — `opencode.json` in your project, or the global config for all projects:
 
 ```json
 {
-  "plugin": ["@openoffice/plugin"]
+  "plugins": ["@openoffice/plugin"]
 }
 ```
 
-opencode installs the package and its dependencies on startup. For version pinning, local development install, verification, and troubleshooting, see [docs/INSTALL.md](docs/INSTALL.md).
+opencode installs the package and its dependencies on startup. For version pinning, plugin options, local development install, verification, and troubleshooting, see [docs/INSTALL.md](docs/INSTALL.md).
 
-> **Note**: This plugin targets the opencode V1 plugin API. opencode 2's new plugin API is not supported yet — see [docs/INSTALL.md](docs/INSTALL.md).
+> **Note**: This plugin targets the opencode 2 (V2) plugin API (`Plugin.define`, `plugins` config field, `opencode2` CLI). It does not load in opencode V1.
 
 ## Requirements
 
@@ -175,22 +175,15 @@ Creates draft from historical snapshot. Must `accept` to write.
 | PPTX | ✅ | ✅ | anydoc + pandoc |
 | Images (PNG, JPG) | ✅ | ✅ | anydoc + sharp |
 
-All formats support full read/write cycle. PDF write requires a LaTeX engine (xelatex); override with the `OFFICECLI_PDF_ENGINE` environment variable (e.g. `typst`).
+All formats support full read/write cycle. PDF write requires a LaTeX engine (xelatex); override with the `pdfEngine` plugin option (e.g. `typst`) or the `OFFICECLI_PDF_ENGINE` environment variable.
 
 **Export fidelity**: `export` converts between PDF/DOCX/XLSX/PPTX through the markdown pipeline, so layout, tables, and styling are approximate — text content is preserved, fine formatting is not. Layout-sensitive conversions (e.g. PDF → DOCX) are best-effort; use them for text extraction and lightweight editing, not for pixel-perfect round-trips.
 
 ## New Features
 
-### Plugin Hooks
+### V2 Plugin API
 
-Plugin integrates with opencode lifecycle:
-
-- `event` — subscribe to opencode events (message updates, etc.)
-- `config` — modify opencode config (extend for custom defaults)
-- `tool.execute.before/after` — track tool usage
-- `dispose` — cleanup on shutdown
-
-Hooks defined in `src/plugin/index.ts`. Extend as needed for custom integrations.
+Plugin is built on the opencode 2 (V2) plugin API: `Plugin.define({ id: "openoffice", effect })` from `@opencode-ai/plugin/effect`. Tools (`officecli`, `edit`) are registered via `ctx.tool.transform` with `codemode: false` (direct provider exposure), and configured via `ctx.options` (`pdfEngine`, `staleLockHours`, `dataDir`). Real failures are thrown as typed `Tool.Error`; informational output stays a plain string. On shutdown, a scope finalizer logs orphaned drafts.
 
 ### Enhanced Formatting
 
@@ -198,12 +191,36 @@ DOCX writes now use `docx` library instead of pandoc for explicit table formatti
 
 ## Data storage
 
-Plugin data stored in `~/.local/share/opencode/plugins/openoffice/`:
+Plugin data stored in `~/.local/share/opencode/plugins/openoffice/` by default (override with the `dataDir` plugin option):
 
 - `drafts/` - Active draft files
 - `locks/` - Session locks
 - `history/` - Version snapshots
 - `registry/` - Registry of draft file paths keyed by hash (powers `list`)
+- `sidecars/` - Non-content mutations (metadata, watermarks, annotations)
+
+## Plugin options
+
+Configure via the `plugins` entry's `options` object in opencode config:
+
+```json
+{
+  "plugins": [
+    {
+      "package": "@openoffice/plugin",
+      "options": {
+        "pdfEngine": "typst",
+        "staleLockHours": 48,
+        "dataDir": "/shared/office-plugin-data"
+      }
+    }
+  ]
+}
+```
+
+- `pdfEngine` — pandoc PDF engine (default `xelatex`; env fallback `OFFICECLI_PDF_ENGINE`)
+- `staleLockHours` — lock staleness threshold (default 24)
+- `dataDir` — plugin data directory (default `~/.local/share/opencode/plugins/openoffice/`)
 
 ## Documentation
 
@@ -213,7 +230,7 @@ Plugin data stored in `~/.local/share/opencode/plugins/openoffice/`:
 - [Testing](docs/TESTING.md) - Local development guide
 - [Workflows](docs/WORKFLOWS.md) - Common usage patterns
 - [Full Flow](docs/FULL-FLOW.md) - End-to-end orchestration
-- [ADRs](docs/adr/) - Architecture decisions (CI/CD, opencode V1 target)
+- [ADRs](docs/adr/) - Architecture decisions (CI/CD, V2 plugin API target)
 
 ## License
 

@@ -1,55 +1,26 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest"
+import { describe, it, expect } from "vitest"
 import { officecliTool } from "@/plugin/tools/officecli"
-import { getDraftsDir, getHistoryDir, getLocksDir } from "@/core/storage/paths"
-import { mkdir, rm, writeFile } from "fs/promises"
+import { runTool, setupHermeticDirs, cleanupTestFile } from "./harness"
+import { writeFile } from "fs/promises"
 
 describe("officecli read action", () => {
   const testFile = "/tmp/read-test.txt"
-  const mockContext = {
-    agent: "test-agent",
-    sessionID: "test-session",
-    messageID: "test-message",
-    directory: "/tmp",
-    worktree: "/tmp",
-    abort: new AbortController().signal,
-    metadata: () => {},
-    ask: async () => {},
-  }
-
-  beforeEach(async () => {
-    await mkdir(getDraftsDir(), { recursive: true })
-    await mkdir(getHistoryDir(), { recursive: true })
-    await mkdir(getLocksDir(), { recursive: true })
-  })
-
-  afterEach(async () => {
-    await rm(getDraftsDir(), { recursive: true, force: true })
-    await rm(getHistoryDir(), { recursive: true, force: true })
-    await rm(getLocksDir(), { recursive: true, force: true })
-  })
+  setupHermeticDirs()
+  cleanupTestFile(testFile)
 
   it("read returns draft content if exists", async () => {
     // Create draft
-    await officecliTool.execute(
-      { action: "create", filePath: testFile, content: "draft content" },
-      mockContext
-    )
+    await runTool(officecliTool, { action: "create", filePath: testFile, content: "draft content" })
 
-    const result = await officecliTool.execute(
-      { action: "read", filePath: testFile },
-      mockContext
-    )
-    expect(result.output).toContain("draft content")
+    const result = await runTool(officecliTool, { action: "read", filePath: testFile })
+    expect(result).toContain("draft content")
   })
 
   it("read returns real file if no draft", async () => {
     // Write real file
     await writeFile(testFile, "real content", "utf-8")
 
-    const result = await officecliTool.execute(
-      { action: "read", filePath: testFile },
-      mockContext
-    )
-    expect(result.output).toContain("real content")
+    const result = await runTool(officecliTool, { action: "read", filePath: testFile })
+    expect(result).toContain("real content")
   })
 })

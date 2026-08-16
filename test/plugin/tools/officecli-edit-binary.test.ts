@@ -1,63 +1,31 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest"
+import { describe, it, expect } from "vitest"
 import { officecliTool } from "@/plugin/tools/officecli"
-import { copyFile, rm, mkdir } from "fs/promises"
+import { runTool, setupHermeticDirs, cleanupTestFile } from "./harness"
+import { copyFile } from "fs/promises"
 import { join } from "path"
-import { getDraftsDir, getHistoryDir, getLocksDir } from "@/core/storage/paths"
 
 describe("officecli edit binary (DOCX)", () => {
   const testFile = "/tmp/test-edit.docx"
   const fixturePath = join(process.cwd(), "test/fixtures/sample.docx")
-  const mockContext = {
-    agent: "test-agent",
-    sessionID: "test-session",
-    messageID: "test-message",
-    directory: "/tmp",
-    worktree: "/tmp",
-    abort: new AbortController().signal,
-    metadata: () => {},
-    ask: async () => {},
-  }
-
-  beforeEach(async () => {
-    await mkdir(getDraftsDir(), { recursive: true })
-    await mkdir(getHistoryDir(), { recursive: true })
-    await mkdir(getLocksDir(), { recursive: true })
-    await copyFile(fixturePath, testFile)
-  })
-
-  afterEach(async () => {
-    await rm(testFile, { force: true })
-    await rm(getDraftsDir(), { recursive: true, force: true })
-    await rm(getHistoryDir(), { recursive: true, force: true })
-    await rm(getLocksDir(), { recursive: true, force: true })
-  })
+  setupHermeticDirs()
+  cleanupTestFile(testFile)
 
   it("edit DOCX updates content after accept", async () => {
+    await copyFile(fixturePath, testFile)
+
     // Read original
-    const readResult = await officecliTool.execute(
-      { action: "read", filePath: testFile },
-      mockContext
-    )
-    expect(readResult.output).toContain("Hello DOCX")
+    const readResult = await runTool(officecliTool, { action: "read", filePath: testFile })
+    expect(readResult).toContain("Hello DOCX")
 
     // Create draft with new content
-    await officecliTool.execute(
-      { action: "create", filePath: testFile, content: "# Updated DOCX\n\nNew content here." },
-      mockContext
-    )
+    await runTool(officecliTool, { action: "create", filePath: testFile, content: "# Updated DOCX\n\nNew content here." })
 
     // Accept
-    await officecliTool.execute(
-      { action: "accept", filePath: testFile },
-      mockContext
-    )
+    await runTool(officecliTool, { action: "accept", filePath: testFile })
 
     // Read again to verify
-    const newReadResult = await officecliTool.execute(
-      { action: "read", filePath: testFile },
-      mockContext
-    )
-    expect(newReadResult.output).toContain("Updated DOCX")
-    expect(newReadResult.output).toContain("New content here")
+    const newReadResult = await runTool(officecliTool, { action: "read", filePath: testFile })
+    expect(newReadResult).toContain("Updated DOCX")
+    expect(newReadResult).toContain("New content here")
   })
 })

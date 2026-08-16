@@ -12,24 +12,30 @@
    bun link --global
    ```
 
-3. **Configure opencode**
+3. **Configure opencode 2** (V2 API — `plugins` field)
    
-   Create `~/.config/opencode/config.json`:
+   Create the global config `~/.config/opencode/opencode.json`:
    ```json
    {
-     "plugin": ["@openoffice/plugin"]
+     "plugins": ["./plugins/local.ts"]
+   }
+   ```
+   or reference the linked package directly:
+   ```json
+   {
+     "plugins": ["@openoffice/plugin"]
    }
    ```
 
-4. **Link in opencode's directory**
+4. **Link in the config directory** so opencode 2 can resolve the package
    ```bash
-   cd ~/.opencode
+   cd ~/.config/opencode
    bun link @openoffice/plugin --global
    ```
 
-5. **Start opencode**
+5. **Start opencode 2**
    ```bash
-   opencode
+   opencode2
    ```
 
 6. **Test commands**
@@ -49,9 +55,9 @@
    cd ~/test-opencode-office
    ```
 
-2. **Initialize opencode**
+2. **Create opencode config**
    ```bash
-   opencode init
+   opencode2 init
    ```
 
 3. **Add plugin to config**
@@ -59,18 +65,19 @@
    Edit `opencode.json`:
    ```json
    {
-     "plugin": ["@openoffice/plugin"]
+     "plugins": ["@openoffice/plugin"]
    }
    ```
 
 4. **Link plugin**
    ```bash
+   cd ~/.opencode
    bun link @openoffice/plugin --global
    ```
 
-5. **Start opencode**
+5. **Start opencode 2**
    ```bash
-   opencode
+   opencode2
    ```
 
 6. **Try these prompts**
@@ -79,6 +86,11 @@
    - "Create a Word doc at /tmp/report.docx with a table"
    - "Show me the history of /tmp/report.docx"
 
+7. **Verify the plugin loaded**
+   ```bash
+   opencode2 api get /api/plugin   # "openoffice" should be listed
+   ```
+
 ## Option 3: Direct programmatic test
 
 Run the example:
@@ -86,33 +98,39 @@ Run the example:
 bun examples/basic-usage.js
 ```
 
-This test all actions without opencode.
+This tests all actions without opencode.
 
 ## Debugging
 
 **Plugin not loading?**
-- Check `opencode` output for plugin errors
-- Verify `bun run build` succeeded
-- Check `dist/` directory exist
+- Run `opencode2 api get /api/plugin` — `openoffice` must be listed
+- Check `~/.local/share/opencode/log/opencode.log` for plugin load errors
+- Verify `bun run build` succeeded and `dist/` exists
+- Confirm the config field is `plugins` (V2), not `plugin` (V1)
+
+**Tools not visible to the model?**
+- Tools are registered with `codemode: false` for direct provider exposure
+- Restart opencode 2 after changing config; the plugin package version must match the opencode 2 release (ADR-0010 pins `@opencode-ai/plugin@0.0.0-next-17444`)
 
 **pandoc errors?**
 - Install pandoc: `brew install pandoc` (macOS) or `sudo apt-get install pandoc` (Linux)
 - Verify: `pandoc --version`
 
 **Permission errors?**
-- Check data directory: `ls ~/.local/share/opencode/plugins/openoffice/`
-- Plugin need write access
+- Check data directory: `ls ~/.local/share/opencode/plugins/openoffice/` (or your configured `dataDir`)
+- Plugin needs write access
 
 ## Manual tool invocation
 
-Test tool directly in Bun:
+Test the tool directly in Bun. The V2 tool's `execute` returns an `Effect`; run it with `Effect.runPromise` and decode input through the tool schema (as the host would):
 
 ```javascript
+import { Effect, Schema } from "effect"
 import { officecliTool } from "./dist/plugin/tools/officecli"
 
-const result = await officecliTool.execute(
-  { action: "read", filePath: "/tmp/test.docx" },
-  { sessionID: "test", /* ... other context */ }
+const input = Schema.decodeUnknownSync(officecliTool.input)({ action: "read", filePath: "/tmp/test.docx" })
+const result = await Effect.runPromise(
+  officecliTool.execute(input, { sessionID: "test", agent: "test", messageID: "m", id: "c", progress: () => Effect.void })
 )
 
 console.log(result.output)
@@ -134,3 +152,5 @@ Specific test:
 ```bash
 bun run test officecli-read-pdf
 ```
+
+Tool tests use the shared harness `test/plugin/tools/harness.ts`: `runTool` decodes args through the input schema and runs the Effect; `setupHermeticDirs()` points the plugin data dir at a temp directory so tests never touch real user data.

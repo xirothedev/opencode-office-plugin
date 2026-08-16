@@ -1,8 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
+import { describe, it, expect, beforeEach, vi } from "vitest"
 import { officecliTool } from "@/plugin/tools/officecli"
-import { getDraftsDir, getHistoryDir, getLocksDir, getFilePathHash } from "@/core/storage/paths"
-import { mkdir, rm } from "fs/promises"
-import { existsSync } from "fs"
+import { runTool, setupHermeticDirs, cleanupTestFile } from "./harness"
+import { getFilePathHash } from "@/core/storage/paths"
 import { tmpdir } from "os"
 import { join } from "path"
 
@@ -25,28 +24,13 @@ describe("officecli preview action", () => {
   const testFile = "/tmp/officecli-preview.txt"
   const previewDir = join(tmpdir(), "openoffice-preview")
   const previewPath = join(previewDir, `${getFilePathHash(testFile)}.html`)
-  const mockContext = {
-    agent: "test-agent",
-    sessionID: "test-session",
-    messageID: "test-message",
-    directory: "/tmp",
-    worktree: "/tmp",
-  }
+  setupHermeticDirs()
+  cleanupTestFile(testFile)
+  cleanupTestFile(previewPath)
 
-  beforeEach(async () => {
+  beforeEach(() => {
     delete process.env.MOCK_PANDOC_FAIL
     vi.mocked(exec).mockClear()
-    await mkdir(getDraftsDir(), { recursive: true })
-    await mkdir(getHistoryDir(), { recursive: true })
-    await mkdir(getLocksDir(), { recursive: true })
-  })
-
-  afterEach(async () => {
-    await rm(getDraftsDir(), { recursive: true, force: true })
-    await rm(getHistoryDir(), { recursive: true, force: true })
-    await rm(getLocksDir(), { recursive: true, force: true })
-    if (existsSync(previewPath)) await rm(previewPath)
-    if (existsSync(testFile)) await rm(testFile)
   })
 
   function pandocCommands(): string[] {
@@ -55,12 +39,9 @@ describe("officecli preview action", () => {
   }
 
   it("renders the draft to an HTML file via pandoc and returns its path", async () => {
-    await officecliTool.execute(
-      { action: "create", filePath: testFile, content: "# Report\n\nHello.\n" },
-      mockContext
-    )
-    const result = await officecliTool.execute({ action: "preview", filePath: testFile }, mockContext)
-    expect(result.output).toContain(previewPath)
+    await runTool(officecliTool, { action: "create", filePath: testFile, content: "# Report\n\nHello.\n" })
+    const result = await runTool(officecliTool, { action: "preview", filePath: testFile })
+    expect(result).toContain(previewPath)
     const commands = pandocCommands()
     expect(commands).toHaveLength(1)
     expect(commands[0]).toContain('pandoc "')
@@ -68,22 +49,20 @@ describe("officecli preview action", () => {
   })
 
   it("errors when there is no draft", async () => {
-    const result = await officecliTool.execute({ action: "preview", filePath: testFile }, mockContext)
-    expect(result.output).toContain("error: no active draft to preview")
+    await expect(runTool(officecliTool, { action: "preview", filePath: testFile })).rejects.toThrow(
+      /no active draft to preview/
+    )
   })
 
   it("returns an error string when pandoc fails", async () => {
     process.env.MOCK_PANDOC_FAIL = "1"
-    await officecliTool.execute(
-      { action: "create", filePath: testFile, content: "content" },
-      mockContext
+    await runTool(officecliTool, { action: "create", filePath: testFile, content: "content" })
+    await expect(runTool(officecliTool, { action: "preview", filePath: testFile })).rejects.toThrow(
+      /pandoc preview failed/
     )
-    const result = await officecliTool.execute({ action: "preview", filePath: testFile }, mockContext)
-    expect(result.output).toContain("error: pandoc preview failed")
   })
 
   it("requires filePath", async () => {
-    const result = await officecliTool.execute({ action: "preview" }, mockContext)
-    expect(result.output).toContain("error")
+    await expect(runTool(officecliTool, { action: "preview" })).rejects.toThrow()
   })
 })

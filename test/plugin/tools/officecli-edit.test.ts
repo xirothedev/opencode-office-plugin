@@ -1,48 +1,22 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest"
+import { describe, it, expect } from "vitest"
 import { officecliTool } from "@/plugin/tools/officecli"
-import { getDraftsDir, getHistoryDir, getLocksDir, getFilePathHash } from "@/core/storage/paths"
-import { mkdir, rm, readFile } from "fs/promises"
+import { runTool, setupHermeticDirs } from "./harness"
+import { getFilePathHash } from "@/core/storage/paths"
+import { readFile } from "fs/promises"
 import { getDraftPath } from "@/core/draft/manager"
 
 describe("officecli edit action", () => {
   const testFile = "/tmp/edit-test.docx"
   const testHash = getFilePathHash(testFile)
-  const mockContext = {
-    agent: "test-agent",
-    sessionID: "test-session",
-    messageID: "test-message",
-    directory: "/tmp",
-    worktree: "/tmp",
-    abort: new AbortController().signal,
-    metadata: () => {},
-    ask: async () => {},
-  }
-
-  beforeEach(async () => {
-    await mkdir(getDraftsDir(), { recursive: true })
-    await mkdir(getHistoryDir(), { recursive: true })
-    await mkdir(getLocksDir(), { recursive: true })
-  })
-
-  afterEach(async () => {
-    await rm(getDraftsDir(), { recursive: true, force: true })
-    await rm(getHistoryDir(), { recursive: true, force: true })
-    await rm(getLocksDir(), { recursive: true, force: true })
-  })
+  setupHermeticDirs()
 
   it("edit updates draft content", async () => {
     // Create draft first
-    await officecliTool.execute(
-      { action: "create", filePath: testFile, content: "initial content" },
-      mockContext
-    )
+    await runTool(officecliTool, { action: "create", filePath: testFile, content: "initial content" })
 
     // Edit draft
-    const result = await officecliTool.execute(
-      { action: "edit", filePath: testFile, content: "updated content" },
-      mockContext
-    )
-    expect(result.output).toContain("edited")
+    const result = await runTool(officecliTool, { action: "edit", filePath: testFile, content: "updated content" })
+    expect(result).toContain("edited")
 
     // Verify draft updated
     const draftPath = getDraftPath(testHash, "test-session", ".docx")
@@ -52,10 +26,8 @@ describe("officecli edit action", () => {
 
   it("edit requires active lock", async () => {
     // Try edit without creating draft first
-    const result = await officecliTool.execute(
-      { action: "edit", filePath: testFile, content: "updated" },
-      mockContext
+    await expect(runTool(officecliTool, { action: "edit", filePath: testFile, content: "updated" })).rejects.toThrow(
+      /no active draft to edit/
     )
-    expect(result.output).toContain("error")
   })
 })

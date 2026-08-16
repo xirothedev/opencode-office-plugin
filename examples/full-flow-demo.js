@@ -13,19 +13,25 @@
  * Run: bun examples/full-flow-demo.js
  */
 
+import { Effect, Schema } from "effect"
 import { officecliTool } from "../dist/plugin/tools/officecli"
 import { mkdir, rm } from "fs/promises"
-import { getDraftsDir, getHistoryDir, getLocksDir } from "../dist/core/storage/paths"
+import { configureOptions } from "../dist/core/options"
+import { tmpdir } from "os"
+import { join } from "path"
 
 const mockContext = {
   agent: "orchestrator",
   sessionID: "procurement-session",
   messageID: "demo-message",
-  directory: process.cwd(),
-  worktree: process.cwd(),
-  abort: new AbortController().signal,
-  metadata: () => {},
-  ask: async () => {},
+  id: "demo-call",
+  progress: () => Effect.void,
+}
+
+async function call(args) {
+  const input = Schema.decodeUnknownSync(officecliTool.input)(args)
+  const result = await Effect.runPromise(officecliTool.execute(input, mockContext))
+  return result.output
 }
 
 // Simulate user prompt
@@ -165,9 +171,7 @@ const generators = {
 
 // Phase 4: Execute workflow
 async function executeWorkflow() {
-  await mkdir(getDraftsDir(), { recursive: true })
-  await mkdir(getHistoryDir(), { recursive: true })
-  await mkdir(getLocksDir(), { recursive: true })
+  configureOptions({ dataDir: join(tmpdir(), "openoffice-demo") })
   await mkdir("./demo-procurement", { recursive: true })
 
   const results = {}
@@ -180,12 +184,9 @@ async function executeWorkflow() {
     // Read dependencies
     const depContents = {}
     for (const dep of step.deps) {
-      const readResult = await officecliTool.execute(
-        { action: "read", filePath: `./demo-procurement/${dep}.docx` },
-        mockContext
-      )
-      depContents[dep] = readResult.output
-      console.log(`   ✓ Read ${dep} (${readResult.output.length} chars)`)
+      const readResult = await call({ action: "read", filePath: `./demo-procurement/${dep}.docx` })
+      depContents[dep] = readResult
+      console.log(`   ✓ Read ${dep} (${readResult.length} chars)`)
     }
 
     // Generate content
@@ -194,16 +195,10 @@ async function executeWorkflow() {
     console.log(`   ✓ Generated content (${content.length} chars)`)
 
     // Create draft
-    await officecliTool.execute(
-      { action: "create", filePath: `./demo-procurement/${step.id}.docx`, content },
-      mockContext
-    )
+    await call({ action: "create", filePath: `./demo-procurement/${step.id}.docx`, content })
 
     // Accept
-    await officecliTool.execute(
-      { action: "accept", filePath: `./demo-procurement/${step.id}.docx` },
-      mockContext
-    )
+    await call({ action: "accept", filePath: `./demo-procurement/${step.id}.docx` })
 
     results[step.id] = content
     console.log(`   ✓ Accepted ${step.id}.docx`)
@@ -219,11 +214,8 @@ async function executeWorkflow() {
   }
 
   console.log("\n📜 Version History (B2):")
-  const history = await officecliTool.execute(
-    { action: "history", filePath: "./demo-procurement/B2.docx" },
-    mockContext
-  )
-  console.log(`  ${history.output}`)
+  const history = await call({ action: "history", filePath: "./demo-procurement/B2.docx" })
+  console.log(`  ${history}`)
 
   console.log("\n📁 Output Directory: ./demo-procurement/")
   console.log("  - B1.docx (Purchase Request)")
@@ -233,9 +225,8 @@ async function executeWorkflow() {
   console.log("  - B5.docx (Procurement Plan, refs B4)")
 
   // Cleanup
-  await rm(getDraftsDir(), { recursive: true, force: true })
-  await rm(getHistoryDir(), { recursive: true, force: true })
-  await rm(getLocksDir(), { recursive: true, force: true })
+  await rm(join(tmpdir(), "openoffice-demo"), { recursive: true, force: true })
+  await rm("./demo-procurement", { recursive: true, force: true })
 }
 
 executeWorkflow().catch(console.error)

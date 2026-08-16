@@ -1,6 +1,7 @@
 import { getLocksDir } from "@/core/storage/paths"
-import { readFileSync, writeFileSync, existsSync, unlinkSync } from "fs"
-import { join } from "path"
+import { getStaleThresholdMs } from "@/core/options"
+import { readFileSync, writeFileSync, existsSync, unlinkSync, mkdirSync } from "fs"
+import { dirname, join } from "path"
 
 export type LockStatus = "acquired" | "in-review" | "stale"
 
@@ -11,11 +12,10 @@ export interface Lock {
   status: LockStatus
 }
 
-const STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000 // 24 hours
-
 export function acquireLock(filePathHash: string, sessionID: string, owner: string): void {
   const lockPath = join(getLocksDir(), `${filePathHash}.json`)
   const lock: Lock = { sessionID, owner, touchedAt: Date.now(), status: "acquired" }
+  mkdirSync(dirname(lockPath), { recursive: true })
   writeFileSync(lockPath, JSON.stringify(lock))
 }
 
@@ -50,7 +50,7 @@ export function getLock(filePathHash: string): Lock | null {
 export function isLockStale(filePathHash: string): boolean {
   const lock = getLock(filePathHash)
   if (!lock) return false
-  return Date.now() - lock.touchedAt > STALE_THRESHOLD_MS
+  return Date.now() - lock.touchedAt > getStaleThresholdMs()
 }
 
 export function overrideLock(filePathHash: string, sessionID: string, owner: string): void {

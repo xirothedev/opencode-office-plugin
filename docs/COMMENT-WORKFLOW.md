@@ -282,6 +282,7 @@ Stakeholder reviews policies, comments on governance issues, tracks revisions.
 
 ## Limitations
 
+- **Binary drafts hold markdown, not OOXML** (CONTEXT.md: Drafts are stored as the agent's markdown regardless of target format, converted at Accept). `comment`, `approve`, `track-insert`, `track-delete` write into the draft file as if it were the binary — so these actions fail on binary-format drafts. The OOXML writers/readers are covered by unit tests against real fixtures (`test/core/format/ooxml/*.test.ts`), but the tool-level path is unimplemented: a sidecar-style design (like Metadata/Watermark) is the intended fix. `list-comments` and `review` fall back to the real file when no draft exists, so reading comments works on files that already carry them.
 - Track changes are DOCX-only (`w:ins`/`w:del` is a Word OOXML feature; Excel/PowerPoint have no equivalent)
 - Suggestions are paragraph/cell/slide-anchored, not text-range-anchored; approving a DOCX suggestion replaces the whole paragraph text (inline formatting lost)
 - PPTX suggestions replace the first text box on the slide
