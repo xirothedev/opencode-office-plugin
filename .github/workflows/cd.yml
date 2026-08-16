@@ -26,7 +26,7 @@ jobs:
       - name: Publish to npm
         # Trusted publishing (OIDC): GitHub Actions authenticates to npm
         # directly via the id-token permission — no NPM_TOKEN secret needed.
-        # Requires the @openoffice scope to have trusted publishing enabled
+        # Requires the @xirothedev scope to have trusted publishing enabled
         # (npm web UI: Settings -> Trusted Publishing, OIDC provider
         # https://token.actions.githubusercontent.com, repo
         # xirothedev/opencode-office-plugin).
