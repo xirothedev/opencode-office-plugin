@@ -70,6 +70,7 @@ const commentArgs = S.Struct({
   author: S.String,
   commentText: S.String,
   suggestedText: S.optional(S.String),
+  targetText: S.optional(S.String),
   rangeStartParagraph: S.optional(S.Number),
   rangeStartOffset: S.optional(S.Number),
   rangeEndParagraph: S.optional(S.Number),
@@ -126,7 +127,7 @@ const officecliOutput = S.String
 export const officecliTool: Tool.Info<typeof officecliInput, typeof officecliOutput> = {
   name: "officecli",
   description:
-    "Office document automation. Create, edit, read, accept, undo, revert documents with draft lifecycle. Preview renders a draft to HTML, validate checks draft content against rules, lock-status queries lock state, force-release takes over a stale lock. Supports comments for DOCX, XLSX, PPTX, track changes for DOCX, and content-changing suggestions (comment with suggestedText, applied by approve action).",
+    "Office document automation. Create, edit, read, accept, undo, revert documents with draft lifecycle. Preview renders a draft to HTML, validate checks draft content against rules, lock-status queries lock state, force-release takes over a stale lock. Supports comments for DOCX, XLSX, PPTX, track changes for DOCX, and content-changing suggestions (comment with suggestedText, applied by approve action; PPTX suggestions accept optional targetText, a snippet of the intended text box's current text, so approve edits that box instead of the first).",
   input: officecliInput,
   output: officecliOutput,
   options: { codemode: false },
@@ -630,6 +631,7 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
         parentId: null,
         resolved: false,
         suggestedText: input.suggestedText ?? null,
+        targetText: input.targetText ?? null,
       }
       await writePptxComment(draftPath, comment)
       return `Comment added to draft for ${input.filePath}`

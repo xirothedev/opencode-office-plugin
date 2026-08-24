@@ -1,7 +1,7 @@
 import JSZip from "jszip"
 import { readFileSync, writeFileSync } from "fs"
 import { parseStringPromise, Builder } from "xml2js"
-import { addRelationship, ensureContentType, partRelsPath, parseSuggestion, readRelationships, SUGGESTED_TEXT_PREFIX } from "@/core/format/ooxml/parts"
+import { addRelationship, ensureContentType, partRelsPath, readRelationships, SUGGESTED_TEXT_PREFIX } from "@/core/format/ooxml/parts"
 
 export interface PptxComment {
   id: string
@@ -14,9 +14,25 @@ export interface PptxComment {
   parentId: string | null
   resolved: boolean
   suggestedText?: string | null
+  targetText?: string | null
 }
 
 export type ApproveResult = "applied" | "not-found" | "no-suggestion"
+
+// ponytail: multi-line suggested text is truncated at the Target line; single-line covers real usage
+function parseStoredSuggestion(text: any): { suggestedText: string | null; targetText: string | null } {
+  if (typeof text !== "string" || !text.startsWith(SUGGESTED_TEXT_PREFIX)) {
+    return { suggestedText: null, targetText: null }
+  }
+  const sep = text.indexOf(`\n${TARGET_TEXT_PREFIX}`)
+  if (sep === -1) {
+    return { suggestedText: text.slice(SUGGESTED_TEXT_PREFIX.length), targetText: null }
+  }
+  return {
+    suggestedText: text.slice(SUGGESTED_TEXT_PREFIX.length, sep),
+    targetText: text.slice(sep + TARGET_TEXT_PREFIX.length + 1),
+  }
+}
 
 const PRESENTATION_NS = "http://schemas.openxmlformats.org/presentationml/2006/main"
 const COMMENTS_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments"
@@ -24,15 +40,19 @@ const COMMENTS_CONTENT_TYPE =
   "application/vnd.openxmlformats-officedocument.presentationml.comments+xml"
 const COMMENT_AUTHORS_CONTENT_TYPE =
   "application/vnd.openxmlformats-officedocument.presentationml.commentAuthors+xml"
+const TARGET_TEXT_PREFIX = "Target text: "
 
 export async function writeComment(pptxPath: string, comment: PptxComment): Promise<void> {
   const data = readFileSync(pptxPath)
   const zip = await JSZip.loadAsync(data)
 
   const authorId = await ensureAuthor(zip, comment.author)
-  const storedText = comment.suggestedText
+  let storedText = comment.suggestedText
     ? `${SUGGESTED_TEXT_PREFIX}${comment.suggestedText}`
     : comment.text
+  if (comment.suggestedText && comment.targetText) {
+    storedText += `\n${TARGET_TEXT_PREFIX}${comment.targetText}`
+  }
   await appendCommentElement(zip, comment, authorId, storedText)
 
   const slidePart = await resolveSlidePart(zip, comment.slide)
@@ -77,7 +97,7 @@ export async function readComments(pptxPath: string): Promise<PptxComment[]> {
       y: pos?.$?.y ? parseInt(pos.$.y, 10) : 0,
       parentId: null,
       resolved: false,
-      suggestedText: parseSuggestion(text, SUGGESTED_TEXT_PREFIX),
+      ...parseStoredSuggestion(text),
     }
   })
 }
@@ -294,13 +314,13 @@ export async function applySlideSuggestion(pptxPath: string, commentId: string):
     return "not-found"
   }
   const text = target["p:text"] || target.text || ""
-  const suggestion = parseSuggestion(text, SUGGESTED_TEXT_PREFIX)
-  if (suggestion === null) {
+  const { suggestedText, targetText } = parseStoredSuggestion(text)
+  if (suggestedText === null) {
     return "no-suggestion"
   }
 
   const slidePart = await resolveSlidePart(zip, slideIndex)
-  await replaceFirstTextBox(zip, slidePart, suggestion)
+  await replaceTextBox(zip, slidePart, suggestedText, targetText)
 
   commentsRoot["p:cm"] = commentElements.filter((c: any) => c !== target)
   const newCommentsXml = new Builder({
@@ -315,7 +335,34 @@ export async function applySlideSuggestion(pptxPath: string, commentId: string):
   return "applied"
 }
 
-async function replaceFirstTextBox(zip: JSZip, slidePart: string, suggestion: string): Promise<void> {
+function normalizeForMatch(text: string): string {
+  return text.toLowerCase().replace(/\s+/g, " ").trim()
+}
+
+function shapeText(shape: any): string {
+  const txBody = shape["p:txBody"]
+  if (!txBody) {
+    return ""
+  }
+  const paras = txBody["a:p"] ? (Array.isArray(txBody["a:p"]) ? txBody["a:p"] : [txBody["a:p"]]) : []
+  const texts: string[] = []
+  for (const para of paras) {
+    const runs = para["a:r"] ? (Array.isArray(para["a:r"]) ? para["a:r"] : [para["a:r"]]) : []
+    for (const run of runs) {
+      if (typeof run["a:t"] === "string") {
+        texts.push(run["a:t"])
+      }
+    }
+  }
+  return texts.join(" ")
+}
+
+async function replaceTextBox(
+  zip: JSZip,
+  slidePart: string,
+  suggestion: string,
+  targetText?: string | null
+): Promise<void> {
   const slideFile = zip.file(slidePart)
   if (!slideFile) {
     throw new Error(`Slide part ${slidePart} not found`)
@@ -324,8 +371,22 @@ async function replaceFirstTextBox(zip: JSZip, slidePart: string, suggestion: st
   const obj = await parseStringPromise(content, { explicitArray: false })
   const root = obj["p:sld"] || obj.sld
   const spTree = root?.["p:cSld"]?.["p:spTree"]
+  // ponytail: top-level p:sp only; recurse into groups if real decks hit it
   const shapes = spTree?.["p:sp"] ? (Array.isArray(spTree["p:sp"]) ? spTree["p:sp"] : [spTree["p:sp"]]) : []
-  const target = shapes.find((s: any) => s["p:txBody"])
+  const textShapes = shapes.filter((s: any) => s["p:txBody"])
+  let target
+  if (targetText) {
+    const needle = normalizeForMatch(targetText)
+    target = textShapes.find((s: any) => normalizeForMatch(shapeText(s)).includes(needle))
+    if (!target) {
+      const previews = textShapes.map((s: any) => JSON.stringify(shapeText(s).slice(0, 60)))
+      throw new Error(
+        `No text box on slide matches target ${JSON.stringify(targetText)}. Text boxes: ${previews.join(", ") || "(none)"}`
+      )
+    }
+  } else {
+    target = textShapes[0]
+  }
   if (!target) {
     throw new Error("No text box found on slide")
   }
