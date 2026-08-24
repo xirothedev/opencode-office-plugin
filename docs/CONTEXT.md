@@ -96,6 +96,10 @@ _Avoid_: steal lock, take over, kick
 File produced by Export. New file at an explicit target path, converted from a document to another format. The document's real file, lock, draft, and version history are untouched. Written outside the single write path by design.
 _Avoid_: exported copy, output file
 
+**Render**:
+Creating an image from markdown: lines rendered as monospace text on a blank white canvas (sharp/SVG). Produces a brand-new image; never modifies an existing image's pixels. Pixel editing of existing images is unsupported — overlays are the mutation path for existing images.
+_Avoid_: image write, image edit
+
 **Image annotation**:
 Pixel-space overlay on an image: text notes, rectangular highlights, and text stamps. Distinct from Comment, which is anchored to a document range, cell, or slide. A mutation — routes through the draft lifecycle.
 _Avoid_: markup, image comment
@@ -129,11 +133,11 @@ Annotation on a document range, cell, or slide. DOCX stored in `word/comments.xm
 _Avoid_: annotation, note, remark
 
 **Suggestion**:
-Comment that carries a proposed content change, added with `suggestedText`. Stored in the comment text with a marker prefix (`Suggested text: ...` for DOCX/PPTX, `Suggested value: ...` for XLSX) so it survives Office round-trips. Applied to the file content by `officecli(action="approve")` — DOCX replaces the anchored paragraph text, XLSX writes the cell value, PPTX replaces the first text box. The comment is removed once applied.
+Comment that carries a proposed content change, added with `suggestedText`. Scope: files that already have content — the point is letting the user review changes to their own content in Office. On a new file (created this session) the agent authors content directly and skips comments entirely; the tool permits suggestions on fresh drafts but the workflow forbids them. Stored in the comment text with a marker prefix (`Suggested text: ...` for DOCX/PPTX, `Suggested value: ...` for XLSX) so it survives Office round-trips. Applied to the file content by `officecli(action="approve")` — DOCX replaces the anchored paragraph text, XLSX writes the cell value, PPTX replaces the first text box. The comment is removed once applied.
 _Avoid_: suggested change, review note
 
 **Approve**:
-Applying a Suggestion to the draft content via `officecli(action="approve", commentId)`. Mutating action (requires lock + draft). Comment id comes from `list-comments`/`review` output. After approve the agent continues the normal accept flow to write the real file.
+Applying a Suggestion to the draft content via `officecli(action="approve", commentId)`. Mutating action (requires lock + draft). Comment id comes from `list-comments`/`review` output. After approve the agent continues the normal accept flow to write the real file. No reject action exists — a suggestion is declined by leaving it unapproved (user resolves it in Office) or by undoing the draft.
 _Avoid_: accept, apply
 
 **Track change**:
@@ -141,8 +145,12 @@ Insertion or deletion with author attribution. Stored inline in `word/document.x
 _Avoid_: revision, redline, edit marker
 
 **Review**:
-Read pending comments and track changes from document. Returns summary of all annotations and modifications awaiting user decision. Agent calls `officecli(action="review")` to see what user needs to review.
-_Avoid_: audit, check, inspection
+Read pending comments and track changes from document. Returns summary of all annotations and modifications awaiting user decision. Agent calls `officecli(action="review")` to see what user needs to review. Reserved word: checking a draft against the real file before accept is not a review — that flow is the Pre-accept check, done with Diff.
+_Avoid_: audit, inspection, pre-accept check
+
+**Pre-accept check**:
+Inspecting the draft against the real file via `officecli(action="diff")` (and optionally `preview` for humans) before running accept. Not a Review — Review reads pending comments; this compares content.
+_Avoid_: draft review, change report
 
 **Validate**:
 `officecli(action="validate", filePath, rules)` checks the draft's markdown content against rules before accept. A rule is `{type: "regex", pattern}` (pattern must match) or `{type: "required", pattern}` (marker must be present). Returns a per-rule pass/fail report; does not block accept on its own — the agent decides what the report means.

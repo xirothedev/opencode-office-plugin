@@ -286,6 +286,7 @@ Configure via the `plugins` entry's `options` object in opencode config:
 - [Comment Workflow](docs/COMMENT-WORKFLOW.md) - Comment approval and track changes
 - [Full Flow](docs/FULL-FLOW.md) - End-to-end orchestration
 - [ADRs](docs/adr/) - Architecture decisions (CI/CD, V2 plugin API target)
+- [Agent skill](.opencode/skills/office/SKILL.md) - Copy to your project's `.opencode/skills/office/` so agents pick up the office workflows
 
 ## 📄 License
 

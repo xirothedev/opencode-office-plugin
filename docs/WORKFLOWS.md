@@ -253,7 +253,7 @@ officecli(action="accept", filePath="./procurement/B2-approval.docx")
 
 ## Limitations
 
-- Image = read-only (can't write back)
+- Image write = Render (markdown to a new text-on-canvas image); existing images are mutated only through overlays (watermark/annotate), never pixel-edited
 - Complex formatting may not round-trip perfectly (markdown intermediate)
 - Large files (>10MB) may be slow (pandoc conversion)
 - No real-time collaboration (lock-based, not CRDT)
