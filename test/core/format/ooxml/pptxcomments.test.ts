@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest"
 import JSZip from "jszip"
 import { writeComment, readComments, applySlideSuggestion } from "@/core/format/ooxml/pptxcomments"
-import { copyFileSync, unlinkSync, mkdirSync, existsSync, readFileSync } from "fs"
+import { copyFileSync, unlinkSync, mkdirSync, existsSync, readFileSync, writeFileSync } from "fs"
 import { join } from "path"
 import { tmpdir } from "os"
 
@@ -146,6 +146,7 @@ describe("OOXML PPTX Comment Writer", () => {
       author: "AI Agent",
       text: "Original note",
       suggestedText: "Revised slide heading",
+      targetText: "Hello from slide 1",
       timestamp: new Date("2026-08-12T10:30:00Z"),
       slide: 0,
       x: 100000,
@@ -156,8 +157,9 @@ describe("OOXML PPTX Comment Writer", () => {
 
     const comments = await readComments(testPptxPath)
     expect(comments).toHaveLength(1)
-    expect(comments[0].text).toBe("Suggested text: Revised slide heading")
+    expect(comments[0].text).toBe("Suggested text: Revised slide heading\nTarget text: Hello from slide 1")
     expect(comments[0].suggestedText).toBe("Revised slide heading")
+    expect(comments[0].targetText).toBe("Hello from slide 1")
   })
 
   it("approve replaces first text box and removes the comment", async () => {
@@ -199,5 +201,58 @@ describe("OOXML PPTX Comment Writer", () => {
 
     expect(await applySlideSuggestion(testPptxPath, "slide-0-cm-1")).toBe("no-suggestion")
     expect(await applySlideSuggestion(testPptxPath, "slide-5-cm-9")).toBe("not-found")
+  })
+
+  it("approve targets the text box matching targetText", async () => {
+    const zip = await JSZip.loadAsync(readFileSync(testPptxPath))
+    const slideXml = await zip.file("ppt/slides/slide1.xml")!.async("string")
+    const extraShape =
+      '<p:sp><p:nvSpPr><p:cNvPr id="99" name="Sidebar"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>' +
+      '<p:spPr/><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>Sidebar note</a:t></a:r></a:p></p:txBody></p:sp>'
+    zip.file("ppt/slides/slide1.xml", slideXml.replace("</p:spTree>", `${extraShape}</p:spTree>`))
+    writeFileSync(testPptxPath, await zip.generateAsync({ type: "nodebuffer" }))
+
+    await writeComment(testPptxPath, {
+      id: "s1",
+      author: "AI Agent",
+      text: "Original note",
+      suggestedText: "Revised sidebar",
+      targetText: "sidebar note",
+      timestamp: new Date("2026-08-12T10:30:00Z"),
+      slide: 0,
+      x: 100000,
+      y: 100000,
+      parentId: null,
+      resolved: false,
+    })
+
+    const result = await applySlideSuggestion(testPptxPath, "slide-0-cm-1")
+    expect(result).toBe("applied")
+
+    expect(await readComments(testPptxPath)).toHaveLength(0)
+    const updated = await JSZip.loadAsync(readFileSync(testPptxPath))
+    const slide = await updated.file("ppt/slides/slide1.xml")!.async("string")
+    expect(slide).toContain("Revised sidebar")
+    expect(slide).toContain("Hello from slide 1")
+  })
+
+  it("approve fails with candidates when targetText matches no box", async () => {
+    await writeComment(testPptxPath, {
+      id: "s1",
+      author: "AI Agent",
+      text: "Original note",
+      suggestedText: "Revised text",
+      targetText: "text that exists nowhere",
+      timestamp: new Date("2026-08-12T10:30:00Z"),
+      slide: 0,
+      x: 100000,
+      y: 100000,
+      parentId: null,
+      resolved: false,
+    })
+
+    await expect(applySlideSuggestion(testPptxPath, "slide-0-cm-1")).rejects.toThrow(
+      /No text box on slide matches target.*Text boxes:/s
+    )
   })
 })

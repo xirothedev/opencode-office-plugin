@@ -133,8 +133,12 @@ Annotation on a document range, cell, or slide. DOCX stored in `word/comments.xm
 _Avoid_: annotation, note, remark
 
 **Suggestion**:
-Comment that carries a proposed content change, added with `suggestedText`. Scope: files that already have content — the point is letting the user review changes to their own content in Office. On a new file (created this session) the agent authors content directly and skips comments entirely; the tool permits suggestions on fresh drafts but the workflow forbids them. Stored in the comment text with a marker prefix (`Suggested text: ...` for DOCX/PPTX, `Suggested value: ...` for XLSX) so it survives Office round-trips. Applied to the file content by `officecli(action="approve")` — DOCX replaces the anchored paragraph text, XLSX writes the cell value, PPTX replaces the first text box. The comment is removed once applied.
+Comment that carries a proposed content change, added with `suggestedText`. Scope: files that already have content — the point is letting the user review changes to their own content in Office. On a new file (created this session) the agent authors content directly and skips comments entirely; the tool permits suggestions on fresh drafts but the workflow forbids them. Stored in the comment text with a marker prefix (`Suggested text: ...` for DOCX/PPTX, `Suggested value: ...` for XLSX) so it survives Office round-trips. Applied to the file content by `officecli(action="approve")` — DOCX replaces the anchored paragraph text, XLSX writes the cell value, PPTX replaces the targeted text box (see Target text). The comment is removed once applied.
 _Avoid_: suggested change, review note
+
+**Target text**:
+Snippet of a PPTX shape's current text, carried inside a PPTX Suggestion (second line of the comment text, `Target text: ...`) so Approve can pick which text box to edit on a slide with several. Matching is normalized (case-insensitive, whitespace-collapsed) substring against each top-level shape's text; first match wins; no match fails approve with the candidate box texts listed. Absent → first text box. Top-level shapes only — text inside grouped shapes is not addressable.
+_Avoid_: shape index, anchor
 
 **Approve**:
 Applying a Suggestion to the draft content via `officecli(action="approve", commentId)`. Mutating action (requires lock + draft). Comment id comes from `list-comments`/`review` output. After approve the agent continues the normal accept flow to write the real file. No reject action exists — a suggestion is declined by leaving it unapproved (user resolves it in Office) or by undoing the draft.

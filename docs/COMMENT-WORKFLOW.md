@@ -26,9 +26,9 @@ A comment with `suggestedText` carries a proposed content change instead of a pl
 
 - **DOCX**: comment on a paragraph with `suggestedText` → `approve` replaces the paragraph text
 - **XLSX**: comment on a cell with `suggestedText` → `approve` writes the value into the cell (numeric if the suggestion is a number, otherwise inline string)
-- **PPTX**: comment on a slide with `suggestedText` → `approve` replaces the first text box text
+- **PPTX**: comment on a slide with `suggestedText` → `approve` replaces the text box matched by optional `targetText` (snippet of the intended box's current text), else the first text box
 
-The suggestion is stored inside the comment text with a marker prefix (`Suggested text: ...` / `Suggested value: ...`) so it survives Office round-trips and is visible to the user reviewing in Word/Excel/PowerPoint.
+The suggestion is stored inside the comment text with a marker prefix (`Suggested text: ...` / `Suggested value: ...`) so it survives Office round-trips and is visible to the user reviewing in Word/Excel/PowerPoint. A PPTX suggestion may carry a second line `Target text: ...` naming the intended text box.
 
 ### Add Suggestion
 
@@ -285,7 +285,7 @@ Stakeholder reviews policies, comments on governance issues, tracks revisions.
 - **Binary drafts hold markdown, not OOXML** (CONTEXT.md: Drafts are stored as the agent's markdown regardless of target format, converted at Accept). `comment`, `approve`, `track-insert`, `track-delete` write into the draft file as if it were the binary — so these actions fail on binary-format drafts. The OOXML writers/readers are covered by unit tests against real fixtures (`test/core/format/ooxml/*.test.ts`), but the tool-level path is unimplemented: a sidecar-style design (like Metadata/Watermark) is the intended fix. `list-comments` and `review` fall back to the real file when no draft exists, so reading comments works on files that already carry them.
 - Track changes are DOCX-only (`w:ins`/`w:del` is a Word OOXML feature; Excel/PowerPoint have no equivalent)
 - Suggestions are paragraph/cell/slide-anchored, not text-range-anchored; approving a DOCX suggestion replaces the whole paragraph text (inline formatting lost)
-- PPTX suggestions replace the first text box on the slide
+- PPTX suggestions replace the first text box unless the suggestion carries `targetText`, which selects the matching box (top-level shapes only)
 - No real-time collaboration (lock-based)
 - Complex formatting may not round-trip perfectly
 
