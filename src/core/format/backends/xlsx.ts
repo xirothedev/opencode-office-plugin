@@ -1,64 +1,87 @@
 import ExcelJS from "exceljs"
 
+interface TableBlock {
+  name: string | undefined
+  rows: string[][]
+}
+
 export async function writeXlsxFromMarkdown(markdown: string, outputPath: string): Promise<void> {
   const workbook = new ExcelJS.Workbook()
   const lines = markdown.split("\n")
 
-  // Extract sheet name from first # heading (optional)
-  let sheetName = "Sheet1"
-  let tableStartIdx = -1
+  // Split into table blocks; the nearest preceding # heading names each sheet
+  const blocks: TableBlock[] = []
+  let pendingName: string | undefined
+  let current: { name: string | undefined; rows: string[][] } | null = null
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim()
+  for (const raw of lines) {
+    const line = raw.trim()
     if (line.startsWith("# ")) {
-      sheetName = line.slice(2).trim()
-    } else if (line.startsWith("|") && tableStartIdx === -1) {
-      tableStartIdx = i
+      if (current && current.rows.length > 0) {
+        blocks.push(current)
+        current = null
+      }
+      pendingName = line.slice(2).trim()
+      continue
     }
+    if (!line.startsWith("|")) {
+      if (current && current.rows.length > 0) {
+        blocks.push(current)
+        current = null
+      }
+      continue
+    }
+
+    if (/^\|[\s\-:|]+\|$/.test(line)) continue
+
+    if (!current) {
+      current = { name: pendingName, rows: [] }
+      pendingName = undefined
+    }
+    current.rows.push(
+      line
+        .slice(1, -1)
+        .split("|")
+        .map((c) => c.trim()),
+    )
+  }
+  if (current && current.rows.length > 0) {
+    blocks.push(current)
   }
 
-  if (tableStartIdx === -1) {
+  if (blocks.length === 0) {
     throw new Error("No markdown table found")
   }
 
-  // Parse table rows
-  const rows: string[][] = []
-  for (let i = tableStartIdx; i < lines.length; i++) {
-    const line = lines[i].trim()
-    if (!line.startsWith("|")) break
+  // Backwards compat: single unnamed block keeps "Sheet1"
+  const usedNames = new Set<string>()
+  blocks.forEach((block, i) => {
+    let name = block.name ?? `Sheet${i + 1}`
+    while (usedNames.has(name)) {
+      name = `${name}_2`
+    }
+    usedNames.add(name)
+    addSheet(workbook, name, block.rows)
+  })
 
-    // Skip separator row (|---|---|)
-    if (/^\|[\s\-:|]+\|$/.test(line)) continue
+  await workbook.xlsx.writeFile(outputPath)
+}
 
-    const cells = line
-      .slice(1, -1)
-      .split("|")
-      .map((c) => c.trim())
-    rows.push(cells)
-  }
-
-  if (rows.length === 0) {
-    throw new Error("Table has no data rows")
-  }
-
+function addSheet(workbook: ExcelJS.Workbook, sheetName: string, rows: string[][]): void {
   const worksheet = workbook.addWorksheet(sheetName)
 
-  // Write rows
   for (const row of rows) {
     worksheet.addRow(row)
   }
 
   // Auto-fit column widths (approximate)
-  const columnCount = rows[0].length
+  const columnCount = Math.max(...rows.map((r) => r.length))
   for (let colIdx = 0; colIdx < columnCount; colIdx++) {
     let maxLen = 10
     for (const row of rows) {
       const cellLen = (row[colIdx] || "").length
       if (cellLen > maxLen) maxLen = cellLen
     }
-    const column = worksheet.getColumn(colIdx + 1)
-    column.width = Math.min(maxLen + 2, 50)
+    worksheet.getColumn(colIdx + 1).width = Math.min(maxLen + 2, 50)
   }
-
-  await workbook.xlsx.writeFile(outputPath)
 }
