@@ -88,6 +88,10 @@ _Avoid_: comparison, changes report
 Plugin registers tool named `edit` via `ctx.tool.transform`; a plugin tool whose name collides with a builtin replaces it in the catalog (verified at next-17444 — no session-hook deletion needed). Checks lock, routes to draft transparently. Binary files (png/pdf/docx) → error "use officecli for binary files". Agent thinks using `edit`, plugin enforces draft lifecycle.
 _Avoid_: edit interceptor, edit wrapper
 
+**Invoke**:
+Host-facing named entry point registered via `ctx.invoke.register(name, handler)` on the v2 plugin API; the opencode host (not the agent) calls it with a params object through the server API. This plugin maps `office.preview`, `office.edit.save`, `office.accept`, and `office.comment.{create,edit,delete,resolve,deny,approve}` onto the matching officecli actions, running as the session that holds the file lock (override with a `sessionID` param).
+_Avoid_: endpoint, api, webhook
+
 **Force release**:
 Releasing a file lock held by another session, via `officecli(action="force-release", filePath)`. Allowed only when the lock is stale (timeout exceeded); a fresh foreign lock cannot be force-released. The displaced session's draft becomes an Orphaned draft; that session gets an error on its next mutating command.
 _Avoid_: steal lock, take over, kick
