@@ -74,11 +74,11 @@ officecli(action="create", filePath="./templates/decision-template.md",
   content="# Decision {{NUMBER}}\n\nDepartment: {{DEPT}}\n\nAmount: {{AMOUNT}}")
 officecli(action="accept", filePath="./templates/decision-template.md")
 
-# Generate 50 decisions in one call
+# Generate 50 decisions in one call (filePaths/dataArray are JSON strings)
 officecli(action="generate",
   templatePath="./templates/decision-template.md",
-  filePaths=["./decisions/dept-001.docx", "./decisions/dept-002.docx", ...],
-  dataArray=[{DEPT: "Microbiology", NUMBER: 1, AMOUNT: 10000}, ...])
+  filePaths='["./decisions/dept-001.docx","./decisions/dept-002.docx", ...]',
+  dataArray='[{"DEPT": "Microbiology", "NUMBER": 1, "AMOUNT": 10000}, ...]')
 ```
 
 See [WORKFLOWS.md](docs/WORKFLOWS.md) for full procurement workflow examples.

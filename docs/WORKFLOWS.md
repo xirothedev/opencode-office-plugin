@@ -44,11 +44,11 @@ officecli(action="accept", filePath="./procurement/B2-approval.docx")
 officecli(action="create", filePath="./templates/decision-template.md", content="# Decision {{NUMBER}}\n\nDepartment: {{DEPT}}\nAmount: {{AMOUNT}}\n...")
 officecli(action="accept", filePath="./templates/decision-template.md")
 
-# Generate variants in one call (creates one draft per data entry)
+# Generate variants in one call (creates one draft per data entry; filePaths/dataArray are JSON strings)
 officecli(action="generate",
   templatePath="./templates/decision-template.md",
-  filePaths=["./decisions/microbiology-decision.docx", "./decisions/radiology-decision.docx"],
-  dataArray=[{"DEPT": "Microbiology", "NUMBER": 1, "AMOUNT": 10000}, {"DEPT": "Radiology", "NUMBER": 2, "AMOUNT": 20000}])
+  filePaths='["./decisions/microbiology-decision.docx","./decisions/radiology-decision.docx"]',
+  dataArray='[{"DEPT":"Microbiology","NUMBER":1,"AMOUNT":10000},{"DEPT":"Radiology","NUMBER":2,"AMOUNT":20000}]')
 
 # Accept each generated draft
 for file in ["./decisions/microbiology-decision.docx", "./decisions/radiology-decision.docx"]:
