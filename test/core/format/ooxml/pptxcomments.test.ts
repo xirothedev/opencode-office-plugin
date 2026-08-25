@@ -36,7 +36,7 @@ describe("OOXML PPTX Comment Writer", () => {
       x: 100000,
       y: 200000,
       parentId: null,
-      resolved: false,
+      status: "open",
     }
 
     await writeComment(testPptxPath, comment)
@@ -49,7 +49,7 @@ describe("OOXML PPTX Comment Writer", () => {
     expect(comments[0].slide).toBe(0)
     expect(comments[0].x).toBe(100000)
     expect(comments[0].y).toBe(200000)
-    expect(comments[0].resolved).toBe(false)
+    expect(comments[0].status).toBe("open")
   })
 
   it("supports multiple comments from different authors", async () => {
@@ -62,7 +62,7 @@ describe("OOXML PPTX Comment Writer", () => {
       x: 100000,
       y: 100000,
       parentId: null,
-      resolved: false,
+      status: "open",
     })
     await writeComment(testPptxPath, {
       id: "c2",
@@ -73,7 +73,7 @@ describe("OOXML PPTX Comment Writer", () => {
       x: 200000,
       y: 200000,
       parentId: null,
-      resolved: false,
+      status: "open",
     })
 
     const comments = await readComments(testPptxPath)
@@ -99,7 +99,7 @@ describe("OOXML PPTX Comment Writer", () => {
       x: 100000,
       y: 100000,
       parentId: null,
-      resolved: false,
+      status: "open",
     })
     await writeComment(testPptxPath, {
       id: "c2",
@@ -110,7 +110,7 @@ describe("OOXML PPTX Comment Writer", () => {
       x: 200000,
       y: 200000,
       parentId: null,
-      resolved: false,
+      status: "open",
     })
     await writeComment(testPptxPath, {
       id: "c3",
@@ -121,7 +121,7 @@ describe("OOXML PPTX Comment Writer", () => {
       x: 300000,
       y: 300000,
       parentId: null,
-      resolved: false,
+      status: "open",
     })
 
     const zip = await JSZip.loadAsync(readFileSync(testPptxPath))
@@ -152,7 +152,7 @@ describe("OOXML PPTX Comment Writer", () => {
       x: 100000,
       y: 100000,
       parentId: null,
-      resolved: false,
+      status: "open",
     })
 
     const comments = await readComments(testPptxPath)
@@ -173,7 +173,7 @@ describe("OOXML PPTX Comment Writer", () => {
       x: 100000,
       y: 100000,
       parentId: null,
-      resolved: false,
+      status: "open",
     })
 
     const result = await applySlideSuggestion(testPptxPath, "slide-0-cm-1")
@@ -196,7 +196,7 @@ describe("OOXML PPTX Comment Writer", () => {
       x: 100000,
       y: 100000,
       parentId: null,
-      resolved: false,
+      status: "open",
     })
 
     expect(await applySlideSuggestion(testPptxPath, "slide-0-cm-1")).toBe("no-suggestion")
@@ -223,7 +223,7 @@ describe("OOXML PPTX Comment Writer", () => {
       x: 100000,
       y: 100000,
       parentId: null,
-      resolved: false,
+      status: "open",
     })
 
     const result = await applySlideSuggestion(testPptxPath, "slide-0-cm-1")
@@ -248,11 +248,33 @@ describe("OOXML PPTX Comment Writer", () => {
       x: 100000,
       y: 100000,
       parentId: null,
-      resolved: false,
+      status: "open",
     })
 
     await expect(applySlideSuggestion(testPptxPath, "slide-0-cm-1")).rejects.toThrow(
       /No text box on slide matches target.*Text boxes:/s
     )
+  })
+
+  it("round-trips comment status", async () => {
+    await writeComment(testPptxPath, {
+      id: "cm-1",
+      author: "AI Agent",
+      text: "Needs a diagram",
+      timestamp: new Date("2026-08-12T10:30:00Z"),
+      slide: 0,
+      x: 100000,
+      y: 200000,
+      parentId: null,
+      status: "denied",
+    })
+    const comments = await readComments(testPptxPath)
+    expect(comments).toHaveLength(1)
+    expect(comments[0].id).toBe("slide-0-cm-1")
+    expect(comments[0].status).toBe("denied")
+    const zip = await JSZip.loadAsync(readFileSync(testPptxPath))
+    const xml = await zip.file("ppt/comments/comment1.xml")!.async("string")
+    expect(xml).toContain('oo:status="denied"')
+    expect(xml).toContain('xmlns:oo="http://opencode.ai/openoffice-plugin"')
   })
 })

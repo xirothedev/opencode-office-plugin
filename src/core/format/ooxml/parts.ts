@@ -120,3 +120,34 @@ export function parseSuggestion(text: any, prefix: string): string | null {
   }
   return text.slice(prefix.length)
 }
+
+// Plugin namespace for Comment status attributes (docs/CONTEXT.md "Comment status").
+// OOXML has no standard "denied" state for comments, so the plugin persists status as a
+// namespaced attribute declared locally on the comment element. Word preserves unknown
+// attributes on recognized elements across save round-trips (it strips unknown child
+// elements, not attributes), so this choice survives a Word round-trip.
+export const OPENOFFICE_NS = "http://opencode.ai/openoffice-plugin"
+export const OO_XMLNS_ATTR = "xmlns:oo"
+export const OO_STATUS_ATTR = "oo:status"
+
+export type CommentStatus = "open" | "resolved" | "denied"
+
+export function openofficeStatusAttributes(status: CommentStatus): Record<string, string> {
+  if (status === "open") {
+    return {}
+  }
+  return { [OO_XMLNS_ATTR]: OPENOFFICE_NS, [OO_STATUS_ATTR]: status }
+}
+
+export function parseStatus(attrs: Record<string, unknown> | undefined): CommentStatus {
+  if (!attrs) {
+    return "open"
+  }
+  if (attrs["w:done"] === "1" || attrs.done === "1") {
+    return "resolved"
+  }
+  if (attrs[OO_STATUS_ATTR] === "denied" || attrs[OO_STATUS_ATTR] === "resolved") {
+    return attrs[OO_STATUS_ATTR] as CommentStatus
+  }
+  return "open"
+}

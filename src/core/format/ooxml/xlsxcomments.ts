@@ -1,7 +1,7 @@
 import JSZip from "jszip"
 import { readFileSync, writeFileSync } from "fs"
 import { parseStringPromise, Builder } from "xml2js"
-import { addRelationship, ensureContentType, escapeXml, partRelsPath, parseSuggestion, readRelationships, resolveTarget, SUGGESTED_VALUE_PREFIX } from "@/core/format/ooxml/parts"
+import { addRelationship, ensureContentType, escapeXml, partRelsPath, parseSuggestion, readRelationships, resolveTarget, SUGGESTED_VALUE_PREFIX, OPENOFFICE_NS, OO_XMLNS_ATTR, OO_STATUS_ATTR, openofficeStatusAttributes, parseStatus, type CommentStatus } from "@/core/format/ooxml/parts"
 
 export interface XlsxComment {
   id: string
@@ -10,7 +10,7 @@ export interface XlsxComment {
   timestamp: Date
   cellRef: string
   parentId: string | null
-  resolved: boolean
+  status: CommentStatus
   suggestedText?: string | null
 }
 
@@ -77,7 +77,7 @@ export async function readComments(xlsxPath: string): Promise<XlsxComment[]> {
       timestamp: new Date(),
       cellRef: elem.$.ref || "",
       parentId: null,
-      resolved: false,
+      status: parseStatus(elem.$),
       suggestedText: parseSuggestion(text, SUGGESTED_VALUE_PREFIX),
     }
   })
@@ -168,7 +168,7 @@ async function appendCommentElement(
     root.commentList.comment = root.commentList.comment ? [root.commentList.comment] : []
   }
   root.commentList.comment.push({
-    $: { ref: comment.cellRef, authorId: String(authorId) },
+    $: { ref: comment.cellRef, authorId: String(authorId), ...openofficeStatusAttributes(comment.status) },
     text: { t: storedText },
   })
   const xml = new Builder({
@@ -415,4 +415,149 @@ async function removeVmlShapeForCell(zip: JSZip, cellRef: string, commentText: s
   if (kept !== body) {
     zip.file(vmlPath, kept)
   }
+}
+
+
+export async function updateComment(
+  xlsxPath: string,
+  commentId: string,
+  update: { text?: string; suggestedText?: string }
+): Promise<"updated" | "not-found"> {
+  const match = commentId.match(/^([A-Z]+[0-9]+)-(\d+)$/)
+  if (!match) {
+    return "not-found"
+  }
+  const cellRef = match[1]
+  const authorId = match[2]
+
+  const data = readFileSync(xlsxPath)
+  const zip = await JSZip.loadAsync(data)
+
+  const commentsFile = zip.file("xl/comments1.xml")
+  if (!commentsFile) {
+    return "not-found"
+  }
+  const commentsObj = await parseStringPromise(await commentsFile.async("string"), { explicitArray: false })
+  const commentsRoot = commentsObj.comments || commentsObj["x:comments"]
+  const commentElements = commentsRoot?.commentList?.comment
+    ? Array.isArray(commentsRoot.commentList.comment)
+      ? commentsRoot.commentList.comment
+      : [commentsRoot.commentList.comment]
+    : []
+  const target = commentElements.find(
+    (c: any) => (c.$?.ref ?? c.$?.cellRef) === cellRef && String(c.$?.authorId) === authorId
+  )
+  if (!target) {
+    return "not-found"
+  }
+  // ponytail: a suggestion replaces the note text, same convention as writeComment
+  const storedText =
+    update.suggestedText !== undefined
+      ? `${SUGGESTED_VALUE_PREFIX}${update.suggestedText}`
+      : (update.text as string)
+  target.text = { t: storedText }
+  const xml = new Builder({
+    rootName: "comments",
+    headless: false,
+    xmldec: { version: "1.0", encoding: "UTF-8", standalone: true },
+  }).buildObject(commentsRoot)
+  zip.file("xl/comments1.xml", xml)
+
+  const buffer = await zip.generateAsync({ type: "nodebuffer" })
+  writeFileSync(xlsxPath, buffer)
+  return "updated"
+}
+
+export async function deleteComment(xlsxPath: string, commentId: string): Promise<"deleted" | "not-found"> {
+  const match = commentId.match(/^([A-Z]+[0-9]+)-(\d+)$/)
+  if (!match) {
+    return "not-found"
+  }
+  const cellRef = match[1]
+  const authorId = match[2]
+
+  const data = readFileSync(xlsxPath)
+  const zip = await JSZip.loadAsync(data)
+
+  const commentsFile = zip.file("xl/comments1.xml")
+  if (!commentsFile) {
+    return "not-found"
+  }
+  const commentsObj = await parseStringPromise(await commentsFile.async("string"), { explicitArray: false })
+  const commentsRoot = commentsObj.comments || commentsObj["x:comments"]
+  const commentElements = commentsRoot?.commentList?.comment
+    ? Array.isArray(commentsRoot.commentList.comment)
+      ? commentsRoot.commentList.comment
+      : [commentsRoot.commentList.comment]
+    : []
+  const target = commentElements.find(
+    (c: any) => (c.$?.ref ?? c.$?.cellRef) === cellRef && String(c.$?.authorId) === authorId
+  )
+  if (!target) {
+    return "not-found"
+  }
+  const text = extractCommentText(target.text)
+  commentsRoot.commentList.comment = commentElements.filter((c: any) => c !== target)
+  const xml = new Builder({
+    rootName: "comments",
+    headless: false,
+    xmldec: { version: "1.0", encoding: "UTF-8", standalone: true },
+  }).buildObject(commentsRoot)
+  zip.file("xl/comments1.xml", xml)
+  await removeVmlShapeForCell(zip, cellRef, text)
+
+  const buffer = await zip.generateAsync({ type: "nodebuffer" })
+  writeFileSync(xlsxPath, buffer)
+  return "deleted"
+}
+
+export async function setCommentStatus(
+  xlsxPath: string,
+  commentId: string,
+  status: CommentStatus
+): Promise<"ok" | "not-found"> {
+  const match = commentId.match(/^([A-Z]+[0-9]+)-(\d+)$/)
+  if (!match) {
+    return "not-found"
+  }
+  const cellRef = match[1]
+  const authorId = match[2]
+
+  const data = readFileSync(xlsxPath)
+  const zip = await JSZip.loadAsync(data)
+
+  const commentsFile = zip.file("xl/comments1.xml")
+  if (!commentsFile) {
+    return "not-found"
+  }
+  const commentsObj = await parseStringPromise(await commentsFile.async("string"), { explicitArray: false })
+  const commentsRoot = commentsObj.comments || commentsObj["x:comments"]
+  const commentElements = commentsRoot?.commentList?.comment
+    ? Array.isArray(commentsRoot.commentList.comment)
+      ? commentsRoot.commentList.comment
+      : [commentsRoot.commentList.comment]
+    : []
+  const target = commentElements.find(
+    (c: any) => (c.$?.ref ?? c.$?.cellRef) === cellRef && String(c.$?.authorId) === authorId
+  )
+  if (!target) {
+    return "not-found"
+  }
+  const attrs = target.$ ?? (target.$ = {})
+  delete attrs[OO_STATUS_ATTR]
+  delete attrs[OO_XMLNS_ATTR]
+  if (status !== "open") {
+    attrs[OO_XMLNS_ATTR] = OPENOFFICE_NS
+    attrs[OO_STATUS_ATTR] = status
+  }
+  const xml = new Builder({
+    rootName: "comments",
+    headless: false,
+    xmldec: { version: "1.0", encoding: "UTF-8", standalone: true },
+  }).buildObject(commentsRoot)
+  zip.file("xl/comments1.xml", xml)
+
+  const buffer = await zip.generateAsync({ type: "nodebuffer" })
+  writeFileSync(xlsxPath, buffer)
+  return "ok"
 }

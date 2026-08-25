@@ -1,7 +1,7 @@
 import JSZip from "jszip"
 import { readFileSync, writeFileSync } from "fs"
 import { parseStringPromise, Builder } from "xml2js"
-import { addRelationship, ensureContentType, partRelsPath, readRelationships, SUGGESTED_TEXT_PREFIX } from "@/core/format/ooxml/parts"
+import { addRelationship, ensureContentType, partRelsPath, readRelationships, SUGGESTED_TEXT_PREFIX, OPENOFFICE_NS, OO_XMLNS_ATTR, OO_STATUS_ATTR, openofficeStatusAttributes, parseStatus, type CommentStatus } from "@/core/format/ooxml/parts"
 
 export interface PptxComment {
   id: string
@@ -12,7 +12,7 @@ export interface PptxComment {
   x: number
   y: number
   parentId: string | null
-  resolved: boolean
+  status: CommentStatus
   suggestedText?: string | null
   targetText?: string | null
 }
@@ -96,7 +96,7 @@ export async function readComments(pptxPath: string): Promise<PptxComment[]> {
       x: pos?.$?.x ? parseInt(pos.$.x, 10) : 0,
       y: pos?.$?.y ? parseInt(pos.$.y, 10) : 0,
       parentId: null,
-      resolved: false,
+      status: parseStatus(elem.$),
       ...parseStoredSuggestion(text),
     }
   })
@@ -173,6 +173,7 @@ async function appendCommentElement(
       authorId: String(authorId),
       dt: comment.timestamp.toISOString(),
       idx: String(idx),
+      ...openofficeStatusAttributes(comment.status),
     },
     "p:pos": { $: { x: String(comment.x), y: String(comment.y) } },
     "p:text": storedText,
@@ -416,4 +417,148 @@ async function replaceTextBox(
     xmldec: { version: "1.0", encoding: "UTF-8", standalone: true },
   }).buildObject(root)
   zip.file(slidePart, xml)
+}
+
+
+export async function updateComment(
+  pptxPath: string,
+  commentId: string,
+  update: { text?: string; suggestedText?: string }
+): Promise<"updated" | "not-found"> {
+  const match = commentId.match(/^slide-\d+-cm-(\d+)$/)
+  if (!match) {
+    return "not-found"
+  }
+  const idx = match[1]
+
+  const data = readFileSync(pptxPath)
+  const zip = await JSZip.loadAsync(data)
+
+  const commentsFile = zip.file("ppt/comments/comment1.xml")
+  if (!commentsFile) {
+    return "not-found"
+  }
+  const commentsObj = await parseStringPromise(await commentsFile.async("string"), { explicitArray: false })
+  const commentsRoot = commentsObj["p:cmLst"] || commentsObj.cmLst
+  const commentElements = commentsRoot?.["p:cm"]
+    ? Array.isArray(commentsRoot["p:cm"])
+      ? commentsRoot["p:cm"]
+      : [commentsRoot["p:cm"]]
+    : []
+  const target = commentElements.find((c: any) => String(c.$?.idx) === idx)
+  if (!target) {
+    return "not-found"
+  }
+  // Keep the existing Target text line so approve still picks the right box.
+  const current = parseStoredSuggestion(target["p:text"] || target.text || "")
+  let storedText: string
+  if (update.suggestedText !== undefined) {
+    storedText = `${SUGGESTED_TEXT_PREFIX}${update.suggestedText}`
+    if (current.targetText) {
+      storedText += `\n${TARGET_TEXT_PREFIX}${current.targetText}`
+    }
+  } else {
+    storedText = update.text as string
+  }
+  if (target["p:text"] !== undefined) {
+    target["p:text"] = storedText
+  } else {
+    target.text = storedText
+  }
+  const xml = new Builder({
+    rootName: "p:cmLst",
+    headless: false,
+    xmldec: { version: "1.0", encoding: "UTF-8", standalone: true },
+  }).buildObject(commentsRoot)
+  zip.file("ppt/comments/comment1.xml", xml)
+
+  const buffer = await zip.generateAsync({ type: "nodebuffer" })
+  writeFileSync(pptxPath, buffer)
+  return "updated"
+}
+
+export async function deleteComment(pptxPath: string, commentId: string): Promise<"deleted" | "not-found"> {
+  const match = commentId.match(/^slide-\d+-cm-(\d+)$/)
+  if (!match) {
+    return "not-found"
+  }
+  const idx = match[1]
+
+  const data = readFileSync(pptxPath)
+  const zip = await JSZip.loadAsync(data)
+
+  const commentsFile = zip.file("ppt/comments/comment1.xml")
+  if (!commentsFile) {
+    return "not-found"
+  }
+  const commentsObj = await parseStringPromise(await commentsFile.async("string"), { explicitArray: false })
+  const commentsRoot = commentsObj["p:cmLst"] || commentsObj.cmLst
+  const commentElements = commentsRoot?.["p:cm"]
+    ? Array.isArray(commentsRoot["p:cm"])
+      ? commentsRoot["p:cm"]
+      : [commentsRoot["p:cm"]]
+    : []
+  const target = commentElements.find((c: any) => String(c.$?.idx) === idx)
+  if (!target) {
+    return "not-found"
+  }
+  commentsRoot["p:cm"] = commentElements.filter((c: any) => c !== target)
+  const xml = new Builder({
+    rootName: "p:cmLst",
+    headless: false,
+    xmldec: { version: "1.0", encoding: "UTF-8", standalone: true },
+  }).buildObject(commentsRoot)
+  zip.file("ppt/comments/comment1.xml", xml)
+
+  const buffer = await zip.generateAsync({ type: "nodebuffer" })
+  writeFileSync(pptxPath, buffer)
+  return "deleted"
+}
+
+export async function setCommentStatus(
+  pptxPath: string,
+  commentId: string,
+  status: CommentStatus
+): Promise<"ok" | "not-found"> {
+  const match = commentId.match(/^slide-\d+-cm-(\d+)$/)
+  if (!match) {
+    return "not-found"
+  }
+  const idx = match[1]
+
+  const data = readFileSync(pptxPath)
+  const zip = await JSZip.loadAsync(data)
+
+  const commentsFile = zip.file("ppt/comments/comment1.xml")
+  if (!commentsFile) {
+    return "not-found"
+  }
+  const commentsObj = await parseStringPromise(await commentsFile.async("string"), { explicitArray: false })
+  const commentsRoot = commentsObj["p:cmLst"] || commentsObj.cmLst
+  const commentElements = commentsRoot?.["p:cm"]
+    ? Array.isArray(commentsRoot["p:cm"])
+      ? commentsRoot["p:cm"]
+      : [commentsRoot["p:cm"]]
+    : []
+  const target = commentElements.find((c: any) => String(c.$?.idx) === idx)
+  if (!target) {
+    return "not-found"
+  }
+  const attrs = target.$ ?? (target.$ = {})
+  delete attrs[OO_STATUS_ATTR]
+  delete attrs[OO_XMLNS_ATTR]
+  if (status !== "open") {
+    attrs[OO_XMLNS_ATTR] = OPENOFFICE_NS
+    attrs[OO_STATUS_ATTR] = status
+  }
+  const xml = new Builder({
+    rootName: "p:cmLst",
+    headless: false,
+    xmldec: { version: "1.0", encoding: "UTF-8", standalone: true },
+  }).buildObject(commentsRoot)
+  zip.file("ppt/comments/comment1.xml", xml)
+
+  const buffer = await zip.generateAsync({ type: "nodebuffer" })
+  writeFileSync(pptxPath, buffer)
+  return "ok"
 }
