@@ -1,4 +1,4 @@
-import { Schema } from "effect"
+import { Effect, Schema } from "effect"
 import { Tool } from "@opencode-ai/schema/tool"
 import { createDraft, acceptDraft, undoDraft, getHistory, getDraftPath, draftExists, getSnapshot, getSnapshotSidecar, listActiveDrafts, getDraftSessions } from "@/core/draft/manager"
 import { acquireLock, getLock, releaseLock, isLockStale, overrideLock } from "@/core/draft/lock"
@@ -147,6 +147,51 @@ export const officecliTool: Tool.Info<typeof officecliInput, typeof officecliOut
   options: { codemode: false },
   execute: (input, context) =>
     tryExecute(async () => ({ output: await runAction(input, context) })),
+}
+
+// ponytail: host-facing invoke names mirror officecli actions so the app drives the same code path as the agent tool
+export const officecliInvokes: Record<string, OfficeCliInput["action"]> = {
+  "office.preview": "preview",
+  "office.edit.save": "edit",
+  "office.accept": "accept",
+  "office.comment.create": "comment",
+  "office.comment.edit": "edit-comment",
+  "office.comment.delete": "delete-comment",
+  "office.comment.resolve": "resolve-comment",
+  "office.comment.deny": "deny-comment",
+  "office.comment.approve": "approve",
+}
+
+export async function runOfficecliInvoke(name: string, input: unknown): Promise<string> {
+  const action = officecliInvokes[name]
+  if (!action) fail(`unknown invoke ${name}`)
+  const params: Record<string, unknown> =
+    input !== null && typeof input === "object" ? (input as Record<string, unknown>) : {}
+  const filePath = strParam(params.filePath) ?? strParam(params.filename)
+  if (!filePath) fail(`${name} requires filePath`)
+  const args = decodeInvokeArgs(name, { ...params, action, filePath })
+  const sessionID = strParam(params.sessionID) ?? getLock(getFilePathHash(filePath))?.sessionID ?? "openoffice-invoke"
+  const context = {
+    sessionID,
+    agent: "openoffice-invoke",
+    messageID: "openoffice-invoke",
+    id: "openoffice-invoke",
+    progress: () => Effect.void,
+  } as never
+  const result = await Effect.runPromise(officecliTool.execute(args, context))
+  return result.output as string
+}
+
+function decodeInvokeArgs(name: string, value: Record<string, unknown>): OfficeCliInput {
+  try {
+    return Schema.decodeUnknownSync(officecliInput)(value)
+  } catch (error) {
+    fail(`invalid ${name} params: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
+function strParam(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined
 }
 
 async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<string> {

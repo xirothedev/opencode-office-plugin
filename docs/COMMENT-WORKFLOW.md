@@ -179,6 +179,24 @@ Persistence: DOCX resolved comments get the standard `w:done="1"` attribute; den
 
 All four actions require an active draft (lock held by the calling session) and operate on the draft, never the real file.
 
+## Host-Driven Actions
+
+The opencode host can drive review actions without the agent. The plugin registers `ctx.invoke` handlers that map 1:1 onto officecli actions; params use `filePath` (or `filename`) plus the action's own arguments, and the call runs as the lock-holding session unless a `sessionID` is passed.
+
+| Invoke name | officecli action |
+| --- | --- |
+| `office.preview` | `preview` |
+| `office.edit.save` | `edit` |
+| `office.accept` | `accept` |
+| `office.comment.create` | `comment` |
+| `office.comment.edit` | `edit-comment` |
+| `office.comment.delete` | `delete-comment` |
+| `office.comment.resolve` | `resolve-comment` |
+| `office.comment.deny` | `deny-comment` |
+| `office.comment.approve` | `approve` |
+
+Failures surface as the same typed errors the agent sees.
+
 ## Workflow Example
 
 ### 1. Agent Creates Draft with Comments
