@@ -69,7 +69,7 @@ Draft whose session lost lock (stale override) or ended without accept/discard. 
 _Avoid_: abandoned draft, lost edits
 
 **officecli**:
-Single tool with action enum. Actions: create, edit, read, accept, undo, revert, history, list, diff, generate, preview, validate, lock-status, force-release, export, metadata, annotate, watermark, comment, track-insert, track-delete, list-comments, review, approve. `create` and `accept` take `filePaths` for Batch calls. `read` returns markdown (delegates to pdf-inspector/anydoc/oocr). `history` returns metadata list. `list` returns active drafts across files. `diff` returns the markdown Diff. `generate` produces drafts from a Template. Registered via `ctx.tool.transform` with `codemode: false` (direct provider exposure); input is a tagged union on `action` so each action declares its required args. Delegates to format-specific backends internally. Enforces draft lifecycle via edit tool override.
+Single tool with action enum. Actions: create, edit, read, accept, undo, revert, history, list, diff, generate, preview, validate, lock-status, force-release, export, metadata, annotate, watermark, comment, edit-comment, delete-comment, resolve-comment, deny-comment, track-insert, track-delete, list-comments, review, approve. `create` and `accept` take `filePaths` for Batch calls. `read` returns markdown (delegates to pdf-inspector/anydoc/oocr). `history` returns metadata list. `list` returns active drafts across files. `diff` returns the markdown Diff. `generate` produces drafts from a Template. Registered via `ctx.tool.transform` with `codemode: false` (direct provider exposure); input is a tagged union on `action` so each action declares its required args. Delegates to format-specific backends internally. Enforces draft lifecycle via edit tool override.
 _Avoid_: office tool, document tool, doc tool
 
 **Template**:
@@ -141,8 +141,28 @@ Snippet of a PPTX shape's current text, carried inside a PPTX Suggestion (second
 _Avoid_: shape index, anchor
 
 **Approve**:
-Applying a Suggestion to the draft content via `officecli(action="approve", commentId)`. Mutating action (requires lock + draft). Comment id comes from `list-comments`/`review` output. After approve the agent continues the normal accept flow to write the real file. No reject action exists — a suggestion is declined by leaving it unapproved (user resolves it in Office) or by undoing the draft.
+Applying a Suggestion to the draft content via `officecli(action="approve", commentId)`. Mutating action (requires lock + draft). Comment id comes from `list-comments`/`review` output. After approve the agent continues the normal accept flow to write the real file. A declined suggestion is marked via `officecli(action="deny-comment")` (status denied, content untouched) or removed entirely with `officecli(action="delete-comment")`.
 _Avoid_: accept, apply
+
+**Comment status**:
+Lifecycle state of a Comment: `open` (default when created), `resolved` (reviewed and handled, no content change), `denied` (suggestion explicitly rejected, content left untouched). Persisted in the comment part: DOCX uses the standard `w:done="1"` attribute on `<w:comment>` for resolved and a plugin-namespaced `oo:status="denied"` attribute (namespace `http://opencode.ai/openoffice-plugin`, declared locally on the element) for denied; XLSX and PPTX use the same plugin attribute for any non-open status. Word preserves unknown attributes on recognized elements across save round-trips, so the marker survives; it is ignored by Office UI. Shown in `list-comments` and `review` output.
+_Avoid_: state, flag, resolved-boolean
+
+**Resolve**:
+Marking a Comment as handled without changing document content: `officecli(action="resolve-comment", filePath, commentId)` sets status to resolved. Mutating (requires lock + draft). Distinct from Approve, which applies a Suggestion and removes the comment.
+_Avoid_: approve, close, complete
+
+**Deny**:
+Marking a Comment (usually a Suggestion) as explicitly rejected: `officecli(action="deny-comment", filePath, commentId)` sets status to denied. Content untouched, comment retained for the record. Distinct from Approve (apply + remove) and from Delete comment (remove entirely).
+_Avoid_: reject, decline, dismiss
+
+**Edit comment**:
+Rewriting an existing comment's text and/or suggested text in place: `officecli(action="edit-comment", filePath, commentId, text?, suggestedText?)`. Keeps author, anchor, and status. Mutating (requires lock + draft).
+_Avoid_: modify comment, update annotation
+
+**Delete comment**:
+Removing a Comment and its markers from the draft: `officecli(action="delete-comment", filePath, commentId)`. DOCX removes the comment plus its `commentRangeStart`/`commentRangeEnd`/`commentReference` markers; XLSX also removes the VML note shape; PPTX removes the `p:cm` entry. Mutating (requires lock + draft). Distinct from Undo, which discards the whole draft.
+_Avoid_: remove comment, discard comment
 
 **Track change**:
 Insertion or deletion with author attribution. Stored inline in `word/document.xml` as `<w:ins>`/`<w:del>` elements with author, timestamp, id. DOCX only — the OOXML spec defines no track changes format for XLSX/PPTX (Excel's legacy Track Changes was removed, PowerPoint never had it). User accepts/rejects in Word's Review tab. Agent adds via `officecli(action="track-insert"|"track-delete")`; for XLSX/PPTX the action returns an error and `comment` is the review path.
