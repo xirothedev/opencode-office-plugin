@@ -6,10 +6,10 @@ import { getFilePathHash } from "@/core/storage/paths"
 import { writeFileSync, readFileSync, existsSync } from "fs"
 import { extname, resolve, join } from "path"
 import { detectFormat } from "@/core/format/detect"
-import { writeComment, readComments, applyCommentSuggestion, type Comment } from "@/core/format/ooxml/comments"
+import { writeComment, readComments, applyCommentSuggestion, updateComment, deleteComment, setCommentStatus, type Comment } from "@/core/format/ooxml/comments"
 import { writeTrackChange, readTrackChanges, type TrackChange } from "@/core/format/ooxml/trackchanges"
-import { writeComment as writeXlsxComment, readComments as readXlsxComments, applyCellSuggestion, type XlsxComment } from "@/core/format/ooxml/xlsxcomments"
-import { writeComment as writePptxComment, readComments as readPptxComments, applySlideSuggestion, type PptxComment } from "@/core/format/ooxml/pptxcomments"
+import { writeComment as writeXlsxComment, readComments as readXlsxComments, applyCellSuggestion, updateComment as updateXlsxComment, deleteComment as deleteXlsxComment, setCommentStatus as setXlsxCommentStatus, type XlsxComment } from "@/core/format/ooxml/xlsxcomments"
+import { writeComment as writePptxComment, readComments as readPptxComments, applySlideSuggestion, updateComment as updatePptxComment, deleteComment as deletePptxComment, setCommentStatus as setPptxCommentStatus, type PptxComment } from "@/core/format/ooxml/pptxcomments"
 import { diffTexts } from "@/core/draft/diff"
 import { substituteTemplate } from "@/core/template/substitute"
 import { readRealFileAsMarkdown } from "@/core/format/read"
@@ -81,6 +81,16 @@ const commentArgs = S.Struct({
   y: S.optional(S.Number),
 })
 const approveArgs = S.Struct({ action: S.Literal("approve"), filePath: S.String, commentId: S.String })
+const editCommentArgs = S.Struct({
+  action: S.Literal("edit-comment"),
+  filePath: S.String,
+  commentId: S.String,
+  text: S.optional(S.String),
+  suggestedText: S.optional(S.String),
+})
+const deleteCommentArgs = S.Struct({ action: S.Literal("delete-comment"), filePath: S.String, commentId: S.String })
+const resolveCommentArgs = S.Struct({ action: S.Literal("resolve-comment"), filePath: S.String, commentId: S.String })
+const denyCommentArgs = S.Struct({ action: S.Literal("deny-comment"), filePath: S.String, commentId: S.String })
 const trackChangeArgs = S.Struct({
   action: S.Union([S.Literal("track-insert"), S.Literal("track-delete")]),
   filePath: S.String,
@@ -114,6 +124,10 @@ const officecliInput = S.Union([
   readArgs,
   commentArgs,
   approveArgs,
+  editCommentArgs,
+  deleteCommentArgs,
+  resolveCommentArgs,
+  denyCommentArgs,
   trackChangeArgs,
   listCommentsArgs,
   previewArgs,
@@ -127,7 +141,7 @@ const officecliOutput = S.String
 export const officecliTool: Tool.Info<typeof officecliInput, typeof officecliOutput> = {
   name: "officecli",
   description:
-    "Office document automation. Create, edit, read, accept, undo, revert documents with draft lifecycle. Preview renders a draft to HTML, validate checks draft content against rules, lock-status queries lock state, force-release takes over a stale lock. Supports comments for DOCX, XLSX, PPTX, track changes for DOCX, and content-changing suggestions (comment with suggestedText, applied by approve action; PPTX suggestions accept optional targetText, a snippet of the intended text box's current text, so approve edits that box instead of the first).",
+    "Office document automation. Create, edit, read, accept, undo, revert documents with draft lifecycle. Preview renders a draft to HTML, validate checks draft content against rules, lock-status queries lock state, force-release takes over a stale lock. Supports comments for DOCX, XLSX, PPTX, track changes for DOCX, and content-changing suggestions (comment with suggestedText, applied by approve action; PPTX suggestions accept optional targetText, a snippet of the intended text box's current text, so approve edits that box instead of the first). Comment lifecycle: comments carry a status (open/resolved/denied) surfaced by list-comments and review; edit-comment rewrites the text or suggestion in place, delete-comment removes the comment and its markers, resolve-comment marks it resolved, deny-comment marks it denied (all require an active draft).",
   input: officecliInput,
   output: officecliOutput,
   options: { codemode: false },
@@ -613,7 +627,7 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
         timestamp: new Date(),
         cellRef: input.cellRef as string,
         parentId: null,
-        resolved: false,
+        status: "open",
         suggestedText: input.suggestedText ?? null,
       }
       await writeXlsxComment(draftPath, comment)
@@ -629,7 +643,7 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
         x: input.x ?? 100000,
         y: input.y ?? 100000,
         parentId: null,
-        resolved: false,
+        status: "open",
         suggestedText: input.suggestedText ?? null,
         targetText: input.targetText ?? null,
       }
@@ -644,7 +658,7 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
       rangeStart: { paragraph: input.rangeStartParagraph as number, offset: input.rangeStartOffset as number },
       rangeEnd: { paragraph: input.rangeEndParagraph as number, offset: input.rangeEndOffset as number },
       parentId: null,
-      resolved: false,
+      status: "open",
       suggestedText: input.suggestedText ?? null,
     }
     await writeComment(draftPath, comment)
@@ -680,6 +694,65 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
       fail(`comment ${input.commentId} has no suggestion to approve`)
     }
     return `Approved comment ${input.commentId} on ${input.filePath}: suggestion applied`
+  }
+
+  if (
+    input.action === "edit-comment" ||
+    input.action === "delete-comment" ||
+    input.action === "resolve-comment" ||
+    input.action === "deny-comment"
+  ) {
+    const ext = extname(input.filePath)
+    if (ext !== ".docx" && ext !== ".xlsx" && ext !== ".pptx") {
+      fail("comment lifecycle actions only supported for DOCX, XLSX and PPTX files")
+    }
+    const filePathHash = getFilePathHash(input.filePath)
+    const lock = getLock(filePathHash)
+    if (!lock || lock.sessionID !== sessionID) {
+      fail(`no active draft to ${input.action.replace("-", " ")}`)
+    }
+    const draftPath = getDraftPath(filePathHash, sessionID, ext)
+    if (!draftExists(filePathHash, sessionID)) {
+      fail("draft not found")
+    }
+    if (input.action === "edit-comment") {
+      if (input.text === undefined && input.suggestedText === undefined) {
+        fail("edit-comment requires text or suggestedText")
+      }
+      const result =
+        ext === ".xlsx"
+          ? await updateXlsxComment(draftPath, input.commentId, { text: input.text, suggestedText: input.suggestedText })
+          : ext === ".pptx"
+            ? await updatePptxComment(draftPath, input.commentId, { text: input.text, suggestedText: input.suggestedText })
+            : await updateComment(draftPath, input.commentId, { text: input.text, suggestedText: input.suggestedText })
+      if (result === "not-found") {
+        fail(`comment ${input.commentId} not found`)
+      }
+      return `Comment ${input.commentId} updated on ${input.filePath}`
+    }
+    if (input.action === "delete-comment") {
+      const result =
+        ext === ".xlsx"
+          ? await deleteXlsxComment(draftPath, input.commentId)
+          : ext === ".pptx"
+            ? await deletePptxComment(draftPath, input.commentId)
+            : await deleteComment(draftPath, input.commentId)
+      if (result === "not-found") {
+        fail(`comment ${input.commentId} not found`)
+      }
+      return `Comment ${input.commentId} deleted from ${input.filePath}`
+    }
+    const status = input.action === "resolve-comment" ? "resolved" : "denied"
+    const result =
+      ext === ".xlsx"
+        ? await setXlsxCommentStatus(draftPath, input.commentId, status)
+      : ext === ".pptx"
+        ? await setPptxCommentStatus(draftPath, input.commentId, status)
+        : await setCommentStatus(draftPath, input.commentId, status)
+    if (result === "not-found") {
+      fail(`comment ${input.commentId} not found`)
+    }
+    return `Comment ${input.commentId} marked ${status} on ${input.filePath}`
   }
 
   if (input.action === "track-insert" || input.action === "track-delete") {
