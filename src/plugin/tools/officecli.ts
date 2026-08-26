@@ -2,9 +2,9 @@ import { Effect, Schema } from "effect"
 import { Tool } from "@opencode-ai/schema/tool"
 import { createDraft, acceptDraft, undoDraft, getHistory, getDraftPath, draftExists, getSnapshot, getSnapshotSidecar, listActiveDrafts, getDraftSessions } from "@/core/draft/manager"
 import { acquireLock, getLock, releaseLock, isLockStale, overrideLock } from "@/core/draft/lock"
-import { getFilePathHash } from "@/core/storage/paths"
-import { writeFileSync, readFileSync, existsSync } from "fs"
-import { extname, resolve, join } from "path"
+import { getFilePathHash, getDraftsDir } from "@/core/storage/paths"
+import { writeFileSync, readFileSync, existsSync, readdirSync, statSync } from "fs"
+import { extname, resolve, join, basename } from "path"
 import { detectFormat } from "@/core/format/detect"
 import { writeComment, readComments, applyCommentSuggestion, updateComment, deleteComment, setCommentStatus, type Comment } from "@/core/format/ooxml/comments"
 import { writeTrackChange, readTrackChanges, type TrackChange } from "@/core/format/ooxml/trackchanges"
@@ -162,7 +162,19 @@ export const officecliInvokes: Record<string, OfficeCliInput["action"]> = {
   "office.comment.approve": "approve",
 }
 
-export async function runOfficecliInvoke(name: string, input: unknown): Promise<string> {
+// ponytail: office.preview resolves a structured object for the host UI instead of the
+// agent-facing HTML-render string; every other invoke keeps returning the action's string
+const officePreviewMimes: Record<string, string> = {
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+}
+
+// ponytail: data URLs above 20 MB would bloat the invoke payload; host falls back to the built-in preview
+const officePreviewFileCapBytes = 20 * 1024 * 1024
+
+export async function runOfficecliInvoke(name: string, input: unknown): Promise<unknown> {
+  if (name === "office.preview") return officePreview(input)
   const action = officecliInvokes[name]
   if (!action) fail(`unknown invoke ${name}`)
   const params: Record<string, unknown> =
@@ -192,6 +204,92 @@ function decodeInvokeArgs(name: string, value: Record<string, unknown>): OfficeC
 
 function strParam(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined
+}
+
+async function officePreview(input: unknown): Promise<unknown> {
+  const params: Record<string, unknown> =
+    input !== null && typeof input === "object" ? (input as Record<string, unknown>) : {}
+  const filePath = strParam(params.filePath) ?? strParam(params.filename)
+  if (!filePath) fail("office.preview requires filePath")
+  const ext = extname(filePath).toLowerCase()
+  const filePathHash = getFilePathHash(filePath)
+  const sessions = getDraftSessions(filePathHash)
+  const managed = sessions.length > 0 || (officePreviewMimes[ext] !== undefined && existsSync(filePath))
+  if (!managed) return { managed: false }
+  // ponytail: draft selection prefers the requesting session, else the most recent draft by mtime
+  const wanted = strParam(params.sessionID)
+  const draftSession = wanted !== undefined && sessions.includes(wanted) ? wanted : mostRecentDraftSession(filePathHash)
+  const target = draftSession ? getDraftPath(filePathHash, draftSession, extname(filePath)) : filePath
+  const lock = getLock(filePathHash)
+  const result: Record<string, unknown> = {
+    managed: true,
+    source: draftSession ? "draft" : "file",
+    filename: basename(filePath),
+    contentType: "markdown",
+    comments: await readPreviewComments(ext, target),
+  }
+  if (draftSession) {
+    result.content = readFileSync(target, "utf-8")
+  } else {
+    result.fileUrl = officePreviewFileUrl(filePath, ext)
+  }
+  if (lock) {
+    result.lock = { sessionID: lock.sessionID, owner: lock.owner, stale: isLockStale(filePathHash) }
+  }
+  return result
+}
+
+function mostRecentDraftSession(filePathHash: string): string | undefined {
+  const dir = join(getDraftsDir(), filePathHash)
+  if (!existsSync(dir)) return undefined
+  const entries = readdirSync(dir).map((file) => {
+    const e = extname(file)
+    return { session: e ? file.slice(0, -e.length) : file, mtime: statSync(join(dir, file)).mtimeMs }
+  })
+  return entries.reduce((a, b) => (b.mtime >= a.mtime ? b : a)).session
+}
+
+function officePreviewFileUrl(filePath: string, ext: string): string | undefined {
+  const data = readFileSync(filePath)
+  if (data.length > officePreviewFileCapBytes) return undefined
+  return `data:${officePreviewMimes[ext]};base64,${data.toString("base64")}`
+}
+
+async function readPreviewComments(ext: string, target: string) {
+  if (ext === ".xlsx") {
+    return (await readXlsxComments(target)).map((c) => ({
+      id: c.id,
+      author: c.author,
+      text: c.text,
+      status: c.status,
+      suggestedText: c.suggestedText ?? undefined,
+      anchor: c.cellRef,
+      createdAt: c.timestamp.getTime(),
+    }))
+  }
+  if (ext === ".pptx") {
+    return (await readPptxComments(target)).map((c) => ({
+      id: c.id,
+      author: c.author,
+      text: c.text,
+      status: c.status,
+      suggestedText: c.suggestedText ?? undefined,
+      anchor: `${c.slide}:${c.x}:${c.y}`,
+      createdAt: c.timestamp.getTime(),
+    }))
+  }
+  if (ext === ".docx") {
+    return (await readComments(target)).map((c) => ({
+      id: c.id,
+      author: c.author,
+      text: c.text,
+      status: c.status,
+      suggestedText: c.suggestedText ?? undefined,
+      anchor: `${c.rangeStart.paragraph}:${c.rangeStart.offset}`,
+      createdAt: c.timestamp.getTime(),
+    }))
+  }
+  return []
 }
 
 async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<string> {
