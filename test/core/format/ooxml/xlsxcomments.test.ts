@@ -34,7 +34,7 @@ describe("OOXML XLSX Comment Writer", () => {
       timestamp: new Date("2026-08-12T10:30:00Z"),
       cellRef: "B2",
       parentId: null,
-      resolved: false,
+      status: "open",
     }
 
     await writeComment(testXlsxPath, comment)
@@ -45,7 +45,7 @@ describe("OOXML XLSX Comment Writer", () => {
     expect(comments[0].author).toBe("AI Agent")
     expect(comments[0].text).toBe("This needs review")
     expect(comments[0].cellRef).toBe("B2")
-    expect(comments[0].resolved).toBe(false)
+    expect(comments[0].status).toBe("open")
   })
 
   it("supports multiple comments from different authors", async () => {
@@ -56,7 +56,7 @@ describe("OOXML XLSX Comment Writer", () => {
       timestamp: new Date("2026-08-12T10:30:00Z"),
       cellRef: "B2",
       parentId: null,
-      resolved: false,
+      status: "open",
     })
     await writeComment(testXlsxPath, {
       id: "c2",
@@ -65,7 +65,7 @@ describe("OOXML XLSX Comment Writer", () => {
       timestamp: new Date("2026-08-12T11:00:00Z"),
       cellRef: "B3",
       parentId: null,
-      resolved: false,
+      status: "open",
     })
 
     const comments = await readComments(testXlsxPath)
@@ -84,7 +84,7 @@ describe("OOXML XLSX Comment Writer", () => {
       timestamp: new Date("2026-08-12T10:30:00Z"),
       cellRef: "A1",
       parentId: null,
-      resolved: false,
+      status: "open",
     })
     await writeComment(testXlsxPath, {
       id: "c2",
@@ -93,7 +93,7 @@ describe("OOXML XLSX Comment Writer", () => {
       timestamp: new Date("2026-08-12T10:31:00Z"),
       cellRef: "C1",
       parentId: null,
-      resolved: false,
+      status: "open",
     })
 
     const comments = await readComments(testXlsxPath)
@@ -119,7 +119,7 @@ describe("OOXML XLSX Comment Writer", () => {
       author: "AI Agent",
       timestamp: new Date("2026-08-12T10:30:00Z"),
       parentId: null,
-      resolved: false,
+      status: "open",
     }
     await writeComment(testXlsxPath, { ...base, id: "c1", text: "First", cellRef: "A1" })
     await writeComment(testXlsxPath, { ...base, id: "c2", text: "Second", cellRef: "C1" })
@@ -137,7 +137,7 @@ describe("OOXML XLSX Comment Writer", () => {
       author: "AI Agent",
       timestamp: new Date("2026-08-12T10:30:00Z"),
       parentId: null,
-      resolved: false,
+      status: "open",
     }
     await writeComment(testXlsxPath, { ...base, id: "c1", text: "First", cellRef: "A1" })
     await writeComment(testXlsxPath, { ...base, id: "c2", text: "Second", cellRef: "C1" })
@@ -159,7 +159,7 @@ describe("OOXML XLSX Comment Writer", () => {
       timestamp: new Date("2026-08-12T10:30:00Z"),
       cellRef: "B2",
       parentId: null,
-      resolved: false,
+      status: "open",
     })
 
     const comments = await readComments(testXlsxPath)
@@ -177,7 +177,7 @@ describe("OOXML XLSX Comment Writer", () => {
       timestamp: new Date("2026-08-12T10:30:00Z"),
       cellRef: "B2",
       parentId: null,
-      resolved: false,
+      status: "open",
     })
 
     const result = await applyCellSuggestion(testXlsxPath, "B2-0")
@@ -200,7 +200,7 @@ describe("OOXML XLSX Comment Writer", () => {
       timestamp: new Date("2026-08-12T10:30:00Z"),
       cellRef: "D1",
       parentId: null,
-      resolved: false,
+      status: "open",
     })
 
     const result = await applyCellSuggestion(testXlsxPath, "D1-0")
@@ -219,10 +219,28 @@ describe("OOXML XLSX Comment Writer", () => {
       timestamp: new Date("2026-08-12T10:30:00Z"),
       cellRef: "B2",
       parentId: null,
-      resolved: false,
+      status: "open",
     })
 
     expect(await applyCellSuggestion(testXlsxPath, "B2-0")).toBe("no-suggestion")
     expect(await applyCellSuggestion(testXlsxPath, "Z9-9")).toBe("not-found")
+  })
+
+  it("round-trips comment status", async () => {
+    await writeComment(testXlsxPath, {
+      id: "s1",
+      author: "AI Agent",
+      text: "Denied value",
+      timestamp: new Date("2026-08-12T10:30:00Z"),
+      cellRef: "B2",
+      parentId: null,
+      status: "denied",
+    })
+    const comments = await readComments(testXlsxPath)
+    expect(comments[0].status).toBe("denied")
+    const zip = await JSZip.loadAsync(readFileSync(testXlsxPath))
+    const xml = await zip.file("xl/comments1.xml")!.async("string")
+    expect(xml).toContain('oo:status="denied"')
+    expect(xml).toContain('xmlns:oo="http://opencode.ai/openoffice-plugin"')
   })
 })

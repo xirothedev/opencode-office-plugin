@@ -1,0 +1,21 @@
+{
+  "name": "@opencode-ai/plugin",
+  "version": "1.18.22",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./tool": "./src/tool.ts",
+    "./tui": "./src/tui.ts",
+    "./v2/effect": "./src/v2/effect/index.ts",
+    "./v2/effect/integration": "./src/v2/effect/integration.ts",
+    "./v2/effect/plugin": "./src/v2/effect/plugin.ts",
+    "./v2/promise": "./src/v2/promise/index.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/provider": "3.0.8",
+    "@opencode-ai/sdk": "1.18.5",
+    "effect": "4.0.0-beta.101",
+    "zod": "4.1.8"
+  }
+}

@@ -140,7 +140,7 @@ officecli({
   action: "list-comments",
   filePath: "/path/to/doc.docx",
 })
-// Returns: { count: 3, comments: [...] }
+// Returns: { count: 3, comments: [...] }, each with id, author, text, status (open/resolved/denied), suggestedText when present
 ```
 
 ### Review Summary
@@ -150,8 +150,52 @@ officecli({
   action: "review",
   filePath: "/path/to/doc.docx",
 })
-// Returns: { comments: [...], trackChanges: [...] }
+// Returns: { comments: [...] (each with status), trackChanges: [...] }
 ```
+
+## Comment Lifecycle
+
+Comments carry a **status**: `open` (default), `resolved`, or `denied`. After adding a comment, drive it through the lifecycle instead of leaving it open-ended:
+
+- **Edit** — rewrite the comment text and/or suggested text in place (`edit-comment` keeps author, anchor, and status):
+
+  ```javascript
+  officecli({
+    action: "edit-comment",
+    filePath: "/path/to/doc.docx",
+    commentId: "comment-1",
+    text: "Clarified clause",       // optional
+    suggestedText: "Revised wording", // optional; at least one required
+  })
+  ```
+
+- **Resolve** — comment reviewed, nothing to change (`resolve-comment` sets status to `resolved`). For a Suggestion that should be applied, use `approve` instead: apply + remove.
+
+- **Deny** — suggestion explicitly rejected (`deny-comment` sets status to `denied`); content stays untouched, the comment remains for the record.
+
+- **Delete** — remove the comment and its markers entirely (`delete-comment`).
+
+Persistence: DOCX resolved comments get the standard `w:done="1"` attribute; denied status (in any format) is stored as `oo:status="denied"` in a plugin namespace (`http://opencode.ai/openoffice-plugin`), declared locally on the comment element. Office ignores the attribute; `list-comments`/`review` surface it back as `status`.
+
+All four actions require an active draft (lock held by the calling session) and operate on the draft, never the real file.
+
+## Host-Driven Actions
+
+The opencode host can drive review actions without the agent. The plugin registers `ctx.invoke` handlers that map 1:1 onto officecli actions; params use `filePath` (or `filename`) plus the action's own arguments, and the call runs as the lock-holding session unless a `sessionID` is passed.
+
+| Invoke name | officecli action |
+| --- | --- |
+| `office.preview` | `preview` |
+| `office.edit.save` | `edit` |
+| `office.accept` | `accept` |
+| `office.comment.create` | `comment` |
+| `office.comment.edit` | `edit-comment` |
+| `office.comment.delete` | `delete-comment` |
+| `office.comment.resolve` | `resolve-comment` |
+| `office.comment.deny` | `deny-comment` |
+| `office.comment.approve` | `approve` |
+
+Failures surface as the same typed errors the agent sees.
 
 ## Workflow Example
 
@@ -292,6 +336,5 @@ Stakeholder reviews policies, comments on governance issues, tracks revisions.
 ## Future Enhancements
 
 - Threaded comment replies
-- Comment resolution tracking
 - Multi-author support with author filtering
 - Real-time collaboration (CRDT-based)

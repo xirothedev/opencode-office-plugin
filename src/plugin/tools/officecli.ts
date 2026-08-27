@@ -1,15 +1,15 @@
-import { Schema } from "effect"
+import { Effect, Schema } from "effect"
 import { Tool } from "@opencode-ai/schema/tool"
 import { createDraft, acceptDraft, undoDraft, getHistory, getDraftPath, draftExists, getSnapshot, getSnapshotSidecar, listActiveDrafts, getDraftSessions } from "@/core/draft/manager"
 import { acquireLock, getLock, releaseLock, isLockStale, overrideLock } from "@/core/draft/lock"
-import { getFilePathHash } from "@/core/storage/paths"
-import { writeFileSync, readFileSync, existsSync } from "fs"
-import { extname, resolve, join } from "path"
+import { getFilePathHash, getDraftsDir } from "@/core/storage/paths"
+import { writeFileSync, readFileSync, existsSync, readdirSync, statSync } from "fs"
+import { extname, resolve, join, basename } from "path"
 import { detectFormat } from "@/core/format/detect"
-import { writeComment, readComments, applyCommentSuggestion, type Comment } from "@/core/format/ooxml/comments"
+import { writeComment, readComments, applyCommentSuggestion, updateComment, deleteComment, setCommentStatus, type Comment } from "@/core/format/ooxml/comments"
 import { writeTrackChange, readTrackChanges, type TrackChange } from "@/core/format/ooxml/trackchanges"
-import { writeComment as writeXlsxComment, readComments as readXlsxComments, applyCellSuggestion, type XlsxComment } from "@/core/format/ooxml/xlsxcomments"
-import { writeComment as writePptxComment, readComments as readPptxComments, applySlideSuggestion, type PptxComment } from "@/core/format/ooxml/pptxcomments"
+import { writeComment as writeXlsxComment, readComments as readXlsxComments, applyCellSuggestion, updateComment as updateXlsxComment, deleteComment as deleteXlsxComment, setCommentStatus as setXlsxCommentStatus, type XlsxComment } from "@/core/format/ooxml/xlsxcomments"
+import { writeComment as writePptxComment, readComments as readPptxComments, applySlideSuggestion, updateComment as updatePptxComment, deleteComment as deletePptxComment, setCommentStatus as setPptxCommentStatus, type PptxComment } from "@/core/format/ooxml/pptxcomments"
 import { diffTexts } from "@/core/draft/diff"
 import { substituteTemplate } from "@/core/template/substitute"
 import { readRealFileAsMarkdown } from "@/core/format/read"
@@ -81,6 +81,16 @@ const commentArgs = S.Struct({
   y: S.optional(S.Number),
 })
 const approveArgs = S.Struct({ action: S.Literal("approve"), filePath: S.String, commentId: S.String })
+const editCommentArgs = S.Struct({
+  action: S.Literal("edit-comment"),
+  filePath: S.String,
+  commentId: S.String,
+  text: S.optional(S.String),
+  suggestedText: S.optional(S.String),
+})
+const deleteCommentArgs = S.Struct({ action: S.Literal("delete-comment"), filePath: S.String, commentId: S.String })
+const resolveCommentArgs = S.Struct({ action: S.Literal("resolve-comment"), filePath: S.String, commentId: S.String })
+const denyCommentArgs = S.Struct({ action: S.Literal("deny-comment"), filePath: S.String, commentId: S.String })
 const trackChangeArgs = S.Struct({
   action: S.Union([S.Literal("track-insert"), S.Literal("track-delete")]),
   filePath: S.String,
@@ -114,6 +124,10 @@ const officecliInput = S.Union([
   readArgs,
   commentArgs,
   approveArgs,
+  editCommentArgs,
+  deleteCommentArgs,
+  resolveCommentArgs,
+  denyCommentArgs,
   trackChangeArgs,
   listCommentsArgs,
   previewArgs,
@@ -127,12 +141,155 @@ const officecliOutput = S.String
 export const officecliTool: Tool.Info<typeof officecliInput, typeof officecliOutput> = {
   name: "officecli",
   description:
-    "Office document automation. Create, edit, read, accept, undo, revert documents with draft lifecycle. Preview renders a draft to HTML, validate checks draft content against rules, lock-status queries lock state, force-release takes over a stale lock. Supports comments for DOCX, XLSX, PPTX, track changes for DOCX, and content-changing suggestions (comment with suggestedText, applied by approve action; PPTX suggestions accept optional targetText, a snippet of the intended text box's current text, so approve edits that box instead of the first).",
+    "Office document automation. Create, edit, read, accept, undo, revert documents with draft lifecycle. Preview renders a draft to HTML, validate checks draft content against rules, lock-status queries lock state, force-release takes over a stale lock. Supports comments for DOCX, XLSX, PPTX, track changes for DOCX, and content-changing suggestions (comment with suggestedText, applied by approve action; PPTX suggestions accept optional targetText, a snippet of the intended text box's current text, so approve edits that box instead of the first). Comment lifecycle: comments carry a status (open/resolved/denied) surfaced by list-comments and review; edit-comment rewrites the text or suggestion in place, delete-comment removes the comment and its markers, resolve-comment marks it resolved, deny-comment marks it denied (all require an active draft).",
   input: officecliInput,
   output: officecliOutput,
   options: { codemode: false },
   execute: (input, context) =>
     tryExecute(async () => ({ output: await runAction(input, context) })),
+}
+
+// ponytail: host-facing invoke names mirror officecli actions so the app drives the same code path as the agent tool
+export const officecliInvokes: Record<string, OfficeCliInput["action"]> = {
+  "office.preview": "preview",
+  "office.edit.save": "edit",
+  "office.accept": "accept",
+  "office.comment.create": "comment",
+  "office.comment.edit": "edit-comment",
+  "office.comment.delete": "delete-comment",
+  "office.comment.resolve": "resolve-comment",
+  "office.comment.deny": "deny-comment",
+  "office.comment.approve": "approve",
+}
+
+// ponytail: office.preview resolves a structured object for the host UI instead of the
+// agent-facing HTML-render string; every other invoke keeps returning the action's string
+const officePreviewMimes: Record<string, string> = {
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+}
+
+// ponytail: data URLs above 20 MB would bloat the invoke payload; host falls back to the built-in preview
+const officePreviewFileCapBytes = 20 * 1024 * 1024
+
+export async function runOfficecliInvoke(name: string, input: unknown): Promise<unknown> {
+  if (name === "office.preview") return officePreview(input)
+  const action = officecliInvokes[name]
+  if (!action) fail(`unknown invoke ${name}`)
+  const params: Record<string, unknown> =
+    input !== null && typeof input === "object" ? (input as Record<string, unknown>) : {}
+  const filePath = strParam(params.filePath) ?? strParam(params.filename)
+  if (!filePath) fail(`${name} requires filePath`)
+  const args = decodeInvokeArgs(name, { ...params, action, filePath })
+  const sessionID = strParam(params.sessionID) ?? getLock(getFilePathHash(filePath))?.sessionID ?? "openoffice-invoke"
+  const context = {
+    sessionID,
+    agent: "openoffice-invoke",
+    messageID: "openoffice-invoke",
+    id: "openoffice-invoke",
+    progress: () => Effect.void,
+  } as never
+  const result = await Effect.runPromise(officecliTool.execute(args, context))
+  return result.output as string
+}
+
+function decodeInvokeArgs(name: string, value: Record<string, unknown>): OfficeCliInput {
+  try {
+    return Schema.decodeUnknownSync(officecliInput)(value)
+  } catch (error) {
+    fail(`invalid ${name} params: ${error instanceof Error ? error.message : String(error)}`)
+  }
+}
+
+function strParam(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined
+}
+
+async function officePreview(input: unknown): Promise<unknown> {
+  const params: Record<string, unknown> =
+    input !== null && typeof input === "object" ? (input as Record<string, unknown>) : {}
+  const filePath = strParam(params.filePath) ?? strParam(params.filename)
+  if (!filePath) fail("office.preview requires filePath")
+  const ext = extname(filePath).toLowerCase()
+  const filePathHash = getFilePathHash(filePath)
+  const sessions = getDraftSessions(filePathHash)
+  const managed = sessions.length > 0 || (officePreviewMimes[ext] !== undefined && existsSync(filePath))
+  if (!managed) return { managed: false }
+  // ponytail: draft selection prefers the requesting session, else the most recent draft by mtime
+  const wanted = strParam(params.sessionID)
+  const draftSession = wanted !== undefined && sessions.includes(wanted) ? wanted : mostRecentDraftSession(filePathHash)
+  const target = draftSession ? getDraftPath(filePathHash, draftSession, extname(filePath)) : filePath
+  const lock = getLock(filePathHash)
+  const result: Record<string, unknown> = {
+    managed: true,
+    source: draftSession ? "draft" : "file",
+    filename: basename(filePath),
+    contentType: "markdown",
+    comments: await readPreviewComments(ext, target),
+  }
+  if (draftSession) {
+    result.content = readFileSync(target, "utf-8")
+  } else {
+    result.fileUrl = officePreviewFileUrl(filePath, ext)
+  }
+  if (lock) {
+    result.lock = { sessionID: lock.sessionID, owner: lock.owner, stale: isLockStale(filePathHash) }
+  }
+  return result
+}
+
+function mostRecentDraftSession(filePathHash: string): string | undefined {
+  const dir = join(getDraftsDir(), filePathHash)
+  if (!existsSync(dir)) return undefined
+  const entries = readdirSync(dir).map((file) => {
+    const e = extname(file)
+    return { session: e ? file.slice(0, -e.length) : file, mtime: statSync(join(dir, file)).mtimeMs }
+  })
+  return entries.reduce((a, b) => (b.mtime >= a.mtime ? b : a)).session
+}
+
+function officePreviewFileUrl(filePath: string, ext: string): string | undefined {
+  const data = readFileSync(filePath)
+  if (data.length > officePreviewFileCapBytes) return undefined
+  return `data:${officePreviewMimes[ext]};base64,${data.toString("base64")}`
+}
+
+async function readPreviewComments(ext: string, target: string) {
+  if (ext === ".xlsx") {
+    return (await readXlsxComments(target)).map((c) => ({
+      id: c.id,
+      author: c.author,
+      text: c.text,
+      status: c.status,
+      suggestedText: c.suggestedText ?? undefined,
+      anchor: c.cellRef,
+      createdAt: c.timestamp.getTime(),
+    }))
+  }
+  if (ext === ".pptx") {
+    return (await readPptxComments(target)).map((c) => ({
+      id: c.id,
+      author: c.author,
+      text: c.text,
+      status: c.status,
+      suggestedText: c.suggestedText ?? undefined,
+      anchor: `${c.slide}:${c.x}:${c.y}`,
+      createdAt: c.timestamp.getTime(),
+    }))
+  }
+  if (ext === ".docx") {
+    return (await readComments(target)).map((c) => ({
+      id: c.id,
+      author: c.author,
+      text: c.text,
+      status: c.status,
+      suggestedText: c.suggestedText ?? undefined,
+      anchor: `${c.rangeStart.paragraph}:${c.rangeStart.offset}`,
+      createdAt: c.timestamp.getTime(),
+    }))
+  }
+  return []
 }
 
 async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<string> {
@@ -613,7 +770,7 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
         timestamp: new Date(),
         cellRef: input.cellRef as string,
         parentId: null,
-        resolved: false,
+        status: "open",
         suggestedText: input.suggestedText ?? null,
       }
       await writeXlsxComment(draftPath, comment)
@@ -629,7 +786,7 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
         x: input.x ?? 100000,
         y: input.y ?? 100000,
         parentId: null,
-        resolved: false,
+        status: "open",
         suggestedText: input.suggestedText ?? null,
         targetText: input.targetText ?? null,
       }
@@ -644,7 +801,7 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
       rangeStart: { paragraph: input.rangeStartParagraph as number, offset: input.rangeStartOffset as number },
       rangeEnd: { paragraph: input.rangeEndParagraph as number, offset: input.rangeEndOffset as number },
       parentId: null,
-      resolved: false,
+      status: "open",
       suggestedText: input.suggestedText ?? null,
     }
     await writeComment(draftPath, comment)
@@ -680,6 +837,65 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
       fail(`comment ${input.commentId} has no suggestion to approve`)
     }
     return `Approved comment ${input.commentId} on ${input.filePath}: suggestion applied`
+  }
+
+  if (
+    input.action === "edit-comment" ||
+    input.action === "delete-comment" ||
+    input.action === "resolve-comment" ||
+    input.action === "deny-comment"
+  ) {
+    const ext = extname(input.filePath)
+    if (ext !== ".docx" && ext !== ".xlsx" && ext !== ".pptx") {
+      fail("comment lifecycle actions only supported for DOCX, XLSX and PPTX files")
+    }
+    const filePathHash = getFilePathHash(input.filePath)
+    const lock = getLock(filePathHash)
+    if (!lock || lock.sessionID !== sessionID) {
+      fail(`no active draft to ${input.action.replace("-", " ")}`)
+    }
+    const draftPath = getDraftPath(filePathHash, sessionID, ext)
+    if (!draftExists(filePathHash, sessionID)) {
+      fail("draft not found")
+    }
+    if (input.action === "edit-comment") {
+      if (input.text === undefined && input.suggestedText === undefined) {
+        fail("edit-comment requires text or suggestedText")
+      }
+      const result =
+        ext === ".xlsx"
+          ? await updateXlsxComment(draftPath, input.commentId, { text: input.text, suggestedText: input.suggestedText })
+          : ext === ".pptx"
+            ? await updatePptxComment(draftPath, input.commentId, { text: input.text, suggestedText: input.suggestedText })
+            : await updateComment(draftPath, input.commentId, { text: input.text, suggestedText: input.suggestedText })
+      if (result === "not-found") {
+        fail(`comment ${input.commentId} not found`)
+      }
+      return `Comment ${input.commentId} updated on ${input.filePath}`
+    }
+    if (input.action === "delete-comment") {
+      const result =
+        ext === ".xlsx"
+          ? await deleteXlsxComment(draftPath, input.commentId)
+          : ext === ".pptx"
+            ? await deletePptxComment(draftPath, input.commentId)
+            : await deleteComment(draftPath, input.commentId)
+      if (result === "not-found") {
+        fail(`comment ${input.commentId} not found`)
+      }
+      return `Comment ${input.commentId} deleted from ${input.filePath}`
+    }
+    const status = input.action === "resolve-comment" ? "resolved" : "denied"
+    const result =
+      ext === ".xlsx"
+        ? await setXlsxCommentStatus(draftPath, input.commentId, status)
+      : ext === ".pptx"
+        ? await setPptxCommentStatus(draftPath, input.commentId, status)
+        : await setCommentStatus(draftPath, input.commentId, status)
+    if (result === "not-found") {
+      fail(`comment ${input.commentId} not found`)
+    }
+    return `Comment ${input.commentId} marked ${status} on ${input.filePath}`
   }
 
   if (input.action === "track-insert" || input.action === "track-delete") {

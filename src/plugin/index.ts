@@ -1,20 +1,29 @@
 import { Effect } from "effect"
-import { Plugin } from "@opencode-ai/plugin/effect"
-import { officecliTool } from "@/plugin/tools/officecli"
-import { editTool } from "@/plugin/tools/edit"
+import { define } from "@opencode-ai/plugin/v2/effect"
+import { officecliInvokes, runOfficecliInvoke } from "@/plugin/tools/officecli"
 import { listActiveDrafts } from "@/core/draft/manager"
 import { configureOptions } from "@/core/options"
 
-export const OpenOfficePlugin = Plugin.define({
+// ponytail: this host build exposes no tool domain for external plugins; officecliTool/editTool
+// stay exported and tested — re-register via ctx.tool.transform when the host ships it
+export const OpenOfficePlugin = define({
   id: "openoffice",
   effect: (ctx) =>
     Effect.gen(function* () {
       configureOptions(ctx.options)
 
-      yield* ctx.tool.transform((tools) => {
-        tools.add(officecliTool)
-        tools.add(editTool)
-      })
+      for (const name of Object.keys(officecliInvokes)) {
+        // ponytail: InvokeHooks types handlers as Effect<unknown> (E = never), but the core
+        // registry yields* the handler so typed failures still propagate at runtime — cast
+        yield* ctx.invoke.register(
+          name,
+          (input) =>
+            Effect.tryPromise({
+              try: () => runOfficecliInvoke(name, input),
+              catch: (error) => (error instanceof Error ? error : new Error(String(error))),
+            }) as unknown as Effect.Effect<unknown>,
+        )
+      }
 
       yield* Effect.addFinalizer(() =>
         Effect.sync(() => {
