@@ -26,12 +26,13 @@ while [ $# -gt 0 ]; do case "$1" in
   *) echo "unknown arg $1"; usage; exit 1 ;;
 esac; done
 
-# decide target dir
-if [ "$GLOBAL" -eq 1 ]; then TARGET="$HOME/.config/opencode"
+# decide target dir (cross-OS: bash covers macOS/Linux/WSL/Git Bash on Windows)
+if [ "$GLOBAL" -eq 1 ]; then
+  case "$(uname -s 2>/dev/null)" in MINGW*|MSYS*|CYGWIN*) TARGET="${APPDATA:-$HOME/AppData/Roaming}/opencode";; *) TARGET="$HOME/.config/opencode";; esac
 else
   if [ -f "$PROJECT/opencode.json" ] || [ -f "$PROJECT/opencode.jsonc" ]; then TARGET="$PROJECT"
   elif [ "$PROJECT" != "." ]; then TARGET="$PROJECT"
-  else TARGET="$HOME/.config/opencode"; echo "no ./opencode.json, using global $TARGET"
+  else case "$(uname -s 2>/dev/null)" in MINGW*|MSYS*|CYGWIN*) TARGET="${APPDATA:-$HOME/AppData/Roaming}/opencode";; *) TARGET="$HOME/.config/opencode";; esac; echo "no ./opencode.json, using global $TARGET"
   fi
 fi
 mkdir -p "$TARGET"
@@ -66,8 +67,9 @@ fi
 # --- skill ---
 if [ "$PLUGIN_ONLY" -eq 0 ]; then
   if [ ! -d "$SKILL_SRC" ]; then echo "skill src $SKILL_SRC not found"; exit 1; fi
-  # opencode skills: project .opencode/skills/office, global ~/.config/opencode/skills/office
-  if [ "$TARGET" = "$HOME/.config/opencode" ]; then SKILL_DST="$TARGET/skills/office"
+  # opencode skills: project .opencode/skills/office, global ~/.config/opencode/skills/office (or %APPDATA%/opencode/skills/office on Windows)
+  case "$(uname -s 2>/dev/null)" in MINGW*|MSYS*|CYGWIN*) GLOBAL_SKILL_BASE="${APPDATA:-$HOME/AppData/Roaming}/opencode";; *) GLOBAL_SKILL_BASE="$HOME/.config/opencode";; esac
+  if [ "$TARGET" = "$GLOBAL_SKILL_BASE" ] || [ "$TARGET" = "$HOME/.config/opencode" ]; then SKILL_DST="$TARGET/skills/office"
   else SKILL_DST="$TARGET/.opencode/skills/office"; fi
   mkdir -p "$(dirname "$SKILL_DST")"
   rm -rf "$SKILL_DST"
