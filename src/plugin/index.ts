@@ -11,7 +11,7 @@ export function isBlockedTool(tool: string): boolean {
   return tool === "edit" || tool === "write"
 }
 
-// ponytail: guard + tool registration dormant until host ships ctx.tool — global check, per-tool hook when throughput matters
+// ponytail: all tool-domain hooks dormant until host ships ctx.tool — global check, per-tool hook when throughput matters
 export const OpenOfficePlugin = define({
   id: "openoffice",
   effect: (ctx: unknown) =>
@@ -53,6 +53,15 @@ export const OpenOfficePlugin = define({
         }) as unknown as Effect.Effect<void>
       }
       if (toolDomain?.hook) {
+        // ponytail: proactive guidance — model sees warning in tool description before choosing edit/write
+        yield* toolDomain.hook("definition", (event: unknown) => {
+          const e = event as { toolID?: string; description?: string }
+          if ((e.toolID === "edit" || e.toolID === "write") && e.description) {
+            e.description += "\n\nIMPORTANT: Do NOT use on binary files (.docx, .xlsx, .pptx, .pdf, images). Use officecli instead."
+          }
+        }) as unknown as Effect.Effect<void>
+
+        // ponytail: safety net — catches binary file attempts after model ignores description warning
         yield* toolDomain.hook("execute.before", (event: unknown) => {
           const e = event as { tool?: string; args?: { filePath?: string; path?: string } }
           const tool = (e.tool ?? "").toLowerCase()
