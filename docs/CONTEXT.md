@@ -88,6 +88,14 @@ _Avoid_: comparison, changes report
 Plugin registers tool named `edit` via `ctx.tool.transform`; a plugin tool whose name collides with a builtin replaces it in the catalog (verified at next-17444 — no session-hook deletion needed). Checks lock, routes to draft transparently. Binary files (png/pdf/docx) → error "use officecli for binary files". Agent thinks using `edit`, plugin enforces draft lifecycle.
 _Avoid_: edit interceptor, edit wrapper
 
+**Guard**:
+`tool.execute.before` hook that fails a generic `edit`/`write` on a binary path with typed error `use officecli tool for binary files`, forcing the agent through the `officecli` draft lifecycle. Keyed by `BINARY_EXTENSIONS` (`docx,xlsx,pptx,pdf,png,jpg,jpeg,gif`). No silent rewrite. Dormant until host ships `ctx.tool` domain — `src/plugin/index.ts:12` feature-checks `if ("tool" in ctx)` so the guard compiles on older hosts and activates on upgrade.
+_Avoid_: auto trigger, interceptor, watcher
+
+**Live document**:
+Content of a document as held in the running Word application (`Application.Word.ActiveDocument` on Windows COM, `active document` via AppleScript on macOS). Distinct from **Draft** (plugin markdown copy) and from **Real file** (saved file on disk). `officecli(action="read", live=true)` prefers Live document when Word is running on the same machine as opencode, else falls back to Real file. Local-only — remote opencode cannot reach the user's Word without a bridge, which is not built until needed.
+_Avoid_: active window, unsaved buffer
+
 **Invoke**:
 Host-facing named entry point registered via `ctx.invoke.register(name, handler)` on the v2 plugin API; the opencode host (not the agent) calls it with a params object through the server API. This plugin maps `office.preview`, `office.edit.save`, `office.accept`, and `office.comment.{create,edit,delete,resolve,deny,approve}` onto the matching officecli actions, running as the session that holds the file lock (override with a `sessionID` param).
 _Avoid_: endpoint, api, webhook
