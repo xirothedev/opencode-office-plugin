@@ -49,8 +49,10 @@ if [ "$SKILL_ONLY" -eq 0 ]; then
   # ponytail: one node line edits plugins array, idempotent — jq if available would be smaller but node is stdlib
   node -e '
     const fs=require("fs"), p=process.argv[1], pkg=process.argv[2];
-    const raw=fs.readFileSync(p,"utf8").replace(/\/\/.*$/gm,"").replace(/\/\*[\s\S]*?\*\//g,"");
-    const j=JSON.parse(raw);
+    let j; try{ j=JSON.parse(fs.readFileSync(p,"utf8")); }catch{
+      let raw=fs.readFileSync(p,"utf8").replace(/^\s*\/\/.*$/gm,"").replace(/\/\*[\s\S]*?\*\//g,"").replace(/,\s*([}\]])/g,"$1");
+      j=JSON.parse(raw);
+    }
     j.plugins=j.plugins||[];
     const found=j.plugins.some(x=> (typeof x==="string"?x:x.package)===pkg);
     if(!found) j.plugins.push(pkg);

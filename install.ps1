@@ -32,8 +32,11 @@ if (-not $SkillOnly) {
   $PKG=$PLUGIN
   $code=@'
 const fs=require("fs"), p=process.argv[1], pkg=process.argv[2];
-const raw=fs.readFileSync(p,"utf8").replace(/\/\/.*$/gm,"").replace(/\/\*[\s\S]*?\*\//g,"");
-const j=JSON.parse(raw); j.plugins=j.plugins||[];
+let j; try{ j=JSON.parse(fs.readFileSync(p,"utf8")); }catch{
+  let raw=fs.readFileSync(p,"utf8").replace(/^\s*\/\/.*$/gm,"").replace(/\/\*[\s\S]*?\*\//g,"").replace(/,\s*([}\]])/g,"$1");
+  j=JSON.parse(raw);
+}
+j.plugins=j.plugins||[];
 if(!j.plugins.some(x=> (typeof x==="string"?x:x.package)===pkg)) j.plugins.push(pkg);
 fs.writeFileSync(p, JSON.stringify(j,null,2)+"\n"); console.log("plugin →", p, ":", pkg);
 '@
