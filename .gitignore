@@ -7,3 +7,11 @@ coverage/
 
 # Turborepo
 .turbo
+
+# Isolated Runtime (strict, local opencode2 + data)
+tests/isolated-workspace/.data/
+tests/isolated-workspace/.home/
+tests/isolated-workspace/node_modules/
+tests/isolated-workspace/docs/
+tests/isolated-workspace/bun.lock
+tests/isolated-workspace/.capture/*.json

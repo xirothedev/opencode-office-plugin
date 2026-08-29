@@ -1,0 +1,16 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugins": [
+    {
+      "package": "/Users/xirothedev/workspace/opencode-office-plugin",
+      "options": {
+        "dataDir": "/Users/xirothedev/workspace/opencode-office-plugin/tests/isolated-workspace/.data",
+        "staleLockHours": 24,
+        "pdfEngine": "weasyprint"
+      }
+    }
+  ],
+  "instructions": [],
+  "mcp": {},
+  "plugin": []
+}

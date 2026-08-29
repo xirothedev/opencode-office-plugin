@@ -5,6 +5,8 @@ interface TableBlock {
   rows: string[][]
 }
 
+// ponytail: v2 styled defaults — header bold, fill D9E1F2, borders, centered, auto-width. Keeps markdown-table → sheet mapping.
+
 export async function writeXlsxFromMarkdown(markdown: string, outputPath: string): Promise<void> {
   const workbook = new ExcelJS.Workbook()
   const lines = markdown.split("\n")
@@ -74,14 +76,55 @@ function addSheet(workbook: ExcelJS.Workbook, sheetName: string, rows: string[][
     worksheet.addRow(row)
   }
 
-  // Auto-fit column widths (approximate)
+  // v2 styling — header row + borders + auto-width
   const columnCount = Math.max(...rows.map((r) => r.length))
+  const headerFill: ExcelJS.Fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FFD9E1F2" },
+  } as any
+  const thinBorder: Partial<ExcelJS.Borders> = {
+    top: { style: "thin", color: { argb: "FFB4C6E7" } },
+    bottom: { style: "thin", color: { argb: "FFB4C6E7" } },
+    left: { style: "thin", color: { argb: "FFB4C6E7" } },
+    right: { style: "thin", color: { argb: "FFB4C6E7" } },
+  } as any
+
+  worksheet.eachRow((row, rowNumber) => {
+    row.eachCell((cell) => {
+      cell.border = thinBorder as any
+      cell.alignment = { vertical: "middle", horizontal: rowNumber === 1 ? "center" : "left", wrapText: true }
+      if (rowNumber === 1) {
+        cell.font = { bold: true, color: { argb: "FF1F4E79" }, size: 11 }
+        cell.fill = headerFill as any
+      } else {
+        cell.font = { size: 11 }
+        // try numeric
+        const v = cell.value as any
+        if (typeof v === "string" && v.trim() !== "" && !isNaN(Number(v.replace(/,/g, "")))) {
+          // keep as string to preserve formatting; no auto-conversion
+        }
+      }
+    })
+    row.commit()
+  })
+
+  // Auto-fit column widths (approximate) + header filter
   for (let colIdx = 0; colIdx < columnCount; colIdx++) {
     let maxLen = 10
     for (const row of rows) {
       const cellLen = (row[colIdx] || "").length
       if (cellLen > maxLen) maxLen = cellLen
     }
-    worksheet.getColumn(colIdx + 1).width = Math.min(maxLen + 2, 50)
+    worksheet.getColumn(colIdx + 1).width = Math.min(maxLen + 4, 50)
+  }
+
+  // Freeze header + auto filter
+  worksheet.views = [{ state: "frozen", ySplit: 1 } as any]
+  if (worksheet.rowCount > 1) {
+    worksheet.autoFilter = {
+      from: { row: 1, column: 1 },
+      to: { row: 1, column: columnCount },
+    } as any
   }
 }
