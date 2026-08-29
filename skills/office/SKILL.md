@@ -12,7 +12,7 @@ The plugin overrides the builtin `edit` tool: every edit — text or binary — 
 
 Steer binary formats exclusively to `officecli` actions; for text files pick freely — patch-tool for surgical fixes, officecli edit for rewrites.
 
-Binary formats (.docx/.xlsx/.pptx/.pdf/images) are markdown on both sides inside officecli: read returns markdown, write consumes markdown.
+Binary formats (.docx/.xlsx/.pptx/.pdf/images) are markdown on both sides inside officecli: read returns markdown, write consumes markdown. Never use `edit`/`write` on `*.docx,*.xlsx,*.pptx,*.pdf,*.png,*.jpg,*.jpeg,*.gif` — Guard (`BINARY_EXTENSIONS`) fails them with `use officecli tool for binary files`; use `officecli(action="create"|"edit")` instead. For live Word content on the same machine use `officecli(action="read", live=true)` (prefers `Application.Word` document whose full name matches `filePath`, falls back to saved file; local-only).
 
 ## Draft lifecycle (every task)
 

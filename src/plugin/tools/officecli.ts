@@ -12,7 +12,7 @@ import { writeComment as writeXlsxComment, readComments as readXlsxComments, app
 import { writeComment as writePptxComment, readComments as readPptxComments, applySlideSuggestion, updateComment as updatePptxComment, deleteComment as deletePptxComment, setCommentStatus as setPptxCommentStatus, type PptxComment } from "@/core/format/ooxml/pptxcomments"
 import { diffTexts } from "@/core/draft/diff"
 import { substituteTemplate } from "@/core/template/substitute"
-import { readRealFileAsMarkdown } from "@/core/format/read"
+import { readLiveOrFileAsMarkdown, readRealFileAsMarkdown } from "@/core/format/read"
 import { renderMarkdownFileToHtml } from "@/core/format/render"
 import { writeDerivedFile, EXPORT_EXTENSIONS } from "@/core/format/export"
 import { readMetadata, METADATA_EXTENSIONS, type FileMetadata } from "@/core/format/metadata"
@@ -62,7 +62,7 @@ const watermarkArgs = S.Struct({
 })
 const annotateArgs = S.Struct({ action: S.Literal("annotate"), filePath: S.String, annotations: S.String })
 const exportArgs = S.Struct({ action: S.Literal("export"), filePath: S.String, targetPath: S.String })
-const readArgs = S.Struct({ action: S.Literal("read"), filePath: S.String })
+const readArgs = S.Struct({ action: S.Literal("read"), filePath: S.String, live: S.optional(S.Boolean) })
 const commentArgs = S.Struct({
   action: S.Literal("comment"),
   filePath: S.String,
@@ -729,18 +729,22 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     const filePathHash = getFilePathHash(input.filePath)
     const ext = extname(input.filePath)
 
-    // Return draft if exists, else real file
+    // Return draft if exists, else real file (live flag prefers Word app when on same machine)
     if (draftExists(filePathHash, sessionID)) {
       const draftPath = getDraftPath(filePathHash, sessionID, ext)
-      // Draft is always markdown, return as-is
-      const content = readFileSync(draftPath, "utf-8")
-      return content
+      return readFileSync(draftPath, "utf-8")
+    }
+    if (input.live === true) {
+      try {
+        return await readLiveOrFileAsMarkdown(input.filePath, true)
+      } catch {
+        // ponytail: live best-effort failed, fall through to file check
+      }
     }
     if (!existsSync(input.filePath)) {
       fail(`file not found: ${input.filePath}`)
     }
-    const content = await readRealFileAsMarkdown(input.filePath)
-    return content
+    return await readRealFileAsMarkdown(input.filePath)
   }
   if (input.action === "comment") {
     const ext = extname(input.filePath)

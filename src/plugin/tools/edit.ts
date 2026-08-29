@@ -7,7 +7,7 @@ import { readFileSync, writeFileSync, existsSync } from "fs"
 import { extname } from "path"
 import { fail, tryExecute } from "@/plugin/tools/boundary"
 
-const BINARY_EXTENSIONS = new Set([".docx", ".xlsx", ".pptx", ".pdf", ".png", ".jpg", ".jpeg", ".gif"])
+export const BINARY_EXTENSIONS = new Set([".docx", ".xlsx", ".pptx", ".pdf", ".png", ".jpg", ".jpeg", ".gif"])
 
 const S = Schema
 

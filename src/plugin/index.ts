@@ -1,28 +1,67 @@
 import { Effect } from "effect"
 import { define } from "@opencode-ai/plugin/v2/effect"
+import { Tool } from "@opencode-ai/schema/tool"
 import { officecliInvokes, runOfficecliInvoke } from "@/plugin/tools/officecli"
+import { BINARY_EXTENSIONS } from "@/plugin/tools/edit"
+import { editTool } from "@/plugin/tools/edit"
 import { listActiveDrafts } from "@/core/draft/manager"
 import { configureOptions } from "@/core/options"
 
-// ponytail: this host build exposes no tool domain for external plugins; officecliTool/editTool
-// stay exported and tested — re-register via ctx.tool.transform when the host ships it
+export function isBlockedTool(tool: string): boolean {
+  return tool === "edit" || tool === "write"
+}
+
+// ponytail: guard + tool registration dormant until host ships ctx.tool — global check, per-tool hook when throughput matters
 export const OpenOfficePlugin = define({
   id: "openoffice",
-  effect: (ctx) =>
+  effect: (ctx: unknown) =>
     Effect.gen(function* () {
-      configureOptions(ctx.options)
+      const safeCtx = ctx as {
+        options: unknown
+        invoke: {
+          register: (name: string, handler: (input: unknown) => Effect.Effect<unknown>) => Effect.Effect<unknown>
+        }
+      } & Record<string, unknown>
+      configureOptions(safeCtx.options as never)
 
       for (const name of Object.keys(officecliInvokes)) {
         // ponytail: InvokeHooks types handlers as Effect<unknown> (E = never), but the core
         // registry yields* the handler so typed failures still propagate at runtime — cast
-        yield* ctx.invoke.register(
+        yield* safeCtx.invoke.register(
           name,
-          (input) =>
+          (input: unknown) =>
             Effect.tryPromise({
               try: () => runOfficecliInvoke(name, input),
               catch: (error) => (error instanceof Error ? error : new Error(String(error))),
             }) as unknown as Effect.Effect<unknown>,
         )
+      }
+
+      // ponytail: defensive guard — compiles on 1.18.22, activates when host ships ctx.tool; single global check
+      const toolDomain =
+        typeof ctx === "object" && ctx !== null && "tool" in ctx
+          ? (ctx as Record<string, unknown>)["tool"] as
+              | {
+                  transform?: (cb: (r: { add: (t: unknown) => void }) => void) => Effect.Effect<unknown>
+                  hook?: (name: string, cb: (e: unknown) => unknown) => Effect.Effect<unknown>
+                }
+              | undefined
+          : undefined
+      if (toolDomain?.transform) {
+        yield* toolDomain.transform((registry) => {
+          registry.add(editTool as unknown)
+        }) as unknown as Effect.Effect<void>
+      }
+      if (toolDomain?.hook) {
+        yield* toolDomain.hook("execute.before", (event: unknown) => {
+          const e = event as { tool?: string; args?: { filePath?: string } }
+          const tool = e.tool ?? ""
+          const fp = e.args?.filePath ?? ""
+          const ext = fp.includes(".") ? fp.slice(fp.lastIndexOf(".")).toLowerCase() : ""
+          if (isBlockedTool(tool) && BINARY_EXTENSIONS.has(ext)) {
+            throw new Tool.Error({ message: "use officecli tool for binary files" })
+          }
+        }) as unknown as Effect.Effect<void>
       }
 
       yield* Effect.addFinalizer(() =>
