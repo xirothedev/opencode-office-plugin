@@ -33,9 +33,25 @@ Universal actions:
 - `list` — active drafts across all files; run when resuming after an interruption
 - Stale lock (`staleLockHours`, default 24h): `lock-status`, then `force-release` — the displaced session's next mutation fails with an error, expected
 
+## Bundled format skills (anthropics/skills, source-available)
+
+`skills/docx`, `skills/xlsx`, `skills/pptx`, `skills/pdf` are bundled verbatim from `anthropics/skills` (see `LICENSE.txt` in each). They hold the canonical gotchas and helper scripts per format. `skills/office` is the router + draft/history; delegate format-specific authoring to the bundled skill when fidelity matters. Quick markdown→officecli covers 80%; the bundled skill covers the 20% that silently corrupts.
+
+| Need | Where |
+|---|---|
+| Simple headings + pipe tables (markdown enough) | `officecli create/edit` → v2 styled defaults (A4, D9E1F2, DXA) |
+| Precise .docx: sections, images, TOC, page size, redlines, comments | `skills/docx` — `docx` npm + `scripts/merge_runs.py`/`comment.py`/`accept_changes.py`/`office/validate.py` + `soffice` |
+| XLSX with formulas, styling, recalc | `skills/xlsx` — `openpyxl` + `scripts/recalc.py` (mandatory) + `pandas` for bulk |
+| Styled .pptx / template fill | `skills/pptx` — `pptxgenjs` + `scripts/add_slide.py`/`thumbnail.py`/`clean.py` |
+| PDF forms, table extraction, merge/split | `skills/pdf` — `forms.md`/`reference.md` + `pypdf`/`pdfplumber`/`reportlab` helpers |
+
+Advanced edit on existing file: `officecli read` to inspect → `officecli edit` to open draft → run the format skill's script **against the draft file** (see `officecli list` / `.opencode/office/drafts/` in `src/core/draft/manager.ts:18`), iterate → `officecli accept`. Never touch the real file bypassing the lock. For quick markdown writes, `officecli edit` alone is enough.
+
 ## Task router
 
 | Task type | Reference |
 |---|---|
-| New document, template batch generation, validation gates, format conversion | [authoring.md](references/authoring.md) |
-| Editing/reviewing existing documents, suggestions, track changes, version recovery | [reviewing.md](references/reviewing.md) |
+| New document, template batch generation, validation gates, format conversion | [authoring.md](references/authoring.md) + format skill (`docx`/`xlsx`/`pptx`/`pdf`) |
+| Editing/reviewing existing documents, suggestions, track changes, version recovery | [reviewing.md](references/reviewing.md) + `docx:editing` / `pptx:editing` sections |
+| Fillable PDF forms | [pdf/forms.md](../pdf/forms.md) + `scripts/check_fillable_fields.py` |
+| XLSX recalc / financial model | [xlsx SKILL](../xlsx/SKILL.md) `recalc.py` section |
