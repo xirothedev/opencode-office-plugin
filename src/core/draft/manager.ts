@@ -55,19 +55,25 @@ export async function acceptDraft(absolutePath: string, sessionID: string, times
   const format = detectFormat(absolutePath)
   const sidecar = readSidecar(filePathHash, sessionID)
 
+  // ponytail: draft may be a real OOXML zip (seeded for comment/track) — detect PK and copy, else markdown→write
+  const draftBuf = readFileSync(draftPath)
+  const isZip = draftBuf.length >= 2 && draftBuf[0] === 0x50 && draftBuf[1] === 0x4b
+
   // Copy draft to real file (with conversion for binary formats)
   if (format === "docx") {
-    const markdown = readFileSync(draftPath, "utf-8")
-    await writeDocxFromMarkdown(markdown, absolutePath)
+    if (isZip) copyFileSync(draftPath, absolutePath)
+    else await writeDocxFromMarkdown(draftBuf.toString("utf-8"), absolutePath)
   } else if (format === "pptx") {
-    const markdown = readFileSync(draftPath, "utf-8")
-    await writeOfficeFromMarkdown(markdown, absolutePath)
+    if (isZip) copyFileSync(draftPath, absolutePath)
+    else await writeOfficeFromMarkdown(draftBuf.toString("utf-8"), absolutePath)
   } else if (format === "xlsx") {
-    const markdown = readFileSync(draftPath, "utf-8")
-    await writeXlsxFromMarkdown(markdown, absolutePath)
+    if (isZip) copyFileSync(draftPath, absolutePath)
+    else await writeXlsxFromMarkdown(draftBuf.toString("utf-8"), absolutePath)
   } else if (format === "pdf") {
-    const markdown = readFileSync(draftPath, "utf-8")
-    await writePdfFromMarkdown(markdown, absolutePath)
+    // ponytail: pdf draft is markdown; if somehow binary PDF (%PDF) was seeded, copy
+    const isPdf = draftBuf.length >= 4 && draftBuf.toString("utf-8", 0, 4) === "%PDF"
+    if (isPdf || isZip) copyFileSync(draftPath, absolutePath)
+    else await writePdfFromMarkdown(draftBuf.toString("utf-8"), absolutePath)
   } else if (format === "image") {
     if (sidecar?.annotations && sidecar.annotations.length > 0) {
       await renderAnnotationsToImage(absolutePath, sidecar.annotations)
@@ -90,7 +96,13 @@ export async function acceptDraft(absolutePath: string, sessionID: string, times
   }
 
   // Record accept-point
-  const snapshot = readFileSync(draftPath, "utf-8")
+  // ponytail: binary zip snapshot can't JSON-store as utf-8 (would be PK garbage) — keep placeholder; proper binary history if revert matters
+  let snapshot: string
+  try {
+    snapshot = isZip ? `[binary ${ext} ${draftBuf.length} bytes]` : draftBuf.toString("utf-8")
+  } catch {
+    snapshot = `[binary ${ext}]`
+  }
   const acceptPoint: AcceptPoint = {
     timestamp: timestamp ?? Date.now(),
     snapshot,

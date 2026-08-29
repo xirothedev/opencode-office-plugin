@@ -129,6 +129,7 @@ export function parseSuggestion(text: any, prefix: string): string | null {
 export const OPENOFFICE_NS = "http://opencode.ai/openoffice-plugin"
 export const OO_XMLNS_ATTR = "xmlns:oo"
 export const OO_STATUS_ATTR = "oo:status"
+export const OO_ORIG_ID_ATTR = "oo:origId"
 
 export type CommentStatus = "open" | "resolved" | "denied"
 

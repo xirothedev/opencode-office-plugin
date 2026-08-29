@@ -59,11 +59,11 @@ export const OpenOfficePlugin = define({
           const fp = e.args?.filePath ?? e.args?.path ?? ""
           const ext = fp.includes(".") ? fp.slice(fp.lastIndexOf(".")).toLowerCase() : ""
           if (isBlockedTool(tool) && BINARY_EXTENSIONS.has(ext)) {
-            throw new Tool.Error({ message: "use officecli tool for binary files" })
+            throw new Tool.Error({ message: "use officecli tool for office/PDF files — office is the main method for read + handle" })
           }
-          // ponytail: read hook for office/pdf — force markdown via officecli, not raw binary read
+          // ponytail: read hook for office/pdf — officecli read is the main method, not raw binary read
           if (tool === "read" && OFFICE_READ_EXTENSIONS.has(ext)) {
-            throw new Tool.Error({ message: "use officecli tool for office files" })
+            throw new Tool.Error({ message: "use officecli tool for office/PDF files — office is the main method for read + handle" })
           }
         }) as unknown as Effect.Effect<void>
       }

@@ -5,26 +5,27 @@ import { detectFormat } from "@/core/format/detect"
 import { extractTextFromPDF } from "@/core/format/backends/pdf"
 import { extractTextFromImage } from "@/core/format/backends/image"
 import { extractTextFromOffice } from "@/core/format/backends/office"
+import { sanitizeXmlText } from "@/core/format/sanitize"
 
 export async function readRealFileAsMarkdown(filePath: string): Promise<string> {
   const format = detectFormat(filePath)
   if (format === "pdf") {
-    return await extractTextFromPDF(filePath)
+    return sanitizeXmlText(await extractTextFromPDF(filePath))
   }
   if (format === "docx" || format === "xlsx" || format === "pptx") {
-    return await extractTextFromOffice(filePath)
+    return sanitizeXmlText(await extractTextFromOffice(filePath))
   }
   if (format === "image") {
-    return await extractTextFromImage(filePath)
+    return sanitizeXmlText(await extractTextFromImage(filePath))
   }
-  return readFileSync(filePath, "utf-8")
+  return sanitizeXmlText(readFileSync(filePath, "utf-8"))
 }
 
 // ponytail: live read best-effort via stdlib only, file fallback when Word not running — Office.js bridge if cross-platform matters
 export async function readLiveOrFileAsMarkdown(filePath: string, live: boolean): Promise<string> {
   if (!live) return readRealFileAsMarkdown(filePath)
   const liveText = tryReadLiveDocument(filePath)
-  if (liveText !== undefined) return liveText
+  if (liveText !== undefined) return sanitizeXmlText(liveText)
   return readRealFileAsMarkdown(filePath)
 }
 

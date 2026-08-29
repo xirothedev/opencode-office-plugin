@@ -13,7 +13,7 @@ describe("edit tool", () => {
   it("denies binary files", async () => {
     writeFileSync(binaryFile, "binary content")
     await expect(runTool(editTool, { filePath: binaryFile, oldString: "old", newString: "new" })).rejects.toThrow(
-      /use officecli tool for binary files/
+      /use officecli tool for office\/PDF files/
     )
   })
 
