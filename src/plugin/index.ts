@@ -2,7 +2,7 @@ import { Effect } from "effect"
 import { define } from "@opencode-ai/plugin/v2/effect"
 import { Tool } from "@opencode-ai/schema/tool"
 import { officecliInvokes, runOfficecliInvoke } from "@/plugin/tools/officecli"
-import { BINARY_EXTENSIONS } from "@/plugin/tools/edit"
+import { BINARY_EXTENSIONS, OFFICE_READ_EXTENSIONS } from "@/plugin/tools/edit"
 import { editTool } from "@/plugin/tools/edit"
 import { listActiveDrafts } from "@/core/draft/manager"
 import { configureOptions } from "@/core/options"
@@ -54,12 +54,16 @@ export const OpenOfficePlugin = define({
       }
       if (toolDomain?.hook) {
         yield* toolDomain.hook("execute.before", (event: unknown) => {
-          const e = event as { tool?: string; args?: { filePath?: string } }
-          const tool = e.tool ?? ""
-          const fp = e.args?.filePath ?? ""
+          const e = event as { tool?: string; args?: { filePath?: string; path?: string } }
+          const tool = (e.tool ?? "").toLowerCase()
+          const fp = e.args?.filePath ?? e.args?.path ?? ""
           const ext = fp.includes(".") ? fp.slice(fp.lastIndexOf(".")).toLowerCase() : ""
           if (isBlockedTool(tool) && BINARY_EXTENSIONS.has(ext)) {
             throw new Tool.Error({ message: "use officecli tool for binary files" })
+          }
+          // ponytail: read hook for office/pdf — force markdown via officecli, not raw binary read
+          if (tool === "read" && OFFICE_READ_EXTENSIONS.has(ext)) {
+            throw new Tool.Error({ message: "use officecli tool for office files" })
           }
         }) as unknown as Effect.Effect<void>
       }

@@ -103,6 +103,8 @@ export async function acceptDraft(absolutePath: string, sessionID: string, times
     history = JSON.parse(readFileSync(historyPath, "utf-8"))
   }
   history.push(acceptPoint)
+  // ponytail: ensure history dir exists for fresh dataDir (cheap, fixes ENOENT on first accept)
+  mkdirSync(getHistoryDir(), { recursive: true })
   writeFileSync(historyPath, JSON.stringify(history))
 
   // Clean up draft

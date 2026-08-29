@@ -8,6 +8,17 @@ import { extname } from "path"
 import { fail, tryExecute } from "@/plugin/tools/boundary"
 
 export const BINARY_EXTENSIONS = new Set([".docx", ".xlsx", ".pptx", ".pdf", ".png", ".jpg", ".jpeg", ".gif"])
+// ponytail: read hook needs legacy office too — doc/xls/ppt without x, plus pdf
+export const OFFICE_READ_EXTENSIONS = new Set([
+  ".docx",
+  ".doc",
+  ".xlsx",
+  ".xls",
+  ".xlsm",
+  ".pptx",
+  ".ppt",
+  ".pdf",
+])
 
 const S = Schema
 

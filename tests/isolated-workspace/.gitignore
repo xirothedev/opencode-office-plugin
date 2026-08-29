@@ -1,0 +1,7 @@
+node_modules/
+.data/
+.capture/*.json
+! .capture/report.md
+.opencode/
+.DS_Store
+
