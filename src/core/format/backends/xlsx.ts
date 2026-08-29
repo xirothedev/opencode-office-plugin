@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs"
+import { sanitizeXmlText } from "@/core/format/sanitize"
 
 interface TableBlock {
   name: string | undefined
@@ -6,8 +7,10 @@ interface TableBlock {
 }
 
 // ponytail: v2 styled defaults — header bold, fill D9E1F2, borders, centered, auto-width. Keeps markdown-table → sheet mapping.
+// ponytail: sanitizeXmlText strips C0 controls that would make Excel refuse to open (ECMA-376)
 
 export async function writeXlsxFromMarkdown(markdown: string, outputPath: string): Promise<void> {
+  markdown = sanitizeXmlText(markdown)
   const workbook = new ExcelJS.Workbook()
   const lines = markdown.split("\n")
 

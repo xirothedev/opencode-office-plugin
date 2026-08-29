@@ -18,6 +18,7 @@ import { writeDerivedFile, EXPORT_EXTENSIONS } from "@/core/format/export"
 import { readMetadata, METADATA_EXTENSIONS, type FileMetadata } from "@/core/format/metadata"
 import { readSidecar, writeSidecar, type WatermarkConfig, type WatermarkPosition, type AnnotationOp } from "@/core/draft/sidecar"
 import { normalizeStampText } from "@/core/format/annotate"
+import { sanitizeMarkdown, sanitizeXmlText } from "@/core/format/sanitize"
 import { fail, tryExecute } from "@/plugin/tools/boundary"
 import { tmpdir } from "os"
 
@@ -229,7 +230,14 @@ async function officePreview(input: unknown): Promise<unknown> {
     comments: await readPreviewComments(ext, target),
   }
   if (draftSession) {
-    result.content = readFileSync(target, "utf-8")
+    // ponytail: zip draft can't be sent as markdown text — extract or fallback to fileUrl
+    try {
+      const buf = readFileSync(target)
+      const isZip = buf.length >= 2 && buf[0] === 0x50 && buf[1] === 0x4b
+      result.content = isZip ? await readRealFileAsMarkdown(target) : buf.toString("utf-8")
+    } catch {
+      result.content = readFileSync(target, "utf-8")
+    }
   } else {
     result.fileUrl = officePreviewFileUrl(filePath, ext)
   }
@@ -301,6 +309,7 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     if (!filePath && !filePaths) {
       fail("create requires filePath or filePaths")
     }
+    const cleanContent = sanitizeMarkdown(content)
     const targets = parseFilePaths(filePaths)
     if (typeof targets === "string") {
       fail(targets)
@@ -308,7 +317,7 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     if (filePath && targets.length === 0) {
       const filePathHash = getFilePathHash(filePath)
       acquireLock(filePathHash, sessionID, owner)
-      createDraft(filePath, sessionID, content)
+      createDraft(filePath, sessionID, cleanContent)
       return `Draft created for ${filePath}`
     }
     const paths = targets.length > 0 ? targets : [filePath as string]
@@ -322,7 +331,7 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     for (const p of paths) {
       const filePathHash = getFilePathHash(p)
       acquireLock(filePathHash, sessionID, owner)
-      createDraft(p, sessionID, content)
+      createDraft(p, sessionID, cleanContent)
     }
     return `Created ${paths.length} drafts`
   }
@@ -384,7 +393,7 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     }
     const ext = extname(input.filePath)
     const draftPath = getDraftPath(filePathHash, sessionID, ext)
-    writeFileSync(draftPath, input.content)
+    writeFileSync(draftPath, sanitizeMarkdown(input.content))
     return `Draft edited for ${input.filePath}`
   }
 
@@ -442,7 +451,9 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     }
     const ext = extname(input.filePath)
     const draftPath = getDraftPath(filePathHash, sessionID, ext)
-    const draftContent = readFileSync(draftPath, "utf-8")
+    const buf = readFileSync(draftPath)
+    const isZip = buf.length >= 2 && buf[0] === 0x50 && buf[1] === 0x4b
+    const draftContent = isZip ? await readRealFileAsMarkdown(draftPath) : buf.toString("utf-8")
     const realContent = await readRealFileAsMarkdown(input.filePath)
     return diffTexts(realContent, draftContent)
   }
@@ -512,7 +523,7 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
         fail(`lock on ${entry.filePath} held by session ${lock.sessionID}`)
       }
       try {
-        prepared.push({ filePath: entry.filePath, content: substituteTemplate(template, entry.data) })
+        prepared.push({ filePath: entry.filePath, content: sanitizeMarkdown(substituteTemplate(template, entry.data)) })
       } catch (error) {
         fail((error as Error).message)
       }
@@ -520,7 +531,7 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     for (const p of prepared) {
       const filePathHash = getFilePathHash(p.filePath)
       acquireLock(filePathHash, sessionID, owner)
-      createDraft(p.filePath, sessionID, p.content)
+      createDraft(p.filePath, sessionID, sanitizeMarkdown(p.content))
     }
     return `Generated ${prepared.length} drafts from ${input.templatePath}`
   }
@@ -714,9 +725,15 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     if (resolve(input.targetPath) === resolve(input.filePath)) {
       fail("targetPath must differ from filePath")
     }
-    const markdown = hasDraft
-      ? readFileSync(getDraftPath(filePathHash, sessionID, sourceExt), "utf-8")
-      : await readRealFileAsMarkdown(input.filePath)
+    let markdown: string
+    if (hasDraft) {
+      const draftPath = getDraftPath(filePathHash, sessionID, sourceExt)
+      const buf = readFileSync(draftPath)
+      const isZip = buf.length >= 2 && buf[0] === 0x50 && buf[1] === 0x4b
+      markdown = isZip ? await readRealFileAsMarkdown(draftPath) : buf.toString("utf-8")
+    } else {
+      markdown = await readRealFileAsMarkdown(input.filePath)
+    }
     try {
       await writeDerivedFile(markdown, input.targetPath)
     } catch (error) {
@@ -732,7 +749,11 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     // Return draft if exists, else real file (live flag prefers Word app when on same machine)
     if (draftExists(filePathHash, sessionID)) {
       const draftPath = getDraftPath(filePathHash, sessionID, ext)
-      return readFileSync(draftPath, "utf-8")
+      // ponytail: zip draft (comment/track) holds real OOXML — extract text, don't dump PK
+      const buf = readFileSync(draftPath)
+      const isZip = buf.length >= 2 && buf[0] === 0x50 && buf[1] === 0x4b
+      if (isZip) return await readRealFileAsMarkdown(draftPath)
+      return buf.toString("utf-8")
     }
     if (input.live === true) {
       try {
@@ -769,13 +790,13 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     if (ext === ".xlsx") {
       const comment: XlsxComment = {
         id: input.commentId,
-        author: input.author,
-        text: input.commentText,
+        author: sanitizeXmlText(input.author),
+        text: sanitizeXmlText(input.commentText),
         timestamp: new Date(),
         cellRef: input.cellRef as string,
         parentId: null,
         status: "open",
-        suggestedText: input.suggestedText ?? null,
+        suggestedText: input.suggestedText ? sanitizeXmlText(input.suggestedText) : null,
       }
       await writeXlsxComment(draftPath, comment)
       return `Comment added to draft for ${input.filePath}`
@@ -783,30 +804,30 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     if (ext === ".pptx") {
       const comment: PptxComment = {
         id: input.commentId,
-        author: input.author,
-        text: input.commentText,
+        author: sanitizeXmlText(input.author),
+        text: sanitizeXmlText(input.commentText),
         timestamp: new Date(),
         slide: input.slide ?? 0,
         x: input.x ?? 100000,
         y: input.y ?? 100000,
         parentId: null,
         status: "open",
-        suggestedText: input.suggestedText ?? null,
-        targetText: input.targetText ?? null,
+        suggestedText: input.suggestedText ? sanitizeXmlText(input.suggestedText) : null,
+        targetText: input.targetText ? sanitizeXmlText(input.targetText) : null,
       }
       await writePptxComment(draftPath, comment)
       return `Comment added to draft for ${input.filePath}`
     }
     const comment: Comment = {
       id: input.commentId,
-      author: input.author,
-      text: input.commentText,
+      author: sanitizeXmlText(input.author),
+      text: sanitizeXmlText(input.commentText),
       timestamp: new Date(),
       rangeStart: { paragraph: input.rangeStartParagraph as number, offset: input.rangeStartOffset as number },
       rangeEnd: { paragraph: input.rangeEndParagraph as number, offset: input.rangeEndOffset as number },
       parentId: null,
       status: "open",
-      suggestedText: input.suggestedText ?? null,
+      suggestedText: input.suggestedText ? sanitizeXmlText(input.suggestedText) : null,
     }
     await writeComment(draftPath, comment)
     return `Comment added to draft for ${input.filePath}`
@@ -866,12 +887,14 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
       if (input.text === undefined && input.suggestedText === undefined) {
         fail("edit-comment requires text or suggestedText")
       }
+      const cleanText = input.text ? sanitizeXmlText(input.text) : undefined
+      const cleanSuggested = input.suggestedText ? sanitizeXmlText(input.suggestedText) : undefined
       const result =
         ext === ".xlsx"
-          ? await updateXlsxComment(draftPath, input.commentId, { text: input.text, suggestedText: input.suggestedText })
+          ? await updateXlsxComment(draftPath, input.commentId, { text: cleanText, suggestedText: cleanSuggested })
           : ext === ".pptx"
-            ? await updatePptxComment(draftPath, input.commentId, { text: input.text, suggestedText: input.suggestedText })
-            : await updateComment(draftPath, input.commentId, { text: input.text, suggestedText: input.suggestedText })
+            ? await updatePptxComment(draftPath, input.commentId, { text: cleanText, suggestedText: cleanSuggested })
+            : await updateComment(draftPath, input.commentId, { text: cleanText, suggestedText: cleanSuggested })
       if (result === "not-found") {
         fail(`comment ${input.commentId} not found`)
       }
@@ -919,9 +942,9 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     const trackChange: TrackChange = {
       id: input.commentId,
       type: input.action === "track-insert" ? "insertion" : "deletion",
-      author: input.author,
+      author: sanitizeXmlText(input.author),
       timestamp: new Date(),
-      text: input.content,
+      text: sanitizeXmlText(input.content),
       paragraph: input.paragraph,
       offset: input.offset,
     }
@@ -960,8 +983,18 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     }
     const draftPath = getDraftPath(filePathHash, sessionID, extname(input.filePath))
     const outputPath = join(tmpdir(), "openoffice-preview", `${filePathHash}.html`)
+    // ponytail: zip draft (comment) — extract markdown first, can't render zip directly
+    const bufP = readFileSync(draftPath)
+    const isZipP = bufP.length >= 2 && bufP[0] === 0x50 && bufP[1] === 0x4b
     try {
-      await renderMarkdownFileToHtml(draftPath, outputPath)
+      if (isZipP) {
+        const md = await readRealFileAsMarkdown(draftPath)
+        const tmpMd = join(tmpdir(), `openoffice-preview-${filePathHash}.md`)
+        writeFileSync(tmpMd, md)
+        await renderMarkdownFileToHtml(tmpMd, outputPath)
+      } else {
+        await renderMarkdownFileToHtml(draftPath, outputPath)
+      }
     } catch (error) {
       fail((error as Error).message)
     }
@@ -994,7 +1027,9 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
       fail("no active draft to validate")
     }
     const draftPath = getDraftPath(filePathHash, sessionID, extname(input.filePath))
-    const content = readFileSync(draftPath, "utf-8")
+    const bufV = readFileSync(draftPath)
+    const isZipV = bufV.length >= 2 && bufV[0] === 0x50 && bufV[1] === 0x4b
+    const content = isZipV ? await readRealFileAsMarkdown(draftPath) : bufV.toString("utf-8")
     const results: Array<{ rule: (typeof rules)[number]; pass: boolean }> = []
     for (const rule of rules) {
       let pass: boolean

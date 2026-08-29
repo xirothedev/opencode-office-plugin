@@ -13,10 +13,53 @@ import {
   ShadingType,
 } from "docx"
 import { writeFileSync } from "fs"
+import { sanitizeXmlText } from "@/core/format/sanitize"
 
 // ponytail: v2 styled defaults — A4, 1" margins, header shading, DXA dual widths, bullet numbering. Boring markdown still works.
+// ponytail: sanitizeXmlText strips C0 controls (\x03 etc.) that would make Word refuse to open (ECMA-376 forbids them in <w:t>)
+
+// ponytail: minimal inline md → TextRun[]: **bold**, *italic*, \-* unescape, <br> → break
+function inlineRuns(text: string, forceBold?: boolean): TextRun[] {
+  const cleaned = text.replace(/<br\s*\/?>/gi, "\n").replace(/\\([\-+*\\])/g, "$1")
+  const parts = cleaned.split(/(\*\*.*?\*\*)/g)
+  const runs: TextRun[] = []
+  for (const part of parts) {
+    if (!part) continue
+    if (part.startsWith("**") && part.endsWith("**") && part.length >= 4) {
+      const inner = part.slice(2, -2).split("\n")
+      inner.forEach((s, idx) => {
+        if (s) runs.push(new TextRun({ text: s, bold: true, size: 22 }))
+        if (idx < inner.length - 1) runs.push(new TextRun({ break: 1 }))
+      })
+      continue
+    }
+    // *italic* whole-segment (avoid **)
+    if (part.startsWith("*") && part.endsWith("*") && part.length >= 2 && !part.startsWith("**")) {
+      const inner = part.slice(1, -1)
+      runs.push(new TextRun({ text: inner, italics: true, size: 22 }))
+      continue
+    }
+    // plain (may contain lone *italic* inside) — handle *...* inside
+    const sub = part.split(/(\*[^*]+\*)/g)
+    for (const seg of sub) {
+      if (!seg) continue
+      if (seg.startsWith("*") && seg.endsWith("*") && seg.length >= 2) {
+        runs.push(new TextRun({ text: seg.slice(1, -1), italics: true, size: 22 }))
+      } else {
+        const lines = seg.split("\n")
+        lines.forEach((s, idx) => {
+          if (s) runs.push(new TextRun({ text: s, bold: forceBold, size: 22 }))
+          if (idx < lines.length - 1) runs.push(new TextRun({ break: 1 }))
+        })
+      }
+    }
+  }
+  if (runs.length === 0) runs.push(new TextRun({ text: cleaned.replace(/\*\*/g, ""), size: 22 }))
+  return runs
+}
 
 export async function writeDocxFromMarkdown(markdown: string, outputPath: string): Promise<void> {
+  markdown = sanitizeXmlText(markdown)
   const lines = markdown.split("\n")
   const children: any[] = []
 
@@ -71,12 +114,12 @@ export async function writeDocxFromMarkdown(markdown: string, outputPath: string
       )
       i++
     }
-    // Bullet list (- or * )
-    else if (/^\s*[-*]\s+/.test(line)) {
-      const text = line.replace(/^\s*[-*]\s+/, "")
+    // Bullet list (- or * ) — also handles escaped \- \* from anydoc
+    else if (/^\s*\\?[-*]\s+/.test(line)) {
+      const norm = line.replace(/^\s*\\?[-*]\s+/, "")
       children.push(
         new Paragraph({
-          children: [new TextRun(text)],
+          children: inlineRuns(norm),
           numbering: { reference: "bullet", level: 0 },
         }),
       )
@@ -106,20 +149,21 @@ export async function writeDocxFromMarkdown(markdown: string, outputPath: string
       rawRows.forEach((cells, rowIdx) => {
         const isHeader = rowIdx === 0
         const row = new TableRow({
-          children: cells.map(
-            (cell) =>
-              new TableCell({
-                children: [new Paragraph({ children: [new TextRun({ text: cell, bold: isHeader })], alignment: isHeader ? AlignmentType.CENTER : AlignmentType.LEFT })],
-                width: { size: colWidth, type: WidthType.DXA },
-                shading: isHeader ? { type: ShadingType.CLEAR, color: "auto", fill: "D9E1F2" } : undefined,
-                borders: {
-                  top: { style: BorderStyle.SINGLE, size: 4, color: "B4C6E7" },
-                  bottom: { style: BorderStyle.SINGLE, size: 4, color: "B4C6E7" },
-                  left: { style: BorderStyle.SINGLE, size: 4, color: "B4C6E7" },
-                  right: { style: BorderStyle.SINGLE, size: 4, color: "B4C6E7" },
-                },
-              }),
-          ),
+          children: cells.map((cell) => {
+            const runs = inlineRuns(cell, isHeader)
+            // ponytail: <br> in anydoc table cell → inlineRuns already emits break runs
+            return new TableCell({
+              children: [new Paragraph({ children: runs, alignment: isHeader ? AlignmentType.CENTER : AlignmentType.LEFT })],
+              width: { size: colWidth, type: WidthType.DXA },
+              shading: isHeader ? { type: ShadingType.CLEAR, color: "auto", fill: "D9E1F2" } : undefined,
+              borders: {
+                top: { style: BorderStyle.SINGLE, size: 4, color: "B4C6E7" },
+                bottom: { style: BorderStyle.SINGLE, size: 4, color: "B4C6E7" },
+                left: { style: BorderStyle.SINGLE, size: 4, color: "B4C6E7" },
+                right: { style: BorderStyle.SINGLE, size: 4, color: "B4C6E7" },
+              },
+            })
+          }),
           tableHeader: isHeader,
         })
         tableRows.push(row)
@@ -142,9 +186,10 @@ export async function writeDocxFromMarkdown(markdown: string, outputPath: string
         )
       }
     }
-    // Paragraph
+    // Paragraph — inline **bold**/*italic* + unescape
     else if (line.trim().length > 0) {
-      children.push(new Paragraph({ children: [new TextRun({ text: line, size: 22 })], spacing: { after: 80 } }))
+      const cleaned = line.replace(/\\([\-+*\\])/g, "$1")
+      children.push(new Paragraph({ children: inlineRuns(cleaned), spacing: { after: 80 } }))
       i++
     } else {
       i++
