@@ -1,18 +1,18 @@
 ---
 name: office
-description: Office and binary documents (DOCX, XLSX, PPTX, PDF, images) — create, read, edit, review, convert, version. Use whenever a task touches .docx/.xlsx/.pptx/.pdf/image files or asks for document drafts, suggestions, track changes, history, batch generation, or format export.
+description: MAIN method for Office and PDF — every read, create, edit, review, convert, version of .docx/.doc/.dotx/.xlsx/.xls/.xlsm/.pptx/.ppt/.pdf (and images) MUST go through officecli. Use whenever a task touches .docx/.doc/.xlsx/.xls/.pptx/.ppt/.pdf/image files or asks for document drafts, suggestions, track changes, history, batch generation, or format export. The native read/edit/write tools are blocked for these extensions.
 ---
 
 # Office documents
 
+> **MAIN for Office/PDF** — every **read** and **handle** (create/edit/accept/undo/history/revert/comment/track-change) of `.docx/.doc/.dotx/.dotm/.xlsx/.xls/.xlsm/.xlsb/.xltx/.pptx/.ppt/.potx/.pdf` (and images `.png/.jpg/.jpeg/.gif/.bmp/.tiff/.webp`) **MUST** go through `officecli`. The plugin's guard blocks the native `read`/`edit`/`write` tools for these extensions and errors with `use officecli tool for office/PDF files — office is the main method for read + handle`. Do not bypass.
+
 The plugin overrides the builtin `edit` tool: every edit — text or binary — runs through a draft and needs `officecli accept` to reach the real file. Two edit surfaces:
 
-- `officecli(action="edit", filePath, content)` — replaces the whole draft with your markdown
-- `edit` tool (`filePath`, `oldString`, `newString`) — patches the existing draft in place
+- `officecli(action="edit", filePath, content)` — replaces the whole draft with your markdown (for office/PDF, this is the ONLY write surface)
+- `edit` tool (`filePath`, `oldString`, `newString`) — patches the existing draft in place (text files only; blocked for office/PDF/images)
 
-Steer binary formats exclusively to `officecli` actions; for text files pick freely — patch-tool for surgical fixes, officecli edit for rewrites.
-
-Binary formats (.docx/.xlsx/.pptx/.pdf/images) are markdown on both sides inside officecli: read returns markdown, write consumes markdown. Never use `edit`/`write` on `*.docx,*.xlsx,*.pptx,*.pdf,*.png,*.jpg,*.jpeg,*.gif` — Guard (`BINARY_EXTENSIONS`) fails them with `use officecli tool for binary files`; use `officecli(action="create"|"edit")` instead. For live Word content on the same machine use `officecli(action="read", live=true)` (prefers `Application.Word` document whose full name matches `filePath`, falls back to saved file; local-only).
+For office/PDF/images, `officecli` is the ONLY path: `read` returns markdown, `create`/`edit` consume markdown, both sides inside `officecli`. Never use `read`/`edit`/`write` on `*.docx,*.doc,*.dotx,*.xlsx,*.xls,*.xlsm,*.pptx,*.ppt,*.pdf,*.png,*.jpg,*.jpeg,*.gif` — guard fails them. For live Word content on the same machine use `officecli(action="read", live=true)` (prefers `Application.Word` document whose full name matches `filePath`, falls back to saved file; local-only).
 
 ## Draft lifecycle (every task)
 
@@ -24,9 +24,9 @@ Every write runs through a **draft**: nothing reaches the real file until `accep
 
 Done means: every write path ended in `accept` or `undo`. A dropped draft leaves the file locked and the change invisible.
 
-Universal actions:
+Universal actions (all via `officecli` — main for office/PDF):
 
-- `read` — extract any supported file to markdown; inspect before editing anything you did not author this session
+- `read` — `officecli(action="read")` extract any office/PDF/image to markdown; inspect before editing anything you did not author this session (native `read` is blocked for `.docx/.doc/.xlsx/.xls/.pptx/.ppt/.pdf`)
 - `diff` — unified markdown diff of draft vs real file; call before accept on edits to files you didn't create
 - `preview` — renders the draft to an HTML file for human inspection
 - `undo` — discard draft, real file unchanged
