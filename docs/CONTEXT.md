@@ -203,3 +203,31 @@ _Avoid_: version, build
 **Publish**:
 Making a new Release available on the npm registry. Performed by CI when a release tag is pushed; never done by hand from a workstation.
 _Avoid_: deploy, ship
+
+**Verify Loop**:
+The manual poll `set/add → query → validate → view` repeated to work around an `officecli` bug. Distinct from `Validate` (the typed gate). Eliminated by In-place Fix.
+_Avoid_: validation loop, check loop
+
+**Skill Learning**:
+The `Capture → proposal → accept` loop where `skills/office` proposes a `Learned Record` after a `verify-l3 PASS` + `Accept`, and the Enduser accepts it. Follows `Single write path`, not runtime self-mutation.
+_Avoid_: self improve, auto-learn
+
+**Learned Record**:
+A typed JSON entry in `.opencode/office/learned/learned.json` (per-project) plus generated `learned.md` view, capturing a verified Template structure, `Format` requirement, or `Verify Loop` workaround that passed `verify-l3`. Replayed next session to avoid the loop.
+_Avoid_: learned lesson, memo
+
+**Capture** (extended):
+JSON traces of each `officecli` invoke (input, output, duration, error) written to `tests/isolated-workspace/.capture/` during a run. For Skill Learning, also written to `.opencode/office/.capture/` on real office runs, same shape.
+_Avoid_: logs, traces, dumps
+
+**Report**:
+A single `report.md` summarizing pass/fail per Tracer Bullet flow, linked to its Capture files.
+_Avoid_: summary, test report, output
+
+**Tracer Bullet**:
+The minimal end-to-end flow `create → edit → read → history → revert` executed on each supported format (docx, xlsx, pptx, pdf) to prove the lifecycle works.
+_Avoid_: smoke test, e2e, happy path
+
+**In-place Fix**:
+A bug found in the Isolated Runtime is fixed in the main repo (`src/`), rebuilt, and re-verified by re-running the same Isolated Runtime.
+_Avoid_: patch, hotfix, direct fix

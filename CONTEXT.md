@@ -19,7 +19,7 @@ The exact plugin list the Isolated Runtime loads. Strict baseline is only `@xiro
 _Avoid_: Allowed plugins, pollution set
 
 **Capture**:
-JSON traces of each `officecli` invoke (input, output, duration, error) written to `tests/isolated-workspace/.capture/` during a run.
+JSON traces of each `officecli` invoke (input, output, duration, error) written to `tests/isolated-workspace/.capture/` during a run. For Skill Learning, also written to `.opencode/office/.capture/` on real office runs, same shape.
 _Avoid_: Logs, traces, dumps
 
 **Report**:
@@ -109,4 +109,16 @@ _Avoid_: Checklist, manifest
 **Procurement Dossier**:
 The set of 22 documents for one HBV/HCV procurement, ordered by the Dossier Index. Each STT maps to one or more files in the dossier folder.
 _Avoid_: Hồ sơ, package
+
+**Verify Loop**:
+The manual poll `set/add → query → validate → view` repeated to work around an `officecli` bug. Distinct from `Validate` (the typed gate). Eliminated by In-place Fix.
+_Avoid_: Validation loop, check loop
+
+**Skill Learning**:
+The `Capture → proposal → accept` loop where `skills/office` proposes a `Learned Record` after a `verify-l3 PASS` + `Accept`, and the Enduser accepts it. Follows `Single write path`, not runtime self-mutation.
+_Avoid_: Self improve, auto-learn
+
+**Learned Record**:
+A typed JSON entry in `.opencode/office/learned/learned.json` (per-project) plus generated `learned.md` view, capturing a verified Template structure, `Format` requirement, or `Verify Loop` workaround that passed `verify-l3`. Replayed next session to avoid the loop.
+_Avoid_: Learned lesson, memo
 

@@ -20,6 +20,29 @@ function unescapeXml(str: string): string {
     .replace(/&amp;/g, "&")
 }
 
+// ponytail: \n → w:br inside same w:r (ponytail: w:br ceiling — for bullet/numbered lists, split w:p with same pPr/numPr if throughput matters)
+function expandDocxNewlines(xml: string, tag: string): string {
+  if (tag !== "w:t" || !xml.includes("\n")) return xml
+  // Replace literal \n inside <w:t> with w:br — keeps same w:p, inserts line break inside same w:r
+  // ponytail: single w:br per \n; bullet lists need separate w:p — upgrade path is to split w:p with replicated pPr/numPr
+  return xml.replace(new RegExp(`<${tag.replace(/:/g, "\\:")}(\\s[^>]*)?>([\\s\\S]*?)</${tag.replace(/:/g, "\\:")}>`, "g"), (match, attrs, inner) => {
+    if (!inner.includes("\n")) return match
+    const a = attrs ?? ""
+    const parts = inner.split("\n")
+    // First part keeps original attrs; subsequent parts ensure preserve if needed
+    let out = `<${tag}${a}>${parts[0]}</${tag}>`
+    for (let i = 1; i < parts.length; i++) {
+      let ai = a
+      const part = parts[i]
+      const needsPreserve = part.length > 0 && (part[0] === " " || part[part.length - 1] === " ")
+      const hasPreserve = /xml:space\s*=\s*["']preserve["']/.test(ai)
+      if (needsPreserve && !hasPreserve) ai = ai + ' xml:space="preserve"'
+      out += `<w:br/><${tag}${ai}>${part}</${tag}>`
+    }
+    return out
+  })
+}
+
 // ponytail: run-preserving replace keeps w:rPr/w:pPr intact — only w:t/a:t/t inner text changes
 function replaceInXml(
   xml: string,
@@ -71,7 +94,7 @@ function replaceInXml(
         missing.push(key)
         continue
       }
-      spans.push({ start, end, replacement: String(data[key]), key })
+      spans.push({ start, end, replacement: String(data[key]).replace(/\r\n/g, "\n"), key })
     }
     if (missing.length > 0) return { xml, replaced: 0, missing: [...new Set(missing)] }
   } else {
@@ -83,7 +106,7 @@ function replaceInXml(
       while (true) {
         const pos = logicalText.indexOf(oldText, idx)
         if (pos === -1) break
-        spans.push({ start: pos, end: pos + oldText.length, replacement: String(newVal), key: oldText })
+        spans.push({ start: pos, end: pos + oldText.length, replacement: String(newVal).replace(/\r\n/g, "\n"), key: oldText })
         idx = pos + oldText.length
       }
     }
@@ -174,9 +197,12 @@ function replaceInXml(
     const escaped = escapeXml(newDecoded)
     // Preserve original attrs, but ensure xml:space="preserve" if needed for leading/trailing spaces
     let attrs = ma.attrs
-    const needsPreserve = newDecoded.length > 0 && (newDecoded[0] === " " || newDecoded[newDecoded.length - 1] === " ")
+    // Check preserve need on raw decoded (before escape) but after split? Use decoded without newlines for preserve check on first segment
+    const preserveCheck = newDecoded.split("\n")[0] ?? newDecoded
+    const needsPreserve = preserveCheck.length > 0 && (preserveCheck[0] === " " || preserveCheck[preserveCheck.length - 1] === " ")
+    // For multiline, preserve is handled per segment in expandDocxNewlines; here only first segment's attrs matters
     const hasPreserve = /xml:space\s*=\s*["']preserve["']/.test(attrs)
-    if (needsPreserve && !hasPreserve) {
+    if (needsPreserve && !hasPreserve && !newDecoded.includes("\n")) {
       attrs = attrs + ' xml:space="preserve"'
     }
     // If empty and had preserve, we keep it (harmless)
@@ -184,6 +210,7 @@ function replaceInXml(
     last = ma.end
   }
   out += xml.slice(last)
+  out = expandDocxNewlines(out, tag)
   return { xml: out, replaced: filtered.length, missing: [] }
 }
 
@@ -266,4 +293,4 @@ export async function substituteOoxml(
 }
 
 // For testing: expose helpers
-export const _test = { replaceInXml, escapeXml, unescapeXml, targetFilesForFormat, detectFormatFromZip }
+export const _test = { replaceInXml, escapeXml, unescapeXml, targetFilesForFormat, detectFormatFromZip, expandDocxNewlines }
