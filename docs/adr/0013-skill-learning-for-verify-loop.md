@@ -1,0 +1,15 @@
+# Skill Learning for Verify Loop
+
+Problem: image trace shows 30 min dossier run, only 2–3 min is real `officecli` work. 20 min is Verify Loop (`set/add → query → validate → view` ×37) diagnosing two `officecli` bugs: `set text` in a table cell overwrote only first `w:p` leaving 7 stray paragraphs (21 deletions, 22 `officecli` calls), and `\n` inside a `w:t` rendered as one line not a break (fix: `set + add --from` ×17, 60 s). Each `set`/`add` forced a manual `query` to re-verify table state. No memory persists — next session repeats the loop.
+
+Decision: add Skill Learning to `skills/office` gated on `verify-l3 PASS` + `accept`. Not runtime self-mutation.
+
+- **Capture** extended: `tests/isolated-workspace/.capture/` for Tracer Bullet stays; real office runs also write `.opencode/office/.capture/` (same JSON shape: input/output/duration/error) when learning is enabled.
+- **Proposal**: after `accept` where `verify-l3 PASS` (or only inherited warnings, e.g., 20 from `.doc` OLE2 source) and `validate` clean, `skills/office` proposes a `Learned Record` (typed JSON) — it does NOT auto-apply.
+- **Accept**: Enduser reviews `learned.md` view and accepts; `learned.json` lives at `.opencode/office/learned/learned.json` (per-project, no Release). Generic patterns promoted to `skills/office/references/learned.md` only after proven reuse.
+- **Replay**: next session reads `learned.json` before Verify Loop; `clone → substitute` with recorded structure skips the 37 manual verifications. Fix in `src/` (In-place Fix) eliminates the loop entirely; Learning records the workaround until the fix lands.
+- **In-place Fix now**: `src/core/template/substitute-ooxml.ts` — `\n` inside `w:t` → `<w:br/>` inside same `w:r` (ponytail: single `w:br` per `\n`; bullet lists needing separate `w:p` with replicated `pPr`/`numPr` are the upgrade path). `r\n` normalized to `\n`. Leaves stray-paragraph cleaning to Template hygiene — Template must contain `{{placeholder}}` not old example content.
+
+Considered options: runtime self-mutate of `SKILL.md` (rejected — violates `Single write path`, drifts Format); always-on Capture without gate (rejected — bakes bad drafts); hand-rolled `Verify Loop` workaround in Task Skill only (rejected — 22+ commands per dossier, each needing query; generic `src/` fix is one function, 20 lines, no new deps); full paragraph-split for every `\n` (rejected now — changes `verify-l3` structure to FAIL; `w:br` keeps L3 close, upgrade adds `pPr` split when bullet evidence repeats).
+
+Consequences: `CONTEXT.md` and `docs/CONTEXT.md` gain `Verify Loop`, `Skill Learning`, `Learned Record`, `Capture` extension, `Report`, `Tracer Bullet`, `In-place Fix`. `skills/office/references/learned.md` skeleton + `learned.json` schema added (per-project store). `substitute-ooxml.ts` now handles `\n → w:br`; next dossier KPI is <5 min, zero manual `query` loops, `verify-l3 PASS` first try. Capture duration deltas measure success. Learning respects `Single write path`: proposal is a draft, Enduser `accept` writes the record.

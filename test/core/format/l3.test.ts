@@ -129,4 +129,35 @@ describe("L3 Fidelity — clone + substitute", () => {
     const res = await verifyL3(outPath, tplPath)
     expect(res.pass).toBe(true)
   })
+
+  it("docx: newline in replacement becomes w:br (Verify Loop fix)", async () => {
+    const buf = readFileSync(sampleDocx)
+    const zip = await JSZip.loadAsync(buf)
+    let xml = await zip.file("word/document.xml")!.async("string")
+    xml = xml.replace("Hello DOCX", "{{content}}")
+    zip.file("word/document.xml", xml)
+    const templateBuf = (await zip.generateAsync({ type: "nodebuffer" })) as Buffer
+    const { buffer: out } = await substituteOoxml(templateBuf, { content: "line1\nline2\nline3" })
+    const outZip = await JSZip.loadAsync(out)
+    const outXml = await outZip.file("word/document.xml")!.async("string")
+    expect(outXml).not.toContain("line1\nline2")
+    expect(outXml).toContain("<w:br/>")
+    expect(outXml).toContain("line1")
+    expect(outXml).toContain("line3")
+    // ponytail: w:br ceiling — for bullet/numbered lists, split w:p with same pPr/numPr if throughput matters
+  })
+
+  it("docx: CRLF normalized to LF before w:br", async () => {
+    const buf = readFileSync(sampleDocx)
+    const zip = await JSZip.loadAsync(buf)
+    let xml = await zip.file("word/document.xml")!.async("string")
+    xml = xml.replace("Hello DOCX", "{{content}}")
+    zip.file("word/document.xml", xml)
+    const templateBuf = (await zip.generateAsync({ type: "nodebuffer" })) as Buffer
+    const { buffer: out } = await substituteOoxml(templateBuf, { content: "a\r\nb" })
+    const outZip = await JSZip.loadAsync(out)
+    const outXml = await outZip.file("word/document.xml")!.async("string")
+    expect(outXml).toContain("<w:br/>")
+    expect(outXml).not.toContain("\r")
+  })
 })
