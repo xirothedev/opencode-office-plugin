@@ -1,31 +1,56 @@
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs"
 import { classifyPdfAsync } from "@firecrawl/pdf-inspector"
+import { toMarkdown, type ConvertOptions } from "@firecrawl/anydoc"
 import { readFileSync, writeFileSync, unlinkSync } from "fs"
 import { exec } from "child_process"
 import { promisify } from "util"
-import { getPdfEngine } from "@/core/options"
+import { getFirecrawlApiKey, getFirecrawlApiUrl, getPdfEngine } from "@/core/options"
 import { sanitizeXmlText } from "@/core/format/sanitize"
 
 const execAsync = promisify(exec)
 
-export async function extractTextFromPDF(absolutePath: string): Promise<string> {
+export async function extractTextFromPDF(
+  absolutePath: string,
+  opts?: ConvertOptions,
+): Promise<string> {
   const buffer = readFileSync(absolutePath)
-  const data = new Uint8Array(buffer)
+  // ponytail: anydoc is primary for PDF — knows needsOcr/hosted, pdfjs is fallback for text PDFs only
+  const apiKey = opts?.apiKey ?? getFirecrawlApiKey()
+  const apiUrl = opts?.apiUrl ?? getFirecrawlApiUrl()
+  const anydocOpts: ConvertOptions | undefined =
+    opts || apiKey || apiUrl
+      ? { ...(opts ?? {}), ...(apiKey ? { apiKey } : {}), ...(apiUrl ? { apiUrl } : {}) }
+      : undefined
+  try {
+    return (await toMarkdown(absolutePath, anydocOpts as ConvertOptions)).trim()
+  } catch (error: unknown) {
+    const code = (error as { code?: string })?.code
+    if (code === "hosted") throw error
+    // ponytail: anydoc's pdf heuristic false-positives on tiny text PDFs — try pdfjs before surfacing needsOcr
+    if (code === "needsOcr") {
+      const fallback = await extractViaPdfjs(buffer)
+      if (fallback.trim().length > 0) return fallback
+      // blank PDFs (no image, no text) are not scanned — return empty instead of throwing
+      const hasImage = buffer.includes(Buffer.from("/Image"))
+      if (!hasImage) return fallback
+      throw error
+    }
+    // fallback to pdfjs for text-based PDFs when anydoc unsupported/malformed
+    return extractViaPdfjs(buffer)
+  }
+}
 
-  // Classify PDF (metadata only, for future OCR routing)
+async function extractViaPdfjs(buffer: Buffer): Promise<string> {
   await classifyPdfAsync(buffer).catch(() => null)
-
-  // Extract text using pdfjs-dist (reliable for text-based PDFs)
+  const data = new Uint8Array(buffer)
   const pdf = await getDocument({ data }).promise
   let fullText = ""
-
   for (let i = 1; i <= pdf.numPages; i++) {
     const page = await pdf.getPage(i)
     const content = await page.getTextContent()
     const pageText = content.items.map((item: any) => item.str).join(" ")
     fullText += pageText + "\n\n"
   }
-
   return fullText.trim()
 }
 

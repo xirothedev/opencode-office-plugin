@@ -63,7 +63,14 @@ const watermarkArgs = S.Struct({
 })
 const annotateArgs = S.Struct({ action: S.Literal("annotate"), filePath: S.String, annotations: S.String })
 const exportArgs = S.Struct({ action: S.Literal("export"), filePath: S.String, targetPath: S.String })
-const readArgs = S.Struct({ action: S.Literal("read"), filePath: S.String, live: S.optional(S.Boolean) })
+const readArgs = S.Struct({
+  action: S.Literal("read"),
+  filePath: S.String,
+  live: S.optional(S.Boolean),
+  ocr: S.optional(S.Union([S.Boolean, S.Literal("hosted"), S.Literal("reject")])),
+  apiKey: S.optional(S.String),
+  apiUrl: S.optional(S.String),
+})
 const commentArgs = S.Struct({
   action: S.Literal("comment"),
   filePath: S.String,
@@ -745,6 +752,10 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
   if (input.action === "read") {
     const filePathHash = getFilePathHash(input.filePath)
     const ext = extname(input.filePath)
+    const readOpts =
+      input.ocr !== undefined || input.apiKey !== undefined || input.apiUrl !== undefined
+        ? { ocr: input.ocr as never, apiKey: input.apiKey, apiUrl: input.apiUrl }
+        : undefined
 
     // Return draft if exists, else real file (live flag prefers Word app when on same machine)
     if (draftExists(filePathHash, sessionID)) {
@@ -752,12 +763,32 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
       // ponytail: zip draft (comment/track) holds real OOXML — extract text, don't dump PK
       const buf = readFileSync(draftPath)
       const isZip = buf.length >= 2 && buf[0] === 0x50 && buf[1] === 0x4b
-      if (isZip) return await readRealFileAsMarkdown(draftPath)
+      if (isZip) {
+        try {
+          return await readRealFileAsMarkdown(draftPath, readOpts)
+        } catch (error) {
+          const code = (error as { code?: string })?.code
+          if (code === "needsOcr") {
+            const pages = (error as { pages?: number[] })?.pages ?? []
+            const pageCount = (error as { pageCount?: number })?.pageCount ?? 0
+            fail(
+              JSON.stringify({
+                code: "needsOcr",
+                pages,
+                pageCount,
+                hint: "retry with ocr: \"hosted\" (or ocr: true) — sends document to Firecrawl Parse for OCR",
+              }),
+            )
+          }
+          if (code === "hosted") fail(`hosted OCR failed: ${(error as Error).message}`)
+          throw error
+        }
+      }
       return buf.toString("utf-8")
     }
     if (input.live === true) {
       try {
-        return await readLiveOrFileAsMarkdown(input.filePath, true)
+        return await readLiveOrFileAsMarkdown(input.filePath, true, readOpts)
       } catch {
         // ponytail: live best-effort failed, fall through to file check
       }
@@ -765,7 +796,25 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     if (!existsSync(input.filePath)) {
       fail(`file not found: ${input.filePath}`)
     }
-    return await readRealFileAsMarkdown(input.filePath)
+    try {
+      return await readRealFileAsMarkdown(input.filePath, readOpts)
+    } catch (error) {
+      const code = (error as { code?: string })?.code
+      if (code === "needsOcr") {
+        const pages = (error as { pages?: number[] })?.pages ?? []
+        const pageCount = (error as { pageCount?: number })?.pageCount ?? 0
+        fail(
+          JSON.stringify({
+            code: "needsOcr",
+            pages,
+            pageCount,
+            hint: "retry with ocr: \"hosted\" (or ocr: true) — sends document to Firecrawl Parse for OCR",
+          }),
+        )
+      }
+      if (code === "hosted") fail(`hosted OCR failed: ${(error as Error).message}`)
+      throw error
+    }
   }
   if (input.action === "comment") {
     const ext = extname(input.filePath)
