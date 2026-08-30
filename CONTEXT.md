@@ -72,6 +72,22 @@ _Avoid_: OCR, cloud OCR, parse
 The generic concept of extracting text from images. Use **Hosted OCR** for the networked anydoc path.
 _Avoid_: Text recognition
 
+**Format**:
+Everything in a document except text content — theme, styles.xml, direct formatting (w:rPr/w:pPr/a:rPr), numbering, header/footer, table grid, slide master, merged cells. Preserved by clone.
+_Avoid_: Style, styling
+
+**Reference**:
+A real Office file that already carries the full Format, used to clone the ZIP verbatim and then substitute text. Distinct from a markdown example.
+_Avoid_: Example, sample
+
+**Template**:
+A Reference that already contains `{{placeholder}}` tokens (e.g. `{{ten_goi_thau}}`) inside its OOXML text nodes. Clone + substitute replaces tokens while keeping all runs.
+_Avoid_: Example file, mẫu
+
+**L3 Fidelity**:
+Byte-identical OOXML except text nodes — unzip two files, every XML identical except `w:t`/`a:t`/`v`/`t` values. The target for Procurement Dossier and any task that needs 100% format.
+_Avoid_: Pixel perfect, exact copy
+
 ### Task & Skill Creation
 
 **Enduser**:

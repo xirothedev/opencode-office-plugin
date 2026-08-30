@@ -9,4 +9,5 @@ Copy this, answer in one line per row.
 | 3 | Output — real file path + format (e.g. `0. LIST DANH MỤC...docx`) |  |
 | 4 | Branches — distinct cases (missing doc, empty row, different template) |  |
 | 5 | Leading word — word that triggers this skill in prompts |  |
-| 6 | Prove — how to run Tracer Bullet in Isolated Runtime |  |
+| 6 | Reference/Template — if L3 needed, real file path + placeholder map, else L1 markdown |  |
+| 7 | Prove — how to run Tracer Bullet in Isolated Runtime |  |
