@@ -56,3 +56,57 @@ _Avoid_: Version, backup
 The operation that promotes a Draft to a Snapshot and overwrites the source file.
 _Avoid_: Save, commit, apply
 
+**Scanned PDF**:
+A PDF where one or more pages are image-only and contain no extractable text, requiring OCR to produce Markdown.
+_Avoid_: Scanned document, image PDF
+
+**needsOcr**:
+The `ConvertErrorCode` thrown by anydoc when a PDF contains Scanned PDF pages. Carries `pages` (1-indexed) and `pageCount`.
+_Avoid_: OCR needed, scan error
+
+**Hosted OCR**:
+The `ocr: 'hosted'` path where anydoc sends the whole document to Firecrawl Parse (`/v2/parse`) for OCR. Networked, keyless or via `FIRECRAWL_API_KEY` / `FIRECRAWL_API_URL`; timeout 300s. Distinct from local extraction.
+_Avoid_: OCR, cloud OCR, parse
+
+**OCR**:
+The generic concept of extracting text from images. Use **Hosted OCR** for the networked anydoc path.
+_Avoid_: Text recognition
+
+**Format**:
+Everything in a document except text content — theme, styles.xml, direct formatting (w:rPr/w:pPr/a:rPr), numbering, header/footer, table grid, slide master, merged cells. Preserved by clone.
+_Avoid_: Style, styling
+
+**Reference**:
+A real Office file that already carries the full Format, used to clone the ZIP verbatim and then substitute text. Distinct from a markdown example.
+_Avoid_: Example, sample
+
+**Template**:
+A Reference that already contains `{{placeholder}}` tokens (e.g. `{{ten_goi_thau}}`) inside its OOXML text nodes. Clone + substitute replaces tokens while keeping all runs.
+_Avoid_: Example file, mẫu
+
+**L3 Fidelity**:
+Byte-identical OOXML except text nodes — unzip two files, every XML identical except `w:t`/`a:t`/`v`/`t` values. The target for Procurement Dossier and any task that needs 100% format.
+_Avoid_: Pixel perfect, exact copy
+
+### Task & Skill Creation
+
+**Enduser**:
+The developer who installs `@xirothedev/openoffice-plugin-opencode` and creates Task Skills for repetitive work.
+_Avoid_: User, client, clerk
+
+**Task Skill**:
+An opencode skill under `skills/` that automates one daily task. Owns its own `SKILL.md` and disclosed references.
+_Avoid_: Workflow, plugin, script
+
+**Skill Creator Workflow**:
+The two-phase procedure `grill → write` that builds a new Task Skill from a daily task.
+_Avoid_: Generator, scaffolder
+
+**Dossier Index**:
+The `LIST DANH MỤC` document that indexes a procurement dossier. The canonical 22-row table covering proposal through contract and acceptance.
+_Avoid_: Checklist, manifest
+
+**Procurement Dossier**:
+The set of 22 documents for one HBV/HCV procurement, ordered by the Dossier Index. Each STT maps to one or more files in the dossier folder.
+_Avoid_: Hồ sơ, package
+

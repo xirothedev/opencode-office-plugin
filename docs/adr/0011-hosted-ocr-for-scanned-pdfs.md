@@ -1,0 +1,7 @@
+# Hosted OCR for Scanned PDFs via anydoc 0.2.4
+
+anydoc 0.2.4 introduces `ocr: 'hosted'` — when a PDF has image-only pages it rejects with `needsOcr` unless the caller opts in to send the whole document to Firecrawl Parse (`/v2/parse`) for OCR (keyless, or via `FIRECRAWL_API_KEY`/`FIRECRAWL_API_URL`, 300s timeout). We bump `@firecrawl/anydoc` to `^0.2.4`, route PDF reads through `toMarkdown` so `needsOcr`/`hosted` surface, and expose an explicit `ocr` opt-in on `officecli read` (`ocr`, `apiKey`, `apiUrl`) with fallback chain `call-opts > PluginOptions > env`. Scanned PDFs without `ocr` now fail with `needsOcr` + pages/hint instead of empty markdown; with `ocr:'hosted'` the document is OCR'd remotely and returned as markdown.
+
+**Considered options**: auto-retry with hosted when a key is present (rejected — silently ships bytes off-machine without consent), keeping `pdfjs-dist` as PDF primary and only falling back to anydoc (rejected — anydoc is the only path that knows `needsOcr` and can do hosted OCR; pdfjs stays as fallback for text-based edge cases), local OCR via tesseract/sharp (rejected — not provided by anydoc, heavy binary, out of scope for v1).
+
+**Consequences**: PDF is now unified under anydoc; networked OCR requires explicit consent per read; new `ConvertErrorCode`s `'needsOcr'` and `'hosted'` are surfaced as typed `Tool.Error`; `CONTEXT.md` canonicalizes **Scanned PDF**, **needsOcr**, **Hosted OCR**, **OCR**.

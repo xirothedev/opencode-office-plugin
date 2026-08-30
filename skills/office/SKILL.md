@@ -18,11 +18,18 @@ For office/PDF/images, `officecli` is the ONLY path: `read` returns markdown, `c
 
 Every write runs through a **draft**: nothing reaches the real file until `accept`. The lock is claimed lazily on the first mutating action and released on accept/undo.
 
+**L1 path (markdown, 80% tasks):**
 1. `create filePath + content` for a new file, or `edit filePath + content` to open an existing file's draft
 2. Re-`edit`, `comment`, `approve`, `metadata`, `watermark` freely while iterating — all mutate the same draft
 3. `accept` flushes the draft to disk, records a version snapshot, releases the lock
 
-Done means: every write path ended in `accept` or `undo`. A dropped draft leaves the file locked and the change invisible.
+**L3 path (100% Format, clone + substitute — for Procurement Dossier or any task needing byte-identical Format):**
+1. `clone filePath(source Reference) + targetPath(new file)` — copies ZIP verbatim, draft is real OOXML (PK), Format identical
+2. `substitute filePath(target) + data(JSON map {{key}}→value)` — run-preserving replace in `w:t`/`a:t`/`t` (keeps `w:rPr`/`w:pPr`, theme, styles)
+3. `accept` — copies draft ZIP verbatim to real file
+4. `verify-l3 filePath(target) + referencePath(Reference)` — optional gate, asserts only text nodes differ
+
+Done means: every write path ended in `accept` or `undo`. A dropped draft leaves the file locked and the change invisible. Use L3 when the Reference already carries the required Format; use L1 when authoring from scratch via markdown.
 
 Universal actions (all via `officecli` — main for office/PDF):
 
@@ -51,7 +58,9 @@ Advanced edit on existing file: `officecli read` to inspect → `officecli edit`
 
 | Task type | Reference |
 |---|---|
-| New document, template batch generation, validation gates, format conversion | [authoring.md](references/authoring.md) + format skill (`docx`/`xlsx`/`pptx`/`pdf`) |
+| New document (L1, markdown→office) | [authoring.md](references/authoring.md) + format skill (`docx`/`xlsx`/`pptx`/`pdf`) |
+| New document (L3, 100% Format) — clone Reference + substitute | `officecli clone → substitute → verify-l3` + `references/template.docx` with `{{placeholder}}` |
+| Template batch generation, validation gates, format conversion | [authoring.md](references/authoring.md) + format skill (`docx`/`xlsx`/`pptx`/`pdf`) |
 | Editing/reviewing existing documents, suggestions, track changes, version recovery | [reviewing.md](references/reviewing.md) + `docx:editing` / `pptx:editing` sections |
 | Fillable PDF forms | [pdf/forms.md](../pdf/forms.md) + `scripts/check_fillable_fields.py` |
 | XLSX recalc / financial model | [xlsx SKILL](../xlsx/SKILL.md) `recalc.py` section |

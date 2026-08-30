@@ -3,8 +3,9 @@ import { Tool } from "@opencode-ai/schema/tool"
 import { createDraft, acceptDraft, undoDraft, getHistory, getDraftPath, draftExists, getSnapshot, getSnapshotSidecar, listActiveDrafts, getDraftSessions } from "@/core/draft/manager"
 import { acquireLock, getLock, releaseLock, isLockStale, overrideLock } from "@/core/draft/lock"
 import { getFilePathHash, getDraftsDir } from "@/core/storage/paths"
-import { writeFileSync, readFileSync, existsSync, readdirSync, statSync } from "fs"
-import { extname, resolve, join, basename } from "path"
+import { registerDraft } from "@/core/storage/registry"
+import { writeFileSync, readFileSync, existsSync, readdirSync, statSync, copyFileSync, mkdirSync } from "fs"
+import { extname, resolve, join, basename, dirname } from "path"
 import { detectFormat } from "@/core/format/detect"
 import { writeComment, readComments, applyCommentSuggestion, updateComment, deleteComment, setCommentStatus, type Comment } from "@/core/format/ooxml/comments"
 import { writeTrackChange, readTrackChanges, type TrackChange } from "@/core/format/ooxml/trackchanges"
@@ -12,6 +13,7 @@ import { writeComment as writeXlsxComment, readComments as readXlsxComments, app
 import { writeComment as writePptxComment, readComments as readPptxComments, applySlideSuggestion, updateComment as updatePptxComment, deleteComment as deletePptxComment, setCommentStatus as setPptxCommentStatus, type PptxComment } from "@/core/format/ooxml/pptxcomments"
 import { diffTexts } from "@/core/draft/diff"
 import { substituteTemplate } from "@/core/template/substitute"
+import { substituteOoxml } from "@/core/template/substitute-ooxml"
 import { readLiveOrFileAsMarkdown, readRealFileAsMarkdown } from "@/core/format/read"
 import { renderMarkdownFileToHtml } from "@/core/format/render"
 import { writeDerivedFile, EXPORT_EXTENSIONS } from "@/core/format/export"
@@ -63,7 +65,14 @@ const watermarkArgs = S.Struct({
 })
 const annotateArgs = S.Struct({ action: S.Literal("annotate"), filePath: S.String, annotations: S.String })
 const exportArgs = S.Struct({ action: S.Literal("export"), filePath: S.String, targetPath: S.String })
-const readArgs = S.Struct({ action: S.Literal("read"), filePath: S.String, live: S.optional(S.Boolean) })
+const readArgs = S.Struct({
+  action: S.Literal("read"),
+  filePath: S.String,
+  live: S.optional(S.Boolean),
+  ocr: S.optional(S.Union([S.Boolean, S.Literal("hosted"), S.Literal("reject")])),
+  apiKey: S.optional(S.String),
+  apiUrl: S.optional(S.String),
+})
 const commentArgs = S.Struct({
   action: S.Literal("comment"),
   filePath: S.String,
@@ -103,6 +112,9 @@ const trackChangeArgs = S.Struct({
 })
 const listCommentsArgs = S.Struct({ action: S.Literal("list-comments"), filePath: S.String })
 const previewArgs = S.Struct({ action: S.Literal("preview"), filePath: S.String })
+const cloneArgs = S.Struct({ action: S.Literal("clone"), filePath: S.String, targetPath: S.String })
+const substituteArgs = S.Struct({ action: S.Literal("substitute"), filePath: S.String, data: S.String })
+const verifyL3Args = S.Struct({ action: S.Literal("verify-l3"), filePath: S.String, referencePath: S.String })
 const validateArgs = S.Struct({ action: S.Literal("validate"), filePath: S.String, rules: S.String })
 const reviewArgs = S.Struct({ action: S.Literal("review"), filePath: S.String })
 
@@ -134,6 +146,9 @@ const officecliInput = S.Union([
   previewArgs,
   validateArgs,
   reviewArgs,
+  cloneArgs,
+  substituteArgs,
+  verifyL3Args,
 ])
 type OfficeCliInput = Schema.Schema.Type<typeof officecliInput>
 
@@ -142,7 +157,7 @@ const officecliOutput = S.String
 export const officecliTool: Tool.Info<typeof officecliInput, typeof officecliOutput> = {
   name: "officecli",
   description:
-    "MAIN method for all Office and PDF files (.docx/.doc/.dotx/.xlsx/.xls/.xlsm/.pptx/.ppt/.pdf and images) — handle every read, create, edit, accept, undo, history, revert, comment, track-change, metadata, watermark, export through this tool. The native read/edit/write tools are blocked for these extensions and will error with 'use officecli'. Draft lifecycle: create/edit → accept (writes real file, snapshots version). Preview renders draft to HTML, validate checks draft against rules, lock-status/force-release manage stale locks (default 24h). Comments for DOCX/XLSX/PPTX, track changes for DOCX, suggestions via comment+suggestedText+approve (PPTX approve accepts optional targetText to pick the box). Comment lifecycle: open/resolved/denied via edit-comment/delete-comment/resolve-comment/deny-comment; list-comments/review surface status.",
+    "MAIN method for all Office and PDF files (.docx/.doc/.dotx/.xlsx/.xls/.xlsm/.pptx/.ppt/.pdf and images) — handle every read, create, edit, accept, undo, history, revert, comment, track-change, metadata, watermark, export through this tool. The native read/edit/write tools are blocked for these extensions and will error with 'use officecli'. Draft lifecycle: create/edit → accept (writes real file, snapshots version). Preview renders draft to HTML, validate checks draft against rules, lock-status/force-release manage stale locks (default 24h). Comments for DOCX/XLSX/PPTX, track changes for DOCX, suggestions via comment+suggestedText+approve (PPTX approve accepts optional targetText to pick the box). Comment lifecycle: open/resolved/denied via edit-comment/delete-comment/resolve-comment/deny-comment; list-comments/review surface status. L3 Fidelity: clone (copy Reference ZIP verbatim for 100% Format), substitute (run-preserving {{placeholder}} replace on Draft ZIP), verify-l3 (OOXML diff except text nodes).",
   input: officecliInput,
   output: officecliOutput,
   options: { codemode: false },
@@ -745,6 +760,10 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
   if (input.action === "read") {
     const filePathHash = getFilePathHash(input.filePath)
     const ext = extname(input.filePath)
+    const readOpts =
+      input.ocr !== undefined || input.apiKey !== undefined || input.apiUrl !== undefined
+        ? { ocr: input.ocr as never, apiKey: input.apiKey, apiUrl: input.apiUrl }
+        : undefined
 
     // Return draft if exists, else real file (live flag prefers Word app when on same machine)
     if (draftExists(filePathHash, sessionID)) {
@@ -752,12 +771,32 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
       // ponytail: zip draft (comment/track) holds real OOXML — extract text, don't dump PK
       const buf = readFileSync(draftPath)
       const isZip = buf.length >= 2 && buf[0] === 0x50 && buf[1] === 0x4b
-      if (isZip) return await readRealFileAsMarkdown(draftPath)
+      if (isZip) {
+        try {
+          return await readRealFileAsMarkdown(draftPath, readOpts)
+        } catch (error) {
+          const code = (error as { code?: string })?.code
+          if (code === "needsOcr") {
+            const pages = (error as { pages?: number[] })?.pages ?? []
+            const pageCount = (error as { pageCount?: number })?.pageCount ?? 0
+            fail(
+              JSON.stringify({
+                code: "needsOcr",
+                pages,
+                pageCount,
+                hint: "retry with ocr: \"hosted\" (or ocr: true) — sends document to Firecrawl Parse for OCR",
+              }),
+            )
+          }
+          if (code === "hosted") fail(`hosted OCR failed: ${(error as Error).message}`)
+          throw error
+        }
+      }
       return buf.toString("utf-8")
     }
     if (input.live === true) {
       try {
-        return await readLiveOrFileAsMarkdown(input.filePath, true)
+        return await readLiveOrFileAsMarkdown(input.filePath, true, readOpts)
       } catch {
         // ponytail: live best-effort failed, fall through to file check
       }
@@ -765,7 +804,25 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     if (!existsSync(input.filePath)) {
       fail(`file not found: ${input.filePath}`)
     }
-    return await readRealFileAsMarkdown(input.filePath)
+    try {
+      return await readRealFileAsMarkdown(input.filePath, readOpts)
+    } catch (error) {
+      const code = (error as { code?: string })?.code
+      if (code === "needsOcr") {
+        const pages = (error as { pages?: number[] })?.pages ?? []
+        const pageCount = (error as { pageCount?: number })?.pageCount ?? 0
+        fail(
+          JSON.stringify({
+            code: "needsOcr",
+            pages,
+            pageCount,
+            hint: "retry with ocr: \"hosted\" (or ocr: true) — sends document to Firecrawl Parse for OCR",
+          }),
+        )
+      }
+      if (code === "hosted") fail(`hosted OCR failed: ${(error as Error).message}`)
+      throw error
+    }
   }
   if (input.action === "comment") {
     const ext = extname(input.filePath)
@@ -1075,6 +1132,74 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     const comments = await readComments(targetPath)
     const trackChanges = await readTrackChanges(targetPath)
     return `Review summary for ${input.filePath}:\n${comments.length} comments, ${trackChanges.length} track changes\n\nComments:\n${JSON.stringify(comments, null, 2)}\n\nTrack Changes:\n${JSON.stringify(trackChanges, null, 2)}`
+  }
+
+  if (input.action === "clone") {
+    const sourcePath = resolve(input.filePath)
+    const targetPath = resolve(input.targetPath)
+    if (!existsSync(sourcePath)) fail(`clone source not found: ${input.filePath}`)
+    const srcFormat = detectFormat(sourcePath)
+    if (srcFormat !== "docx" && srcFormat !== "xlsx" && srcFormat !== "pptx") {
+      fail("clone only supported for DOCX, XLSX and PPTX files")
+    }
+    if (resolve(sourcePath) === resolve(targetPath)) fail("targetPath must differ from filePath")
+    const targetHash = getFilePathHash(targetPath)
+    const lock = getLock(targetHash)
+    if (lock && lock.sessionID !== sessionID && !isLockStale(targetHash)) {
+      fail(`lock on ${input.targetPath} held by session ${lock.sessionID}`)
+    }
+    acquireLock(targetHash, sessionID, owner)
+    const ext = extname(targetPath)
+    const draftPath = getDraftPath(targetHash, sessionID, ext)
+    mkdirSync(dirname(draftPath), { recursive: true })
+    // ponytail: binary copy preserves 100% Format — draft is real ZIP, accept will copy verbatim
+    const buf = readFileSync(sourcePath)
+    const isZip = buf.length >= 2 && buf[0] === 0x50 && buf[1] === 0x4b
+    if (!isZip) fail(`clone source is not a valid OOXML file: ${input.filePath}`)
+    writeFileSync(draftPath, buf)
+    registerDraft(targetPath)
+    return `Cloned ${input.filePath} to draft for ${input.targetPath} (L3 Format preserved)`
+  }
+
+  if (input.action === "substitute") {
+    const draftError = requireDraftFor(input.filePath, sessionID)
+    if (draftError) fail(draftError)
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(input.data)
+    } catch {
+      fail("invalid data JSON")
+    }
+    if (!isDataObject(parsed)) fail("data must be a JSON object with string or number values")
+    const filePathHash = getFilePathHash(input.filePath)
+    const ext = extname(input.filePath)
+    const draftPath = getDraftPath(filePathHash, sessionID, ext)
+    const buf = readFileSync(draftPath)
+    const isZip = buf.length >= 2 && buf[0] === 0x50 && buf[1] === 0x4b
+    if (!isZip) fail("substitute only supported on OOXML drafts (clone first for L3)")
+    try {
+      const { buffer, replaced, format } = await substituteOoxml(buf, parsed)
+      writeFileSync(draftPath, buffer)
+      return `Substituted ${replaced} placeholders in ${input.filePath} (${format}, run-preserving)`
+    } catch (error) {
+      fail((error as Error).message)
+    }
+  }
+
+  if (input.action === "verify-l3") {
+    const fileA = resolve(input.filePath)
+    const fileB = resolve(input.referencePath)
+    if (!existsSync(fileA)) fail(`file not found: ${input.filePath}`)
+    if (!existsSync(fileB)) fail(`reference not found: ${input.referencePath}`)
+    const { verifyL3 } = await import("@/core/format/verify-l3")
+    try {
+      const result = await verifyL3(fileA, fileB)
+      return result.pass
+        ? `L3 PASS: ${input.filePath} vs ${input.referencePath} — only text nodes differ (${result.textDiffs} diffs, ${result.checkedFiles} files checked)`
+        : `L3 FAIL: ${input.filePath} vs ${input.referencePath} — Format differs\n${result.details}`
+    } catch (error) {
+      fail((error as Error).message)
+    }
   }
 
   fail(`action ${input.action} not implemented`)
