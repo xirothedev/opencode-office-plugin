@@ -3,8 +3,9 @@
 // draft-file IO. Callers state intent + session identity; the hash/lock
 // preamble lives exactly once, here.
 import { dirname, extname, join, resolve } from "path"
-import { writeFileSync, existsSync, readdirSync, statSync, mkdirSync } from "fs"
+import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSync } from "fs"
 import { getDraftsDir, getFilePathHash } from "@/core/storage/paths"
+import { readRealFileAsMarkdown } from "@/core/format/read"
 import { registerDraft } from "@/core/storage/registry"
 import * as lock from "./lock"
 import {
@@ -86,6 +87,14 @@ export function create(filePath: string, sessionID: string, owner: string, conte
 
 export function write(filePath: string, sessionID: string, content: string | Buffer): void {
   writeFileSync(draftPath(filePath, sessionID), content)
+}
+
+// ponytail: comment/track drafts hold real OOXML — sniff PK, extract text, never dump zip bytes
+export async function draftMarkdown(filePath: string, sessionID: string): Promise<string> {
+  const path = draftPath(filePath, sessionID)
+  const buf = readFileSync(path)
+  const isZip = buf.length >= 2 && buf[0] === 0x50 && buf[1] === 0x4b
+  return isZip ? readRealFileAsMarkdown(path) : buf.toString("utf-8")
 }
 
 export function cloneIntoDraft(filePath: string, sessionID: string, owner: string, buffer: Buffer): void {

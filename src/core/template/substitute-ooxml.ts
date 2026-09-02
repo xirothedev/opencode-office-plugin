@@ -293,4 +293,3 @@ export async function substituteOoxml(
 }
 
 // For testing: expose helpers
-export const _test = { replaceInXml, escapeXml, unescapeXml, targetFilesForFormat, detectFormatFromZip, expandDocxNewlines }

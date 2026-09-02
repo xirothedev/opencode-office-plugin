@@ -1,7 +1,8 @@
 import { Effect, Schema } from "effect"
 import { Tool } from "@opencode-ai/schema/tool"
 import * as Draft from "@/core/draft"
-import type { WatermarkConfig, WatermarkPosition, AnnotationOp } from "@/core/draft"
+import type { WatermarkConfig, AnnotationOp } from "@/core/draft"
+import { buildWatermarkConfig } from "@/core/format/watermark"
 import { writeFileSync, readFileSync, existsSync } from "fs"
 import { extname, resolve, join, basename } from "path"
 import { detectFormat } from "@/core/format/detect"
@@ -366,10 +367,7 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     if (detectFormat(input.filePath) === "image") {
       fail("diff not supported for images")
     }
-    const draftPath = Draft.draftPath(input.filePath, sessionID)
-    const buf = readFileSync(draftPath)
-    const isZip = buf.length >= 2 && buf[0] === 0x50 && buf[1] === 0x4b
-    const draftContent = isZip ? await readRealFileAsMarkdown(draftPath) : buf.toString("utf-8")
+    const draftContent = await Draft.draftMarkdown(input.filePath, sessionID)
     const realContent = await readRealFileAsMarkdown(input.filePath)
     return diffTexts(realContent, draftContent)
   }
@@ -519,21 +517,12 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
       Draft.writeSidecarFor(input.filePath, sessionID, sidecar)
       return `Watermark removed for ${input.filePath}`
     }
-    const defaultPosition: WatermarkPosition = ext === ".docx" ? "top-center" : "diagonal-center"
-    const position = (input.position as WatermarkPosition | undefined) ?? defaultPosition
-    const validPositions: WatermarkPosition[] = ["diagonal-center", "top-center", "bottom-center"]
-    if (!validPositions.includes(position)) {
-      fail(`invalid position "${position}" (supported: diagonal-center, top-center, bottom-center)`)
+    let config: WatermarkConfig
+    try {
+      config = buildWatermarkConfig(ext, { text: input.text, position: input.position, size: input.size, opacity: input.opacity })
+    } catch (error) {
+      fail((error as Error).message)
     }
-    if (ext === ".docx" && position === "diagonal-center") {
-      fail("diagonal-center watermark not supported for DOCX (supported: top-center, bottom-center)")
-    }
-    if (ext === ".docx" && input.opacity !== undefined) {
-      fail("opacity not supported for DOCX watermarks (supported: PDF only)")
-    }
-    const config: WatermarkConfig = { text: input.text, position }
-    if (input.size !== undefined) config.size = input.size
-    if (input.opacity !== undefined) config.opacity = input.opacity
     sidecar.watermark = config
     Draft.writeSidecarFor(input.filePath, sessionID, sidecar)
     return `Watermark set for ${input.filePath}: "${input.text}"`
@@ -616,15 +605,9 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     if (resolve(input.targetPath) === resolve(input.filePath)) {
       fail("targetPath must differ from filePath")
     }
-    let markdown: string
-    if (hasDraft) {
-      const draftPath = Draft.draftPath(input.filePath, sessionID)
-      const buf = readFileSync(draftPath)
-      const isZip = buf.length >= 2 && buf[0] === 0x50 && buf[1] === 0x4b
-      markdown = isZip ? await readRealFileAsMarkdown(draftPath) : buf.toString("utf-8")
-    } else {
-      markdown = await readRealFileAsMarkdown(input.filePath)
-    }
+    const markdown = hasDraft
+      ? await Draft.draftMarkdown(input.filePath, sessionID)
+      : await readRealFileAsMarkdown(input.filePath)
     try {
       await writeDerivedFile(markdown, input.targetPath)
     } catch (error) {
@@ -814,20 +797,12 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
       fail("no active draft to preview")
     }
     const filePathHash = Draft.hashOf(input.filePath)
-    const draftPath = Draft.draftPath(input.filePath, sessionID)
     const outputPath = join(tmpdir(), "openoffice-preview", `${filePathHash}.html`)
-    // ponytail: zip draft (comment) — extract markdown first, can't render zip directly
-    const bufP = readFileSync(draftPath)
-    const isZipP = bufP.length >= 2 && bufP[0] === 0x50 && bufP[1] === 0x4b
     try {
-      if (isZipP) {
-        const md = await readRealFileAsMarkdown(draftPath)
-        const tmpMd = join(tmpdir(), `openoffice-preview-${filePathHash}.md`)
-        writeFileSync(tmpMd, md)
-        await renderMarkdownFileToHtml(tmpMd, outputPath)
-      } else {
-        await renderMarkdownFileToHtml(draftPath, outputPath)
-      }
+      const md = await Draft.draftMarkdown(input.filePath, sessionID)
+      const tmpMd = join(tmpdir(), `openoffice-preview-${filePathHash}.md`)
+      writeFileSync(tmpMd, md)
+      await renderMarkdownFileToHtml(tmpMd, outputPath)
     } catch (error) {
       fail((error as Error).message)
     }
@@ -858,10 +833,7 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     if (!Draft.exists(input.filePath, sessionID)) {
       fail("no active draft to validate")
     }
-    const draftPath = Draft.draftPath(input.filePath, sessionID)
-    const bufV = readFileSync(draftPath)
-    const isZipV = bufV.length >= 2 && bufV[0] === 0x50 && bufV[1] === 0x4b
-    const content = isZipV ? await readRealFileAsMarkdown(draftPath) : bufV.toString("utf-8")
+    const content = await Draft.draftMarkdown(input.filePath, sessionID)
     const results: Array<{ rule: (typeof rules)[number]; pass: boolean }> = []
     for (const rule of rules) {
       let pass: boolean
