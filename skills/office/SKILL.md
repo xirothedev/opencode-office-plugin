@@ -34,7 +34,7 @@ Every write runs through a **draft**: nothing reaches the real file until `accep
 > Bạn cần làm gì: trả lời "duyệt 1 và 3" để áp dụng, hoặc "từ chối 1" và tôi sẽ giữ nguyên.
 > ```
 >
-> Shape: 1 line result → numbered changes (what + where + state: applied / waiting for you) → one clear next action phrased so a one-word reply works. Pending suggestions must be numbered the same way as comment ids so "duyệt 2" is unambiguous.
+> Shape: 1 line result → numbered changes (what + where + state: applied / waiting for you) → one clear next action phrased so a one-word reply works. Pending suggestions must be numbered the same way as comment ids so "duyệt 2" is unambiguous. The full standard — 8 rules, the four message shapes (report/question/failure/reminder), Vietnamese number & register conventions, and the pre-send self-check — is [references/enduser-output.md](references/enduser-output.md); apply it to every user-facing message.
 
 > **Suggest-first rule:** when the target is a document you did **not** author this session (`create` reports *pre-existing document*), seed the draft with `edit` from the markdown you just `read`, then make every content change as `comment` + `suggestedText` on the exact range/cell/box (`approve` applies a suggestion into the draft). Direct content edits to such a draft are allowed only when the user chose that mode — if it is not clear whether the task wants suggested edits or direct edit, **ask the user before writing any content change, in the exact format of the mode question in [references/reviewing.md](references/reviewing.md)** — then wait for the answer. Bulk generation from a Reference (L3 `clone` + `substitute`) is direct by design and does not need to ask.
 
@@ -77,5 +77,6 @@ Advanced edit on existing file: `officecli read` to inspect → `officecli edit`
 | New document (L3, 100% Format) — clone Reference + substitute | `officecli clone → substitute → verify-l3` + `references/template.docx` with `{{placeholder}}` |
 | Template batch generation, validation gates, format conversion | [authoring.md](references/authoring.md) + format skill (`docx`/`xlsx`/`pptx`/`pdf`) |
 | Editing/reviewing existing documents, suggestions, track changes, version recovery | [reviewing.md](references/reviewing.md) + `docx:editing` / `pptx:editing` sections |
+| Writing any message to the Enduser (reports, questions, failures) | [enduser-output.md](references/enduser-output.md) |
 | Fillable PDF forms | [pdf/forms.md](../pdf/forms.md) + `scripts/check_fillable_fields.py` |
 | XLSX recalc / financial model | [xlsx SKILL](../xlsx/SKILL.md) `recalc.py` section |
