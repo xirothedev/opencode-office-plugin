@@ -1,8 +1,7 @@
 import { Effect, Schema } from "effect"
 import { Tool } from "@opencode-ai/schema/tool"
 import * as Draft from "@/core/draft"
-import type { WatermarkConfig, AnnotationOp } from "@/core/draft"
-import { buildWatermarkConfig } from "@/core/format/watermark"
+import { buildWatermarkConfig, WATERMARK_EXTENSIONS } from "@/core/format/watermark"
 import { writeFileSync, readFileSync, existsSync } from "fs"
 import { extname, resolve, join, basename } from "path"
 import { detectFormat } from "@/core/format/detect"
@@ -10,12 +9,13 @@ import { writeTrackChange, readTrackChanges, type TrackChange } from "@/core/for
 import * as Comments from "@/core/comments"
 import { diffTexts } from "@/core/draft/diff"
 import { substituteTemplate } from "@/core/template/substitute"
-import { substituteOoxml } from "@/core/template/substitute-ooxml"
-import { readLiveOrFileAsMarkdown, readRealFileAsMarkdown } from "@/core/format/read"
+import { assertTemplate, parseGenerateEntries, parseTemplateData, readCloneSource } from "@/core/template/generate"
+import { parseRules, renderValidationReport } from "@/core/format/validate"
+import { readLiveOrFileAsMarkdown, readRealFileAsMarkdown, type ReadOptions } from "@/core/format/read"
 import { renderMarkdownFileToHtml } from "@/core/format/render"
-import { writeDerivedFile, EXPORT_EXTENSIONS } from "@/core/format/export"
-import { readMetadata, METADATA_EXTENSIONS, type FileMetadata } from "@/core/format/metadata"
-import { normalizeStampText } from "@/core/format/annotate"
+import { writeDerivedFile, assertExportPaths } from "@/core/format/export"
+import { readMetadata, METADATA_EXTENSIONS, parseMetadataProperties, type FileMetadata } from "@/core/format/metadata"
+import { parseAnnotationOps, ANNOTATE_EXTENSIONS } from "@/core/format/annotate"
 import { sanitizeMarkdown, sanitizeXmlText } from "@/core/format/sanitize"
 import { fail, tryExecute } from "@/plugin/tools/boundary"
 import { tmpdir } from "os"
@@ -373,73 +373,18 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
   }
 
   if (input.action === "generate") {
-    if (!existsSync(input.templatePath)) {
-      fail(`template not found: ${input.templatePath}`)
-    }
-    const templateFormat = detectFormat(input.templatePath)
-    if (templateFormat !== "text" && templateFormat !== "docx" && templateFormat !== "xlsx" && templateFormat !== "pptx") {
-      fail("template must be a text, docx, xlsx or pptx file")
-    }
+    assertTemplate(input.templatePath)
+    const entries = parseGenerateEntries(input)
     const template = await readRealFileAsMarkdown(input.templatePath)
-    const entries: Array<{ data: Record<string, string | number>; filePath: string }> = []
-    if (input.data && input.filePath) {
-      let parsed: unknown
-      try {
-        parsed = JSON.parse(input.data)
-      } catch {
-        fail("invalid data JSON")
-      }
-      if (!isDataObject(parsed)) {
-        fail("data must be a JSON object with string or number values")
-      }
-      entries.push({ data: parsed, filePath: input.filePath })
-    } else if (input.dataArray && input.filePaths) {
-      let dataArray: unknown
-      let filePaths: unknown
-      try {
-        dataArray = JSON.parse(input.dataArray)
-      } catch {
-        fail("invalid dataArray JSON")
-      }
-      try {
-        filePaths = JSON.parse(input.filePaths)
-      } catch {
-        fail("invalid filePaths JSON")
-      }
-      if (
-        !Array.isArray(dataArray) ||
-        !Array.isArray(filePaths) ||
-        dataArray.length !== filePaths.length
-      ) {
-        fail("dataArray and filePaths must be arrays of equal length")
-      }
-      for (let i = 0; i < dataArray.length; i++) {
-        const d = dataArray[i]
-        const p = filePaths[i]
-        if (!isDataObject(d)) {
-          fail(`dataArray entry ${i} must be a JSON object with string or number values`)
-        }
-        if (typeof p !== "string") {
-          fail(`filePaths entry ${i} must be a string`)
-        }
-        entries.push({ data: d, filePath: p })
-      }
-    } else {
-      fail("generate requires data + filePath or dataArray + filePaths")
-    }
     // Validate every entry before creating anything: a missing key or a held
     // lock must abort with no partial drafts
     const prepared: Array<{ filePath: string; content: string }> = []
     for (const entry of entries) {
       Draft.assertNoForeignLock(entry.filePath, sessionID, false)
-      try {
-        prepared.push({ filePath: entry.filePath, content: sanitizeMarkdown(substituteTemplate(template, entry.data)) })
-      } catch (error) {
-        fail((error as Error).message)
-      }
+      prepared.push({ filePath: entry.filePath, content: sanitizeMarkdown(substituteTemplate(template, entry.data)) })
     }
     for (const p of prepared) {
-      Draft.create(p.filePath, sessionID, owner, sanitizeMarkdown(p.content))
+      Draft.create(p.filePath, sessionID, owner, p.content)
     }
     return `Generated ${prepared.length} drafts from ${input.templatePath}`
   }
@@ -460,43 +405,16 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
       fail("metadata only supported for DOCX, XLSX, PPTX and PDF files")
     }
     if (input.properties !== undefined) {
-      const draftError = requireDraftFor(input.filePath, sessionID)
-      if (draftError) {
-        fail(draftError)
-      }
-      let parsed: unknown
-      try {
-        parsed = JSON.parse(input.properties)
-      } catch {
-        fail("invalid properties JSON")
-      }
-      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-        fail("properties must be a JSON object")
-      }
-      for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
-        if (key === "custom") {
-          if (typeof value !== "object" || value === null || Array.isArray(value) ||
-              !Object.values(value as Record<string, unknown>).every((v) => typeof v === "string")) {
-            fail("custom must be an object with string values")
-          }
-        } else if (typeof value !== "string") {
-          fail(`property "${key}" must be a string`)
-        }
-      }
+      requireDraftFor(input.filePath, sessionID)
       const sidecar = Draft.readSidecarFor(input.filePath, sessionID) ?? {}
-      sidecar.metadata = parsed as FileMetadata
+      sidecar.metadata = parseMetadataProperties(input.properties)
       Draft.writeSidecarFor(input.filePath, sessionID, sidecar)
       return `Metadata set for ${input.filePath}`
     }
     if (!existsSync(input.filePath)) {
       fail(`file not found: ${input.filePath}`)
     }
-    let real: FileMetadata
-    try {
-      real = await readMetadata(input.filePath)
-    } catch (error) {
-      fail((error as Error).message)
-    }
+    const real = await readMetadata(input.filePath)
     const sidecar = Draft.readSidecarFor(input.filePath, sessionID)
     const merged: FileMetadata = { ...real, ...(sidecar?.metadata) }
     return JSON.stringify(merged, null, 2)
@@ -504,86 +422,39 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
 
   if (input.action === "watermark") {
     const ext = extname(input.filePath).toLowerCase()
-    if (ext !== ".docx" && ext !== ".pdf") {
+    if (!WATERMARK_EXTENSIONS.includes(ext)) {
       fail("watermark only supported for DOCX and PDF files")
     }
-    const draftError = requireDraftFor(input.filePath, sessionID)
-    if (draftError) {
-      fail(draftError)
-    }
+    requireDraftFor(input.filePath, sessionID)
     const sidecar = Draft.readSidecarFor(input.filePath, sessionID) ?? {}
     if (input.text === "") {
       delete sidecar.watermark
       Draft.writeSidecarFor(input.filePath, sessionID, sidecar)
       return `Watermark removed for ${input.filePath}`
     }
-    let config: WatermarkConfig
-    try {
-      config = buildWatermarkConfig(ext, { text: input.text, position: input.position, size: input.size, opacity: input.opacity })
-    } catch (error) {
-      fail((error as Error).message)
-    }
-    sidecar.watermark = config
+    sidecar.watermark = buildWatermarkConfig(ext, {
+      text: input.text,
+      position: input.position,
+      size: input.size,
+      opacity: input.opacity,
+    })
     Draft.writeSidecarFor(input.filePath, sessionID, sidecar)
     return `Watermark set for ${input.filePath}: "${input.text}"`
   }
 
   if (input.action === "annotate") {
     const ext = extname(input.filePath).toLowerCase()
-    if (ext !== ".png" && ext !== ".jpg" && ext !== ".jpeg") {
+    if (!ANNOTATE_EXTENSIONS.includes(ext)) {
       fail("annotate only supported for PNG and JPG images")
     }
-    const draftError = requireDraftFor(input.filePath, sessionID)
-    if (draftError) {
-      fail(draftError)
-    }
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(input.annotations)
-    } catch {
-      fail("invalid annotations JSON")
-    }
-    if (!Array.isArray(parsed)) {
-      fail("annotations must be an array")
-    }
-    if (parsed.length === 0) {
-      const clearingSidecar = Draft.readSidecarFor(input.filePath, sessionID) ?? {}
-      delete clearingSidecar.annotations
-      Draft.writeSidecarFor(input.filePath, sessionID, clearingSidecar)
+    requireDraftFor(input.filePath, sessionID)
+    const ops = parseAnnotationOps(ext, input.annotations)
+    const sidecar = Draft.readSidecarFor(input.filePath, sessionID) ?? {}
+    if (ops === null) {
+      delete sidecar.annotations
+      Draft.writeSidecarFor(input.filePath, sessionID, sidecar)
       return `Annotations cleared for ${input.filePath}`
     }
-    const ops: AnnotationOp[] = []
-    for (let i = 0; i < parsed.length; i++) {
-      const entry = parsed[i] as { type?: unknown; text?: unknown; position?: unknown; rect?: unknown; size?: unknown }
-      if (entry.type !== "note" && entry.type !== "highlight" && entry.type !== "stamp") {
-        fail(`annotation ${i} has unknown type ${String(entry.type)}`)
-      }
-      if (entry.type === "note") {
-        if (typeof entry.text !== "string" || entry.text === "" || !isFractionPoint(entry.position)) {
-          fail(`note ${i} requires text and position {x, y} between 0 and 1`)
-        }
-        const op: AnnotationOp = { type: "note", text: entry.text, position: entry.position as AnnotationOp["position"] }
-        if (typeof entry.size === "number") op.size = entry.size
-        ops.push(op)
-      } else if (entry.type === "highlight") {
-        if (!isFractionRect(entry.rect)) {
-          fail(`highlight ${i} requires rect {x, y, width, height} between 0 and 1`)
-        }
-        ops.push({ type: "highlight", rect: entry.rect as AnnotationOp["rect"] })
-      } else {
-        if (typeof entry.text !== "string" || !isFractionPoint(entry.position)) {
-          fail(`stamp ${i} requires text and position {x, y} between 0 and 1`)
-        }
-        const stampText = normalizeStampText(entry.text)
-        if (!stampText) {
-          fail(`stamp ${i} text must be one of: DRAFT, APPROVED, CONFIDENTIAL`)
-        }
-        const op: AnnotationOp = { type: "stamp", text: stampText, position: entry.position as AnnotationOp["position"] }
-        if (typeof entry.size === "number") op.size = entry.size
-        ops.push(op)
-      }
-    }
-    const sidecar = Draft.readSidecarFor(input.filePath, sessionID) ?? {}
     sidecar.annotations = [...(sidecar.annotations ?? []), ...ops]
     Draft.writeSidecarFor(input.filePath, sessionID, sidecar)
     return `Annotations added to draft for ${input.filePath}: ${ops.length}`
@@ -594,25 +465,11 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     if (!hasDraft && !existsSync(input.filePath)) {
       fail(`file not found: ${input.filePath}`)
     }
-    const sourceExt = extname(input.filePath).toLowerCase()
-    if (!EXPORT_EXTENSIONS.includes(sourceExt)) {
-      fail(`export source format not supported: ${sourceExt} (supported: pdf, docx, xlsx, pptx)`)
-    }
-    const targetExt = extname(input.targetPath).toLowerCase()
-    if (!EXPORT_EXTENSIONS.includes(targetExt)) {
-      fail(`export target format not supported: ${targetExt} (supported: pdf, docx, xlsx, pptx)`)
-    }
-    if (resolve(input.targetPath) === resolve(input.filePath)) {
-      fail("targetPath must differ from filePath")
-    }
+    assertExportPaths(input.filePath, input.targetPath)
     const markdown = hasDraft
       ? await Draft.draftMarkdown(input.filePath, sessionID)
       : await readRealFileAsMarkdown(input.filePath)
-    try {
-      await writeDerivedFile(markdown, input.targetPath)
-    } catch (error) {
-      fail((error as Error).message)
-    }
+    await writeDerivedFile(markdown, input.targetPath)
     return `Exported ${input.filePath} to ${input.targetPath}`
   }
 
@@ -628,27 +485,7 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
       // ponytail: zip draft (comment/track) holds real OOXML — extract text, don't dump PK
       const buf = readFileSync(draftPath)
       const isZip = buf.length >= 2 && buf[0] === 0x50 && buf[1] === 0x4b
-      if (isZip) {
-        try {
-          return await readRealFileAsMarkdown(draftPath, readOpts)
-        } catch (error) {
-          const code = (error as { code?: string })?.code
-          if (code === "needsOcr") {
-            const pages = (error as { pages?: number[] })?.pages ?? []
-            const pageCount = (error as { pageCount?: number })?.pageCount ?? 0
-            fail(
-              JSON.stringify({
-                code: "needsOcr",
-                pages,
-                pageCount,
-                hint: "retry with ocr: \"hosted\" (or ocr: true) — sends document to Firecrawl Parse for OCR",
-              }),
-            )
-          }
-          if (code === "hosted") fail(`hosted OCR failed: ${(error as Error).message}`)
-          throw error
-        }
-      }
+      if (isZip) return await readWithOcrError(draftPath, readOpts)
       return buf.toString("utf-8")
     }
     if (input.live === true) {
@@ -661,25 +498,7 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     if (!existsSync(input.filePath)) {
       fail(`file not found: ${input.filePath}`)
     }
-    try {
-      return await readRealFileAsMarkdown(input.filePath, readOpts)
-    } catch (error) {
-      const code = (error as { code?: string })?.code
-      if (code === "needsOcr") {
-        const pages = (error as { pages?: number[] })?.pages ?? []
-        const pageCount = (error as { pageCount?: number })?.pageCount ?? 0
-        fail(
-          JSON.stringify({
-            code: "needsOcr",
-            pages,
-            pageCount,
-            hint: "retry with ocr: \"hosted\" (or ocr: true) — sends document to Firecrawl Parse for OCR",
-          }),
-        )
-      }
-      if (code === "hosted") fail(`hosted OCR failed: ${(error as Error).message}`)
-      throw error
-    }
+    return await readWithOcrError(input.filePath, readOpts)
   }
   if (input.action === "comment") {
     Comments.requireFormat(input.filePath, "comments")
@@ -810,50 +629,12 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
   }
 
   if (input.action === "validate") {
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(input.rules)
-    } catch {
-      fail("invalid rules JSON")
-    }
-    if (!Array.isArray(parsed)) {
-      fail("rules must be an array")
-    }
-    const rules: Array<{ type: "regex" | "required"; pattern: string }> = []
-    for (let i = 0; i < parsed.length; i++) {
-      const rule = parsed[i] as { type?: unknown; pattern?: unknown }
-      if (rule.type !== "regex" && rule.type !== "required") {
-        fail(`rule ${i} has unknown type ${String(rule.type)}`)
-      }
-      if (typeof rule.pattern !== "string") {
-        fail(`rule ${i} must have a string pattern`)
-      }
-      rules.push({ type: rule.type, pattern: rule.pattern })
-    }
+    const rules = parseRules(input.rules)
     if (!Draft.exists(input.filePath, sessionID)) {
       fail("no active draft to validate")
     }
     const content = await Draft.draftMarkdown(input.filePath, sessionID)
-    const results: Array<{ rule: (typeof rules)[number]; pass: boolean }> = []
-    for (const rule of rules) {
-      let pass: boolean
-      if (rule.type === "regex") {
-        try {
-          pass = new RegExp(rule.pattern).test(content)
-        } catch {
-          fail(`invalid regex pattern "${rule.pattern}"`)
-        }
-      } else {
-        pass = content.includes(rule.pattern)
-      }
-      results.push({ rule, pass })
-    }
-    const passed = results.filter((r) => r.pass).length
-    const failed = results.length - passed
-    const lines = results.map(
-      (r) => `- ${r.pass ? "pass" : "fail"}: ${r.rule.type} "${r.rule.pattern}"`
-    )
-    return `Validation of ${input.filePath}: ${results.length} rules, ${passed} passed, ${failed} failed\n${lines.join("\n")}`
+    return renderValidationReport(input.filePath, content, rules)
   }
 
   if (input.action === "review") {
@@ -876,44 +657,19 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
   }
 
   if (input.action === "clone") {
-    const sourcePath = resolve(input.filePath)
+    const buf = readCloneSource(resolve(input.filePath), input.filePath)
     const targetPath = resolve(input.targetPath)
-    if (!existsSync(sourcePath)) fail(`clone source not found: ${input.filePath}`)
-    const srcFormat = detectFormat(sourcePath)
-    if (srcFormat !== "docx" && srcFormat !== "xlsx" && srcFormat !== "pptx") {
-      fail("clone only supported for DOCX, XLSX and PPTX files")
-    }
-    if (resolve(sourcePath) === resolve(targetPath)) fail("targetPath must differ from filePath")
+    if (targetPath === resolve(input.filePath)) fail("targetPath must differ from filePath")
     Draft.assertNoForeignLock(targetPath, sessionID, true, input.targetPath)
-    // ponytail: binary copy preserves 100% Format — draft is real ZIP, accept will copy verbatim
-    const buf = readFileSync(sourcePath)
-    const isZip = buf.length >= 2 && buf[0] === 0x50 && buf[1] === 0x4b
-    if (!isZip) fail(`clone source is not a valid OOXML file: ${input.filePath}`)
     Draft.cloneIntoDraft(targetPath, sessionID, owner, buf)
     return `Cloned ${input.filePath} to draft for ${input.targetPath} (L3 Format preserved)`
   }
 
   if (input.action === "substitute") {
-    const draftError = requireDraftFor(input.filePath, sessionID)
-    if (draftError) fail(draftError)
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(input.data)
-    } catch {
-      fail("invalid data JSON")
-    }
-    if (!isDataObject(parsed)) fail("data must be a JSON object with string or number values")
-    const draftPath = Draft.draftPath(input.filePath, sessionID)
-    const buf = readFileSync(draftPath)
-    const isZip = buf.length >= 2 && buf[0] === 0x50 && buf[1] === 0x4b
-    if (!isZip) fail("substitute only supported on OOXML drafts (clone first for L3)")
-    try {
-      const { buffer, replaced, format } = await substituteOoxml(buf, parsed)
-      writeFileSync(draftPath, buffer)
-      return `Substituted ${replaced} placeholders in ${input.filePath} (${format}, run-preserving)`
-    } catch (error) {
-      fail((error as Error).message)
-    }
+    requireDraftFor(input.filePath, sessionID)
+    const data = parseTemplateData(input.data)
+    const { replaced, format } = await Draft.substituteInDraft(input.filePath, sessionID, data)
+    return `Substituted ${replaced} placeholders in ${input.filePath} (${format}, run-preserving)`
   }
 
   if (input.action === "verify-l3") {
@@ -922,56 +678,43 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     if (!existsSync(fileA)) fail(`file not found: ${input.filePath}`)
     if (!existsSync(fileB)) fail(`reference not found: ${input.referencePath}`)
     const { verifyL3 } = await import("@/core/format/verify-l3")
-    try {
-      const result = await verifyL3(fileA, fileB)
-      return result.pass
-        ? `L3 PASS: ${input.filePath} vs ${input.referencePath} — only text nodes differ (${result.textDiffs} diffs, ${result.checkedFiles} files checked)`
-        : `L3 FAIL: ${input.filePath} vs ${input.referencePath} — Format differs\n${result.details}`
-    } catch (error) {
-      fail((error as Error).message)
-    }
+    const result = await verifyL3(fileA, fileB)
+    return result.pass
+      ? `L3 PASS: ${input.filePath} vs ${input.referencePath} — only text nodes differ (${result.textDiffs} diffs, ${result.checkedFiles} files checked)`
+      : `L3 FAIL: ${input.filePath} vs ${input.referencePath} — Format differs\n${result.details}`
   }
 
   fail(`action ${input.action} not implemented`)
 }
 
-function isDataObject(value: unknown): value is Record<string, string | number> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
-    return false
-  }
-  return Object.values(value).every((v) => typeof v === "string" || typeof v === "number")
+// The metadata/watermark/annotate/substitute preamble, in one call into Draft
+function requireDraftFor(filePath: string, sessionID: string): void {
+  Draft.requireOwned(filePath, sessionID, "no active draft")
+  Draft.requireDraftExists(filePath, sessionID)
 }
 
-function isFraction(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1
-}
-
-// ponytail: metadata/watermark/annotate/substitute predate typed errors and map the error
-// string themselves; one call into the Draft module keeps the preamble in one place
-function requireDraftFor(filePath: string, sessionID: string): string | null {
+// needsOcr/hosted are the tool's agent-facing read contract (ADR: Hosted OCR);
+// both the draft and the file branch of the read action share this mapping.
+async function readWithOcrError(path: string, opts?: ReadOptions): Promise<string> {
   try {
-    Draft.requireOwned(filePath, sessionID, "no active draft")
-    Draft.requireDraftExists(filePath, sessionID)
-    return null
+    return await readRealFileAsMarkdown(path, opts)
   } catch (error) {
-    return (error as Error).message
+    const code = (error as { code?: string })?.code
+    if (code === "needsOcr") {
+      const pages = (error as { pages?: number[] })?.pages ?? []
+      const pageCount = (error as { pageCount?: number })?.pageCount ?? 0
+      fail(
+        JSON.stringify({
+          code: "needsOcr",
+          pages,
+          pageCount,
+          hint: "retry with ocr: \"hosted\" (or ocr: true) — sends document to Firecrawl Parse for OCR",
+        }),
+      )
+    }
+    if (code === "hosted") fail(`hosted OCR failed: ${(error as Error).message}`)
+    throw error
   }
-}
-
-function isFractionPoint(value: unknown): value is { x: number; y: number } {
-  if (typeof value !== "object" || value === null) {
-    return false
-  }
-  const point = value as { x?: unknown; y?: unknown }
-  return isFraction(point.x) && isFraction(point.y)
-}
-
-function isFractionRect(value: unknown): value is { x: number; y: number; width: number; height: number } {
-  if (typeof value !== "object" || value === null) {
-    return false
-  }
-  const rect = value as { x?: unknown; y?: unknown; width?: unknown; height?: unknown }
-  return isFraction(rect.x) && isFraction(rect.y) && isFraction(rect.width) && isFraction(rect.height)
 }
 
 function parseFilePaths(filePaths: string | undefined): string[] | string {

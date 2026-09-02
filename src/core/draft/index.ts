@@ -21,6 +21,8 @@ import {
   type ActiveDraft,
 } from "./manager"
 import { readSidecar, writeSidecar, type Sidecar } from "./sidecar"
+import { substituteOoxml } from "@/core/template/substitute-ooxml"
+import type { TemplateData } from "@/core/template/generate"
 
 export type { ActiveDraft, Sidecar }
 export type {
@@ -108,6 +110,23 @@ export function cloneIntoDraft(filePath: string, sessionID: string, owner: strin
 
 export async function accept(filePath: string, sessionID: string, timestamp?: number): Promise<void> {
   await acceptDraft(filePath, sessionID, timestamp)
+}
+
+// L3 Fidelity substitute: run-preserving {{placeholder}} replace on a Draft ZIP.
+export async function substituteInDraft(
+  filePath: string,
+  sessionID: string,
+  data: TemplateData,
+): Promise<{ replaced: number; format: string }> {
+  const path = draftPath(filePath, sessionID)
+  const buf = readFileSync(path)
+  const isZip = buf.length >= 2 && buf[0] === 0x50 && buf[1] === 0x4b
+  if (!isZip) {
+    throw new DraftError("substitute only supported on OOXML drafts (clone first for L3)")
+  }
+  const { buffer, replaced, format } = await substituteOoxml(buf, data)
+  writeFileSync(path, buffer)
+  return { replaced, format }
 }
 
 export function undo(filePath: string, sessionID: string): void {
