@@ -80,5 +80,6 @@ Advanced edit on existing file: `officecli read` to inspect → `officecli edit`
 | Template batch generation, validation gates, format conversion | [authoring.md](references/authoring.md) + format skill (`docx`/`xlsx`/`pptx`/`pdf`) |
 | Editing/reviewing existing documents, suggestions, track changes, version recovery | [reviewing.md](references/reviewing.md) + `docx:editing` / `pptx:editing` sections |
 | Writing any message to the Enduser (reports, questions, failures) | [enduser-output.md](references/enduser-output.md) |
+| Enduser reports a problem for the developer ("report the problem…", complaint about a failed office task) | [reporting.md](references/reporting.md) |
 | Fillable PDF forms | [pdf/forms.md](../pdf/forms.md) + `scripts/check_fillable_fields.py` |
 | XLSX recalc / financial model | [xlsx SKILL](../xlsx/SKILL.md) `recalc.py` section |

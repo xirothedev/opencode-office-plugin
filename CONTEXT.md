@@ -122,6 +122,10 @@ _Avoid_: Validation loop, check loop
 The `Capture → proposal → accept` loop where `skills/office` proposes a `Learned Record` after a `verify-l3 PASS` + `Accept`, and the Enduser accepts it. Follows `Single write path`, not runtime self-mutation.
 _Avoid_: Self improve, auto-learn
 
+**Enduser report**:
+A single portable English `.md` in `.opencode/office/reports/` written after the 4-question interview when the Enduser reports a problem for the developer. Self-contained: sanitized action trace inline, Captures referenced by id only. Distinct from a `Report` (test artifact); never a GitHub issue.
+_Avoid_: bug report file, feedback doc
+
 **Learned Record**:
 A typed JSON entry in `.opencode/office/learned/learned.json` (per-project) plus generated `learned.md` view, capturing a verified Template structure, `Format` requirement, or `Verify Loop` workaround that passed `verify-l3`. Replayed next session to avoid the loop.
 _Avoid_: Learned lesson, memo
