@@ -7,10 +7,8 @@ import { registerDraft } from "@/core/storage/registry"
 import { writeFileSync, readFileSync, existsSync, readdirSync, statSync, copyFileSync, mkdirSync } from "fs"
 import { extname, resolve, join, basename, dirname } from "path"
 import { detectFormat } from "@/core/format/detect"
-import { writeComment, readComments, applyCommentSuggestion, updateComment, deleteComment, setCommentStatus, type Comment } from "@/core/format/ooxml/comments"
 import { writeTrackChange, readTrackChanges, type TrackChange } from "@/core/format/ooxml/trackchanges"
-import { writeComment as writeXlsxComment, readComments as readXlsxComments, applyCellSuggestion, updateComment as updateXlsxComment, deleteComment as deleteXlsxComment, setCommentStatus as setXlsxCommentStatus, type XlsxComment } from "@/core/format/ooxml/xlsxcomments"
-import { writeComment as writePptxComment, readComments as readPptxComments, applySlideSuggestion, updateComment as updatePptxComment, deleteComment as deletePptxComment, setCommentStatus as setPptxCommentStatus, type PptxComment } from "@/core/format/ooxml/pptxcomments"
+import * as Comments from "@/core/comments"
 import { diffTexts } from "@/core/draft/diff"
 import { substituteTemplate } from "@/core/template/substitute"
 import { substituteOoxml } from "@/core/template/substitute-ooxml"
@@ -242,7 +240,7 @@ async function officePreview(input: unknown): Promise<unknown> {
     source: draftSession ? "draft" : "file",
     filename: basename(filePath),
     contentType: "markdown",
-    comments: await readPreviewComments(ext, target),
+    comments: await Comments.preview(target),
   }
   if (draftSession) {
     // ponytail: zip draft can't be sent as markdown text — extract or fallback to fileUrl
@@ -276,43 +274,6 @@ function officePreviewFileUrl(filePath: string, ext: string): string | undefined
   const data = readFileSync(filePath)
   if (data.length > officePreviewFileCapBytes) return undefined
   return `data:${officePreviewMimes[ext]};base64,${data.toString("base64")}`
-}
-
-async function readPreviewComments(ext: string, target: string) {
-  if (ext === ".xlsx") {
-    return (await readXlsxComments(target)).map((c) => ({
-      id: c.id,
-      author: c.author,
-      text: c.text,
-      status: c.status,
-      suggestedText: c.suggestedText ?? undefined,
-      anchor: c.cellRef,
-      createdAt: c.timestamp.getTime(),
-    }))
-  }
-  if (ext === ".pptx") {
-    return (await readPptxComments(target)).map((c) => ({
-      id: c.id,
-      author: c.author,
-      text: c.text,
-      status: c.status,
-      suggestedText: c.suggestedText ?? undefined,
-      anchor: `${c.slide}:${c.x}:${c.y}`,
-      createdAt: c.timestamp.getTime(),
-    }))
-  }
-  if (ext === ".docx") {
-    return (await readComments(target)).map((c) => ({
-      id: c.id,
-      author: c.author,
-      text: c.text,
-      status: c.status,
-      suggestedText: c.suggestedText ?? undefined,
-      anchor: `${c.rangeStart.paragraph}:${c.rangeStart.offset}`,
-      createdAt: c.timestamp.getTime(),
-    }))
-  }
-  return []
 }
 
 async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<string> {
@@ -825,16 +786,23 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     }
   }
   if (input.action === "comment") {
-    const ext = extname(input.filePath)
-    if (ext !== ".docx" && ext !== ".xlsx" && ext !== ".pptx") {
-      fail("comments only supported for DOCX, XLSX and PPTX files")
+    const ext = Comments.requireFormat(input.filePath, "comments")
+    const newComment = {
+      id: input.commentId,
+      author: input.author,
+      text: input.commentText,
+      suggestedText: input.suggestedText,
+      targetText: input.targetText,
+      rangeStartParagraph: input.rangeStartParagraph,
+      rangeStartOffset: input.rangeStartOffset,
+      rangeEndParagraph: input.rangeEndParagraph,
+      rangeEndOffset: input.rangeEndOffset,
+      cellRef: input.cellRef,
+      slide: input.slide,
+      x: input.x,
+      y: input.y,
     }
-    if (ext === ".docx" && (input.rangeStartParagraph === undefined || input.rangeStartOffset === undefined || input.rangeEndParagraph === undefined || input.rangeEndOffset === undefined)) {
-      fail("comment on DOCX requires rangeStartParagraph, rangeStartOffset, rangeEndParagraph, rangeEndOffset")
-    }
-    if (ext === ".xlsx" && !input.cellRef) {
-      fail('comment on XLSX requires cellRef (e.g. "B4")')
-    }
+    Comments.validate(input.filePath, newComment)
     const filePathHash = getFilePathHash(input.filePath)
     const lock = getLock(filePathHash)
     if (!lock || lock.sessionID !== sessionID) {
@@ -844,57 +812,12 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     if (!draftExists(filePathHash, sessionID)) {
       fail("draft not found")
     }
-    if (ext === ".xlsx") {
-      const comment: XlsxComment = {
-        id: input.commentId,
-        author: sanitizeXmlText(input.author),
-        text: sanitizeXmlText(input.commentText),
-        timestamp: new Date(),
-        cellRef: input.cellRef as string,
-        parentId: null,
-        status: "open",
-        suggestedText: input.suggestedText ? sanitizeXmlText(input.suggestedText) : null,
-      }
-      await writeXlsxComment(draftPath, comment)
-      return `Comment added to draft for ${input.filePath}`
-    }
-    if (ext === ".pptx") {
-      const comment: PptxComment = {
-        id: input.commentId,
-        author: sanitizeXmlText(input.author),
-        text: sanitizeXmlText(input.commentText),
-        timestamp: new Date(),
-        slide: input.slide ?? 0,
-        x: input.x ?? 100000,
-        y: input.y ?? 100000,
-        parentId: null,
-        status: "open",
-        suggestedText: input.suggestedText ? sanitizeXmlText(input.suggestedText) : null,
-        targetText: input.targetText ? sanitizeXmlText(input.targetText) : null,
-      }
-      await writePptxComment(draftPath, comment)
-      return `Comment added to draft for ${input.filePath}`
-    }
-    const comment: Comment = {
-      id: input.commentId,
-      author: sanitizeXmlText(input.author),
-      text: sanitizeXmlText(input.commentText),
-      timestamp: new Date(),
-      rangeStart: { paragraph: input.rangeStartParagraph as number, offset: input.rangeStartOffset as number },
-      rangeEnd: { paragraph: input.rangeEndParagraph as number, offset: input.rangeEndOffset as number },
-      parentId: null,
-      status: "open",
-      suggestedText: input.suggestedText ? sanitizeXmlText(input.suggestedText) : null,
-    }
-    await writeComment(draftPath, comment)
+    await Comments.add(draftPath, newComment)
     return `Comment added to draft for ${input.filePath}`
   }
 
   if (input.action === "approve") {
-    const ext = extname(input.filePath)
-    if (ext !== ".docx" && ext !== ".xlsx" && ext !== ".pptx") {
-      fail("suggestions only supported for DOCX, XLSX and PPTX files")
-    }
+    const ext = Comments.requireFormat(input.filePath, "suggestions")
     const filePathHash = getFilePathHash(input.filePath)
     const lock = getLock(filePathHash)
     if (!lock || lock.sessionID !== sessionID) {
@@ -904,14 +827,7 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     if (!draftExists(filePathHash, sessionID)) {
       fail("draft not found")
     }
-    let result: "applied" | "not-found" | "no-suggestion"
-    if (ext === ".xlsx") {
-      result = await applyCellSuggestion(draftPath, input.commentId)
-    } else if (ext === ".pptx") {
-      result = await applySlideSuggestion(draftPath, input.commentId)
-    } else {
-      result = await applyCommentSuggestion(draftPath, input.commentId)
-    }
+    const result = await Comments.applySuggestion(draftPath, input.commentId)
     if (result === "not-found") {
       fail(`comment ${input.commentId} not found`)
     }
@@ -927,10 +843,7 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     input.action === "resolve-comment" ||
     input.action === "deny-comment"
   ) {
-    const ext = extname(input.filePath)
-    if (ext !== ".docx" && ext !== ".xlsx" && ext !== ".pptx") {
-      fail("comment lifecycle actions only supported for DOCX, XLSX and PPTX files")
-    }
+    const ext = Comments.requireFormat(input.filePath, "comment lifecycle actions")
     const filePathHash = getFilePathHash(input.filePath)
     const lock = getLock(filePathHash)
     if (!lock || lock.sessionID !== sessionID) {
@@ -944,38 +857,24 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
       if (input.text === undefined && input.suggestedText === undefined) {
         fail("edit-comment requires text or suggestedText")
       }
-      const cleanText = input.text ? sanitizeXmlText(input.text) : undefined
-      const cleanSuggested = input.suggestedText ? sanitizeXmlText(input.suggestedText) : undefined
-      const result =
-        ext === ".xlsx"
-          ? await updateXlsxComment(draftPath, input.commentId, { text: cleanText, suggestedText: cleanSuggested })
-          : ext === ".pptx"
-            ? await updatePptxComment(draftPath, input.commentId, { text: cleanText, suggestedText: cleanSuggested })
-            : await updateComment(draftPath, input.commentId, { text: cleanText, suggestedText: cleanSuggested })
+      const result = await Comments.update(draftPath, input.commentId, {
+        text: input.text,
+        suggestedText: input.suggestedText,
+      })
       if (result === "not-found") {
         fail(`comment ${input.commentId} not found`)
       }
       return `Comment ${input.commentId} updated on ${input.filePath}`
     }
     if (input.action === "delete-comment") {
-      const result =
-        ext === ".xlsx"
-          ? await deleteXlsxComment(draftPath, input.commentId)
-          : ext === ".pptx"
-            ? await deletePptxComment(draftPath, input.commentId)
-            : await deleteComment(draftPath, input.commentId)
+      const result = await Comments.remove(draftPath, input.commentId)
       if (result === "not-found") {
         fail(`comment ${input.commentId} not found`)
       }
       return `Comment ${input.commentId} deleted from ${input.filePath}`
     }
     const status = input.action === "resolve-comment" ? "resolved" : "denied"
-    const result =
-      ext === ".xlsx"
-        ? await setXlsxCommentStatus(draftPath, input.commentId, status)
-      : ext === ".pptx"
-        ? await setPptxCommentStatus(draftPath, input.commentId, status)
-        : await setCommentStatus(draftPath, input.commentId, status)
+    const result = await Comments.setStatus(draftPath, input.commentId, status)
     if (result === "not-found") {
       fail(`comment ${input.commentId} not found`)
     }
@@ -1010,10 +909,7 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
   }
 
   if (input.action === "list-comments") {
-    const ext = extname(input.filePath)
-    if (ext !== ".docx" && ext !== ".xlsx" && ext !== ".pptx") {
-      fail("comments only supported for DOCX, XLSX and PPTX files")
-    }
+    const ext = Comments.requireFormat(input.filePath, "comments")
     const filePathHash = getFilePathHash(input.filePath)
     let targetPath = input.filePath
     if (draftExists(filePathHash, sessionID)) {
@@ -1021,15 +917,7 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     } else if (!existsSync(input.filePath)) {
       fail(`file not found: ${input.filePath}`)
     }
-    if (ext === ".xlsx") {
-      const comments = await readXlsxComments(targetPath)
-      return `${comments.length} comments\n${JSON.stringify(comments, null, 2)}`
-    }
-    if (ext === ".pptx") {
-      const comments = await readPptxComments(targetPath)
-      return `${comments.length} comments\n${JSON.stringify(comments, null, 2)}`
-    }
-    const comments = await readComments(targetPath)
+    const comments = await Comments.list(targetPath)
     return `${comments.length} comments\n${JSON.stringify(comments, null, 2)}`
   }
 
@@ -1110,10 +998,7 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
   }
 
   if (input.action === "review") {
-    const ext = extname(input.filePath)
-    if (ext !== ".docx" && ext !== ".xlsx" && ext !== ".pptx") {
-      fail("review only supported for DOCX, XLSX and PPTX files")
-    }
+    const ext = Comments.requireFormat(input.filePath, "review")
     const filePathHash = getFilePathHash(input.filePath)
     let targetPath = input.filePath
     if (draftExists(filePathHash, sessionID)) {
@@ -1121,15 +1006,13 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     } else if (!existsSync(input.filePath)) {
       fail(`file not found: ${input.filePath}`)
     }
+    const comments = await Comments.list(targetPath)
     if (ext === ".xlsx") {
-      const comments = await readXlsxComments(targetPath)
       return `Review summary for ${input.filePath}:\n${comments.length} comments (XLSX has no track changes)\n\nComments:\n${JSON.stringify(comments, null, 2)}`
     }
     if (ext === ".pptx") {
-      const comments = await readPptxComments(targetPath)
       return `Review summary for ${input.filePath}:\n${comments.length} comments (PPTX has no track changes)\n\nComments:\n${JSON.stringify(comments, null, 2)}`
     }
-    const comments = await readComments(targetPath)
     const trackChanges = await readTrackChanges(targetPath)
     return `Review summary for ${input.filePath}:\n${comments.length} comments, ${trackChanges.length} track changes\n\nComments:\n${JSON.stringify(comments, null, 2)}\n\nTrack Changes:\n${JSON.stringify(trackChanges, null, 2)}`
   }
