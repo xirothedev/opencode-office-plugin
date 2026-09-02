@@ -682,7 +682,7 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     }
   }
   if (input.action === "comment") {
-    const ext = Comments.requireFormat(input.filePath, "comments")
+    Comments.requireFormat(input.filePath, "comments")
     const newComment = {
       id: input.commentId,
       author: input.author,
@@ -707,7 +707,7 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
   }
 
   if (input.action === "approve") {
-    const ext = Comments.requireFormat(input.filePath, "suggestions")
+    Comments.requireFormat(input.filePath, "suggestions")
     Draft.requireOwned(input.filePath, sessionID, "no active draft to approve")
     Draft.requireDraftExists(input.filePath, sessionID)
     const draftPath = Draft.draftPath(input.filePath, sessionID)
@@ -727,7 +727,7 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     input.action === "resolve-comment" ||
     input.action === "deny-comment"
   ) {
-    const ext = Comments.requireFormat(input.filePath, "comment lifecycle actions")
+    Comments.requireFormat(input.filePath, "comment lifecycle actions")
     Draft.requireOwned(input.filePath, sessionID, `no active draft to ${input.action.replace("-", " ")}`)
     Draft.requireDraftExists(input.filePath, sessionID)
     const draftPath = Draft.draftPath(input.filePath, sessionID)
@@ -781,7 +781,7 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
   }
 
   if (input.action === "list-comments") {
-    const ext = Comments.requireFormat(input.filePath, "comments")
+    Comments.requireFormat(input.filePath, "comments")
     let targetPath = input.filePath
     if (Draft.exists(input.filePath, sessionID)) {
       targetPath = Draft.draftPath(input.filePath, sessionID)
