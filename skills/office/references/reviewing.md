@@ -10,7 +10,7 @@
 - File carries user-authored content worth preserving visibly → **suggestions** or **track changes** below
 - Unsure which mode the user wants → **ask the user with the mode question below** before writing any content change; if asking is impossible, default to suggestions — they are reversible and visible in Office apps
 
-**Mode question** — ask in this format, then stop and wait for the answer:
+**Mode question** — keep the two-option structure and ask in the **user's language** (Vietnamese endusers get the Vietnamese version; translate faithfully, do not reword the options), then stop and wait for the answer:
 
 ```
 How should I apply changes to <file>?
