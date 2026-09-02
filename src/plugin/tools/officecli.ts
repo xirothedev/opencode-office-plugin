@@ -153,7 +153,7 @@ const officecliOutput = S.String
 export const officecliTool: Tool.Info<typeof officecliInput, typeof officecliOutput> = {
   name: "officecli",
   description:
-    "MAIN method for all Office and PDF files (.docx/.doc/.dotx/.xlsx/.xls/.xlsm/.pptx/.ppt/.pdf and images) — handle every read, create, edit, accept, undo, history, revert, comment, track-change, metadata, watermark, export through this tool. The native read/edit/write tools are blocked for these extensions and will error with 'use officecli'. Draft lifecycle: create/edit → accept (writes real file, snapshots version). Preview renders draft to HTML, validate checks draft against rules, lock-status/force-release manage stale locks (default 24h). Comments for DOCX/XLSX/PPTX, track changes for DOCX, suggestions via comment+suggestedText+approve (PPTX approve accepts optional targetText to pick the box; denied suggestions cannot be approved). Comment lifecycle: open/resolved/denied via edit-comment/delete-comment/resolve-comment/deny-comment; list-comments/review surface status. L3 Fidelity: clone (copy Reference ZIP verbatim for 100% Format), substitute (run-preserving {{placeholder}} replace on Draft ZIP), verify-l3 (OOXML diff except text nodes).",
+    "MAIN method for all Office and PDF files (.docx/.doc/.dotx/.xlsx/.xls/.xlsm/.pptx/.ppt/.pdf and images) — handle every read, create, edit, accept, undo, history, revert, comment, track-change, metadata, watermark, export through this tool. The native read/edit/write tools are blocked for these extensions and will error with 'use officecli'. Draft lifecycle: create/edit → accept (writes real file, snapshots version). Preview renders draft to HTML, validate checks draft against rules, lock-status/force-release manage stale locks (default 24h). Comments for DOCX/XLSX/PPTX, track changes for DOCX, suggestions via comment+suggestedText+approve (PPTX approve accepts optional targetText to pick the box; denied suggestions cannot be approved). Comment lifecycle: open/resolved/denied via edit-comment/delete-comment/resolve-comment/deny-comment; list-comments/review surface status. L3 Fidelity: clone (copy Reference ZIP verbatim for 100% Format), substitute (run-preserving {{placeholder}} replace on Draft ZIP), verify-l3 (OOXML diff except text nodes). Suggest-first: on documents you did not create this session, content changes default to comment+suggestedText (approve applies); ask the user before direct-editing.",
   input: officecliInput,
   output: officecliOutput,
   options: { codemode: false },
@@ -279,7 +279,9 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     }
     if (filePath && targets.length === 0) {
       Draft.create(filePath, sessionID, owner, cleanContent)
-      return `Draft created for ${filePath}`
+      return existsSync(filePath)
+        ? `Draft created for ${filePath} — pre-existing document: prefer comment+suggestedText for content changes; ask the user before direct-editing`
+        : `Draft created for ${filePath}`
     }
     const paths = targets.length > 0 ? targets : [filePath as string]
     for (const p of paths) {
@@ -288,7 +290,8 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     for (const p of paths) {
       Draft.create(p, sessionID, owner, cleanContent)
     }
-    return `Created ${paths.length} drafts`
+    const preExisting = paths.filter((p) => existsSync(p)).length
+    return `Created ${paths.length} drafts${preExisting > 0 ? ` (${preExisting} pre-existing — suggest-first, ask the user before direct-editing)` : ""}`
   }
 
   if (input.action === "accept") {

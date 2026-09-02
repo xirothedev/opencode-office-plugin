@@ -8,7 +8,7 @@
 
 - User asked for direct changes → plain `edit` + `accept`
 - File carries user-authored content worth preserving visibly → **suggestions** or **track changes** below
-- Unsure → suggestions; they are reversible and visible in Office apps
+- Unsure which mode the user wants → **ask the user: suggested edits or direct edit?** before writing any content change; if asking is impossible, default to suggestions — they are reversible and visible in Office apps
 
 Suggestions and comments belong to files that already have content. On a file created this session, write the content directly and skip comments entirely.
 
