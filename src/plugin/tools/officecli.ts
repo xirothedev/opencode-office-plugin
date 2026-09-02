@@ -1,11 +1,9 @@
 import { Effect, Schema } from "effect"
 import { Tool } from "@opencode-ai/schema/tool"
-import { createDraft, acceptDraft, undoDraft, getHistory, getDraftPath, draftExists, getSnapshot, getSnapshotSidecar, listActiveDrafts, getDraftSessions } from "@/core/draft/manager"
-import { acquireLock, getLock, releaseLock, isLockStale, overrideLock } from "@/core/draft/lock"
-import { getFilePathHash, getDraftsDir } from "@/core/storage/paths"
-import { registerDraft } from "@/core/storage/registry"
-import { writeFileSync, readFileSync, existsSync, readdirSync, statSync, copyFileSync, mkdirSync } from "fs"
-import { extname, resolve, join, basename, dirname } from "path"
+import * as Draft from "@/core/draft"
+import type { WatermarkConfig, WatermarkPosition, AnnotationOp } from "@/core/draft"
+import { writeFileSync, readFileSync, existsSync } from "fs"
+import { extname, resolve, join, basename } from "path"
 import { detectFormat } from "@/core/format/detect"
 import { writeTrackChange, readTrackChanges, type TrackChange } from "@/core/format/ooxml/trackchanges"
 import * as Comments from "@/core/comments"
@@ -16,7 +14,6 @@ import { readLiveOrFileAsMarkdown, readRealFileAsMarkdown } from "@/core/format/
 import { renderMarkdownFileToHtml } from "@/core/format/render"
 import { writeDerivedFile, EXPORT_EXTENSIONS } from "@/core/format/export"
 import { readMetadata, METADATA_EXTENSIONS, type FileMetadata } from "@/core/format/metadata"
-import { readSidecar, writeSidecar, type WatermarkConfig, type WatermarkPosition, type AnnotationOp } from "@/core/draft/sidecar"
 import { normalizeStampText } from "@/core/format/annotate"
 import { sanitizeMarkdown, sanitizeXmlText } from "@/core/format/sanitize"
 import { fail, tryExecute } from "@/plugin/tools/boundary"
@@ -196,7 +193,7 @@ export async function runOfficecliInvoke(name: string, input: unknown): Promise<
   const filePath = strParam(params.filePath) ?? strParam(params.filename)
   if (!filePath) fail(`${name} requires filePath`)
   const args = decodeInvokeArgs(name, { ...params, action, filePath })
-  const sessionID = strParam(params.sessionID) ?? getLock(getFilePathHash(filePath))?.sessionID ?? "openoffice-invoke"
+  const sessionID = strParam(params.sessionID) ?? Draft.lockSession(filePath) ?? "openoffice-invoke"
   const context = {
     sessionID,
     agent: "openoffice-invoke",
@@ -226,15 +223,14 @@ async function officePreview(input: unknown): Promise<unknown> {
   const filePath = strParam(params.filePath) ?? strParam(params.filename)
   if (!filePath) fail("office.preview requires filePath")
   const ext = extname(filePath).toLowerCase()
-  const filePathHash = getFilePathHash(filePath)
-  const sessions = getDraftSessions(filePathHash)
+  const sessions = Draft.draftSessions(filePath)
   const managed = sessions.length > 0 || (officePreviewMimes[ext] !== undefined && existsSync(filePath))
   if (!managed) return { managed: false }
   // ponytail: draft selection prefers the requesting session, else the most recent draft by mtime
   const wanted = strParam(params.sessionID)
-  const draftSession = wanted !== undefined && sessions.includes(wanted) ? wanted : mostRecentDraftSession(filePathHash)
-  const target = draftSession ? getDraftPath(filePathHash, draftSession, extname(filePath)) : filePath
-  const lock = getLock(filePathHash)
+  const draftSession = wanted !== undefined && sessions.includes(wanted) ? wanted : Draft.mostRecentDraftSession(filePath)
+  const target = draftSession ? Draft.draftPath(filePath, draftSession) : filePath
+  const lock = Draft.status(filePath)
   const result: Record<string, unknown> = {
     managed: true,
     source: draftSession ? "draft" : "file",
@@ -255,19 +251,9 @@ async function officePreview(input: unknown): Promise<unknown> {
     result.fileUrl = officePreviewFileUrl(filePath, ext)
   }
   if (lock) {
-    result.lock = { sessionID: lock.sessionID, owner: lock.owner, stale: isLockStale(filePathHash) }
+    result.lock = { sessionID: lock.sessionID, owner: lock.owner, stale: lock.stale }
   }
   return result
-}
-
-function mostRecentDraftSession(filePathHash: string): string | undefined {
-  const dir = join(getDraftsDir(), filePathHash)
-  if (!existsSync(dir)) return undefined
-  const entries = readdirSync(dir).map((file) => {
-    const e = extname(file)
-    return { session: e ? file.slice(0, -e.length) : file, mtime: statSync(join(dir, file)).mtimeMs }
-  })
-  return entries.reduce((a, b) => (b.mtime >= a.mtime ? b : a)).session
 }
 
 function officePreviewFileUrl(filePath: string, ext: string): string | undefined {
@@ -291,23 +277,15 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
       fail(targets)
     }
     if (filePath && targets.length === 0) {
-      const filePathHash = getFilePathHash(filePath)
-      acquireLock(filePathHash, sessionID, owner)
-      createDraft(filePath, sessionID, cleanContent)
+      Draft.create(filePath, sessionID, owner, cleanContent)
       return `Draft created for ${filePath}`
     }
     const paths = targets.length > 0 ? targets : [filePath as string]
     for (const p of paths) {
-      const filePathHash = getFilePathHash(p)
-      const lock = getLock(filePathHash)
-      if (lock && lock.sessionID !== sessionID && !isLockStale(filePathHash)) {
-        fail(`lock on ${p} held by session ${lock.sessionID}`)
-      }
+      Draft.assertNoForeignLock(p, sessionID, true)
     }
     for (const p of paths) {
-      const filePathHash = getFilePathHash(p)
-      acquireLock(filePathHash, sessionID, owner)
-      createDraft(p, sessionID, cleanContent)
+      Draft.create(p, sessionID, owner, cleanContent)
     }
     return `Created ${paths.length} drafts`
   }
@@ -322,60 +300,37 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
       fail(targets)
     }
     if (filePath && targets.length === 0) {
-      const filePathHash = getFilePathHash(filePath)
-      const lock = getLock(filePathHash)
-      if (!lock || lock.sessionID !== sessionID) {
-        fail("no active draft to accept")
-      }
-      await acceptDraft(filePath, sessionID, timestamp)
+      Draft.requireOwned(filePath, sessionID, "no active draft to accept")
+      Draft.requireDraftExists(filePath, sessionID, `draft not found for ${filePath}`)
+      await Draft.accept(filePath, sessionID, timestamp)
       return `Accepted draft for ${filePath}`
     }
     const paths = targets.length > 0 ? targets : [filePath as string]
     for (const p of paths) {
-      const filePathHash = getFilePathHash(p)
-      const lock = getLock(filePathHash)
-      if (!lock || lock.sessionID !== sessionID) {
-        fail(`no active draft to accept for ${p}`)
-      }
-      if (!draftExists(filePathHash, sessionID)) {
-        fail(`draft not found for ${p}`)
-      }
+      Draft.requireOwned(p, sessionID, `no active draft to accept for ${p}`)
+      Draft.requireDraftExists(p, sessionID, `draft not found for ${p}`)
     }
     for (const p of paths) {
-      await acceptDraft(p, sessionID, timestamp)
+      await Draft.accept(p, sessionID, timestamp)
     }
     return `Accepted ${paths.length} drafts`
   }
 
   if (input.action === "undo") {
-    const filePathHash = getFilePathHash(input.filePath)
-    const lock = getLock(filePathHash)
-    if (!lock || lock.sessionID !== sessionID) {
-      fail("no active draft to undo")
-    }
-    undoDraft(input.filePath, sessionID)
-    releaseLock(filePathHash)
+    Draft.requireOwned(input.filePath, sessionID, "no active draft to undo")
+    Draft.undo(input.filePath, sessionID)
     return `Draft undone for ${input.filePath}`
   }
 
   if (input.action === "edit") {
-    const filePathHash = getFilePathHash(input.filePath)
-    const lock = getLock(filePathHash)
-    if (!lock || lock.sessionID !== sessionID) {
-      fail("no active draft to edit")
-    }
-    if (!draftExists(filePathHash, sessionID)) {
-      fail("draft not found")
-    }
-    const ext = extname(input.filePath)
-    const draftPath = getDraftPath(filePathHash, sessionID, ext)
-    writeFileSync(draftPath, sanitizeMarkdown(input.content))
+    Draft.requireOwned(input.filePath, sessionID, "no active draft to edit")
+    Draft.requireDraftExists(input.filePath, sessionID)
+    Draft.write(input.filePath, sessionID, sanitizeMarkdown(input.content))
     return `Draft edited for ${input.filePath}`
   }
 
   if (input.action === "lock-status") {
-    const filePathHash = getFilePathHash(input.filePath)
-    const lock = getLock(filePathHash)
+    const lock = Draft.status(input.filePath)
     if (!lock) {
       return `no lock on ${input.filePath}`
     }
@@ -383,37 +338,23 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
       sessionID: lock.sessionID,
       owner: lock.owner,
       status: lock.status,
-      stale: isLockStale(filePathHash),
+      stale: lock.stale,
       touchedAt: lock.touchedAt,
     })
   }
 
   if (input.action === "force-release") {
-    const filePathHash = getFilePathHash(input.filePath)
-    const lock = getLock(filePathHash)
-    if (!lock) {
-      fail(`no lock on ${input.filePath} to force release`)
-    }
-    if (!isLockStale(filePathHash)) {
-      fail(`lock on ${input.filePath} is not stale; force release allowed only on stale locks`)
-    }
-    overrideLock(filePathHash, sessionID, owner)
+    Draft.forceRelease(input.filePath, sessionID, owner)
     return `Force released lock on ${input.filePath}`
   }
 
   if (input.action === "list") {
-    const drafts = input.filePath
-      ? listActiveDrafts().filter(
-          (d) => d.filePath === input.filePath || resolve(d.filePath) === resolve(input.filePath as string)
-        )
-      : listActiveDrafts()
-    return JSON.stringify(drafts, null, 2)
+    return JSON.stringify(Draft.listDrafts(input.filePath), null, 2)
   }
 
   if (input.action === "diff") {
-    const filePathHash = getFilePathHash(input.filePath)
-    if (!draftExists(filePathHash, sessionID)) {
-      const sessions = getDraftSessions(filePathHash)
+    if (!Draft.exists(input.filePath, sessionID)) {
+      const sessions = Draft.draftSessions(input.filePath)
       if (sessions.length > 0) {
         fail(`no draft for this session; draft held by session ${sessions[0]}`)
       }
@@ -425,8 +366,7 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     if (detectFormat(input.filePath) === "image") {
       fail("diff not supported for images")
     }
-    const ext = extname(input.filePath)
-    const draftPath = getDraftPath(filePathHash, sessionID, ext)
+    const draftPath = Draft.draftPath(input.filePath, sessionID)
     const buf = readFileSync(draftPath)
     const isZip = buf.length >= 2 && buf[0] === 0x50 && buf[1] === 0x4b
     const draftContent = isZip ? await readRealFileAsMarkdown(draftPath) : buf.toString("utf-8")
@@ -493,11 +433,7 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     // lock must abort with no partial drafts
     const prepared: Array<{ filePath: string; content: string }> = []
     for (const entry of entries) {
-      const filePathHash = getFilePathHash(entry.filePath)
-      const lock = getLock(filePathHash)
-      if (lock && lock.sessionID !== sessionID) {
-        fail(`lock on ${entry.filePath} held by session ${lock.sessionID}`)
-      }
+      Draft.assertNoForeignLock(entry.filePath, sessionID, false)
       try {
         prepared.push({ filePath: entry.filePath, content: sanitizeMarkdown(substituteTemplate(template, entry.data)) })
       } catch (error) {
@@ -505,35 +441,18 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
       }
     }
     for (const p of prepared) {
-      const filePathHash = getFilePathHash(p.filePath)
-      acquireLock(filePathHash, sessionID, owner)
-      createDraft(p.filePath, sessionID, sanitizeMarkdown(p.content))
+      Draft.create(p.filePath, sessionID, owner, sanitizeMarkdown(p.content))
     }
     return `Generated ${prepared.length} drafts from ${input.templatePath}`
   }
 
   if (input.action === "history") {
-    const filePathHash = getFilePathHash(input.filePath)
-    const history = getHistory(filePathHash)
-    const metadata = history.map((ap) => ({
-      timestamp: ap.timestamp,
-      sessionID: ap.sessionID,
-    }))
-    return `${history.length} accept-points for ${input.filePath}\n${JSON.stringify(metadata)}`
+    const history = Draft.history(input.filePath)
+    return `${history.length} accept-points for ${input.filePath}\n${JSON.stringify(history)}`
   }
 
   if (input.action === "revert") {
-    const filePathHash = getFilePathHash(input.filePath)
-    const snapshot = getSnapshot(filePathHash, input.timestamp)
-    if (!snapshot) {
-      fail("snapshot not found for timestamp")
-    }
-    acquireLock(filePathHash, sessionID, owner)
-    createDraft(input.filePath, sessionID, snapshot)
-    const sidecar = getSnapshotSidecar(filePathHash, input.timestamp)
-    if (sidecar) {
-      writeSidecar(filePathHash, sessionID, sidecar)
-    }
+    Draft.revert(input.filePath, sessionID, owner, input.timestamp)
     return `Reverted to snapshot for ${input.filePath}`
   }
 
@@ -542,7 +461,6 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     if (!METADATA_EXTENSIONS.includes(ext)) {
       fail("metadata only supported for DOCX, XLSX, PPTX and PDF files")
     }
-    const filePathHash = getFilePathHash(input.filePath)
     if (input.properties !== undefined) {
       const draftError = requireDraftFor(input.filePath, sessionID)
       if (draftError) {
@@ -567,9 +485,9 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
           fail(`property "${key}" must be a string`)
         }
       }
-      const sidecar = readSidecar(filePathHash, sessionID) ?? {}
+      const sidecar = Draft.readSidecarFor(input.filePath, sessionID) ?? {}
       sidecar.metadata = parsed as FileMetadata
-      writeSidecar(filePathHash, sessionID, sidecar)
+      Draft.writeSidecarFor(input.filePath, sessionID, sidecar)
       return `Metadata set for ${input.filePath}`
     }
     if (!existsSync(input.filePath)) {
@@ -581,7 +499,7 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     } catch (error) {
       fail((error as Error).message)
     }
-    const sidecar = readSidecar(filePathHash, sessionID)
+    const sidecar = Draft.readSidecarFor(input.filePath, sessionID)
     const merged: FileMetadata = { ...real, ...(sidecar?.metadata) }
     return JSON.stringify(merged, null, 2)
   }
@@ -595,11 +513,10 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     if (draftError) {
       fail(draftError)
     }
-    const filePathHash = getFilePathHash(input.filePath)
-    const sidecar = readSidecar(filePathHash, sessionID) ?? {}
+    const sidecar = Draft.readSidecarFor(input.filePath, sessionID) ?? {}
     if (input.text === "") {
       delete sidecar.watermark
-      writeSidecar(filePathHash, sessionID, sidecar)
+      Draft.writeSidecarFor(input.filePath, sessionID, sidecar)
       return `Watermark removed for ${input.filePath}`
     }
     const defaultPosition: WatermarkPosition = ext === ".docx" ? "top-center" : "diagonal-center"
@@ -618,7 +535,7 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     if (input.size !== undefined) config.size = input.size
     if (input.opacity !== undefined) config.opacity = input.opacity
     sidecar.watermark = config
-    writeSidecar(filePathHash, sessionID, sidecar)
+    Draft.writeSidecarFor(input.filePath, sessionID, sidecar)
     return `Watermark set for ${input.filePath}: "${input.text}"`
   }
 
@@ -627,7 +544,6 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     if (ext !== ".png" && ext !== ".jpg" && ext !== ".jpeg") {
       fail("annotate only supported for PNG and JPG images")
     }
-    const filePathHash = getFilePathHash(input.filePath)
     const draftError = requireDraftFor(input.filePath, sessionID)
     if (draftError) {
       fail(draftError)
@@ -642,9 +558,9 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
       fail("annotations must be an array")
     }
     if (parsed.length === 0) {
-      const clearingSidecar = readSidecar(filePathHash, sessionID) ?? {}
+      const clearingSidecar = Draft.readSidecarFor(input.filePath, sessionID) ?? {}
       delete clearingSidecar.annotations
-      writeSidecar(filePathHash, sessionID, clearingSidecar)
+      Draft.writeSidecarFor(input.filePath, sessionID, clearingSidecar)
       return `Annotations cleared for ${input.filePath}`
     }
     const ops: AnnotationOp[] = []
@@ -678,15 +594,14 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
         ops.push(op)
       }
     }
-    const sidecar = readSidecar(filePathHash, sessionID) ?? {}
+    const sidecar = Draft.readSidecarFor(input.filePath, sessionID) ?? {}
     sidecar.annotations = [...(sidecar.annotations ?? []), ...ops]
-    writeSidecar(filePathHash, sessionID, sidecar)
+    Draft.writeSidecarFor(input.filePath, sessionID, sidecar)
     return `Annotations added to draft for ${input.filePath}: ${ops.length}`
   }
 
   if (input.action === "export") {
-    const filePathHash = getFilePathHash(input.filePath)
-    const hasDraft = draftExists(filePathHash, sessionID)
+    const hasDraft = Draft.exists(input.filePath, sessionID)
     if (!hasDraft && !existsSync(input.filePath)) {
       fail(`file not found: ${input.filePath}`)
     }
@@ -703,7 +618,7 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     }
     let markdown: string
     if (hasDraft) {
-      const draftPath = getDraftPath(filePathHash, sessionID, sourceExt)
+      const draftPath = Draft.draftPath(input.filePath, sessionID)
       const buf = readFileSync(draftPath)
       const isZip = buf.length >= 2 && buf[0] === 0x50 && buf[1] === 0x4b
       markdown = isZip ? await readRealFileAsMarkdown(draftPath) : buf.toString("utf-8")
@@ -719,16 +634,14 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
   }
 
   if (input.action === "read") {
-    const filePathHash = getFilePathHash(input.filePath)
-    const ext = extname(input.filePath)
     const readOpts =
       input.ocr !== undefined || input.apiKey !== undefined || input.apiUrl !== undefined
         ? { ocr: input.ocr as never, apiKey: input.apiKey, apiUrl: input.apiUrl }
         : undefined
 
     // Return draft if exists, else real file (live flag prefers Word app when on same machine)
-    if (draftExists(filePathHash, sessionID)) {
-      const draftPath = getDraftPath(filePathHash, sessionID, ext)
+    if (Draft.exists(input.filePath, sessionID)) {
+      const draftPath = Draft.draftPath(input.filePath, sessionID)
       // ponytail: zip draft (comment/track) holds real OOXML — extract text, don't dump PK
       const buf = readFileSync(draftPath)
       const isZip = buf.length >= 2 && buf[0] === 0x50 && buf[1] === 0x4b
@@ -803,30 +716,18 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
       y: input.y,
     }
     Comments.validate(input.filePath, newComment)
-    const filePathHash = getFilePathHash(input.filePath)
-    const lock = getLock(filePathHash)
-    if (!lock || lock.sessionID !== sessionID) {
-      fail("no active draft to add comment")
-    }
-    const draftPath = getDraftPath(filePathHash, sessionID, ext)
-    if (!draftExists(filePathHash, sessionID)) {
-      fail("draft not found")
-    }
+    Draft.requireOwned(input.filePath, sessionID, "no active draft to add comment")
+    Draft.requireDraftExists(input.filePath, sessionID)
+    const draftPath = Draft.draftPath(input.filePath, sessionID)
     await Comments.add(draftPath, newComment)
     return `Comment added to draft for ${input.filePath}`
   }
 
   if (input.action === "approve") {
     const ext = Comments.requireFormat(input.filePath, "suggestions")
-    const filePathHash = getFilePathHash(input.filePath)
-    const lock = getLock(filePathHash)
-    if (!lock || lock.sessionID !== sessionID) {
-      fail("no active draft to approve")
-    }
-    const draftPath = getDraftPath(filePathHash, sessionID, ext)
-    if (!draftExists(filePathHash, sessionID)) {
-      fail("draft not found")
-    }
+    Draft.requireOwned(input.filePath, sessionID, "no active draft to approve")
+    Draft.requireDraftExists(input.filePath, sessionID)
+    const draftPath = Draft.draftPath(input.filePath, sessionID)
     const result = await Comments.applySuggestion(draftPath, input.commentId)
     if (result === "not-found") {
       fail(`comment ${input.commentId} not found`)
@@ -844,15 +745,9 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     input.action === "deny-comment"
   ) {
     const ext = Comments.requireFormat(input.filePath, "comment lifecycle actions")
-    const filePathHash = getFilePathHash(input.filePath)
-    const lock = getLock(filePathHash)
-    if (!lock || lock.sessionID !== sessionID) {
-      fail(`no active draft to ${input.action.replace("-", " ")}`)
-    }
-    const draftPath = getDraftPath(filePathHash, sessionID, ext)
-    if (!draftExists(filePathHash, sessionID)) {
-      fail("draft not found")
-    }
+    Draft.requireOwned(input.filePath, sessionID, `no active draft to ${input.action.replace("-", " ")}`)
+    Draft.requireDraftExists(input.filePath, sessionID)
+    const draftPath = Draft.draftPath(input.filePath, sessionID)
     if (input.action === "edit-comment") {
       if (input.text === undefined && input.suggestedText === undefined) {
         fail("edit-comment requires text or suggestedText")
@@ -886,15 +781,9 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     if (ext !== ".docx") {
       fail("track changes not supported for XLSX/PPTX files (w:ins/w:del is Word-only OOXML); use comment action for review feedback")
     }
-    const filePathHash = getFilePathHash(input.filePath)
-    const lock = getLock(filePathHash)
-    if (!lock || lock.sessionID !== sessionID) {
-      fail("no active draft to add track change")
-    }
-    const draftPath = getDraftPath(filePathHash, sessionID, ext)
-    if (!draftExists(filePathHash, sessionID)) {
-      fail("draft not found")
-    }
+    Draft.requireOwned(input.filePath, sessionID, "no active draft to add track change")
+    Draft.requireDraftExists(input.filePath, sessionID)
+    const draftPath = Draft.draftPath(input.filePath, sessionID)
     const trackChange: TrackChange = {
       id: input.commentId,
       type: input.action === "track-insert" ? "insertion" : "deletion",
@@ -910,10 +799,9 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
 
   if (input.action === "list-comments") {
     const ext = Comments.requireFormat(input.filePath, "comments")
-    const filePathHash = getFilePathHash(input.filePath)
     let targetPath = input.filePath
-    if (draftExists(filePathHash, sessionID)) {
-      targetPath = getDraftPath(filePathHash, sessionID, ext)
+    if (Draft.exists(input.filePath, sessionID)) {
+      targetPath = Draft.draftPath(input.filePath, sessionID)
     } else if (!existsSync(input.filePath)) {
       fail(`file not found: ${input.filePath}`)
     }
@@ -922,11 +810,11 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
   }
 
   if (input.action === "preview") {
-    const filePathHash = getFilePathHash(input.filePath)
-    if (!draftExists(filePathHash, sessionID)) {
+    if (!Draft.exists(input.filePath, sessionID)) {
       fail("no active draft to preview")
     }
-    const draftPath = getDraftPath(filePathHash, sessionID, extname(input.filePath))
+    const filePathHash = Draft.hashOf(input.filePath)
+    const draftPath = Draft.draftPath(input.filePath, sessionID)
     const outputPath = join(tmpdir(), "openoffice-preview", `${filePathHash}.html`)
     // ponytail: zip draft (comment) — extract markdown first, can't render zip directly
     const bufP = readFileSync(draftPath)
@@ -967,11 +855,10 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
       }
       rules.push({ type: rule.type, pattern: rule.pattern })
     }
-    const filePathHash = getFilePathHash(input.filePath)
-    if (!draftExists(filePathHash, sessionID)) {
+    if (!Draft.exists(input.filePath, sessionID)) {
       fail("no active draft to validate")
     }
-    const draftPath = getDraftPath(filePathHash, sessionID, extname(input.filePath))
+    const draftPath = Draft.draftPath(input.filePath, sessionID)
     const bufV = readFileSync(draftPath)
     const isZipV = bufV.length >= 2 && bufV[0] === 0x50 && bufV[1] === 0x4b
     const content = isZipV ? await readRealFileAsMarkdown(draftPath) : bufV.toString("utf-8")
@@ -999,10 +886,9 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
 
   if (input.action === "review") {
     const ext = Comments.requireFormat(input.filePath, "review")
-    const filePathHash = getFilePathHash(input.filePath)
     let targetPath = input.filePath
-    if (draftExists(filePathHash, sessionID)) {
-      targetPath = getDraftPath(filePathHash, sessionID, ext)
+    if (Draft.exists(input.filePath, sessionID)) {
+      targetPath = Draft.draftPath(input.filePath, sessionID)
     } else if (!existsSync(input.filePath)) {
       fail(`file not found: ${input.filePath}`)
     }
@@ -1026,21 +912,12 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
       fail("clone only supported for DOCX, XLSX and PPTX files")
     }
     if (resolve(sourcePath) === resolve(targetPath)) fail("targetPath must differ from filePath")
-    const targetHash = getFilePathHash(targetPath)
-    const lock = getLock(targetHash)
-    if (lock && lock.sessionID !== sessionID && !isLockStale(targetHash)) {
-      fail(`lock on ${input.targetPath} held by session ${lock.sessionID}`)
-    }
-    acquireLock(targetHash, sessionID, owner)
-    const ext = extname(targetPath)
-    const draftPath = getDraftPath(targetHash, sessionID, ext)
-    mkdirSync(dirname(draftPath), { recursive: true })
+    Draft.assertNoForeignLock(targetPath, sessionID, true, input.targetPath)
     // ponytail: binary copy preserves 100% Format — draft is real ZIP, accept will copy verbatim
     const buf = readFileSync(sourcePath)
     const isZip = buf.length >= 2 && buf[0] === 0x50 && buf[1] === 0x4b
     if (!isZip) fail(`clone source is not a valid OOXML file: ${input.filePath}`)
-    writeFileSync(draftPath, buf)
-    registerDraft(targetPath)
+    Draft.cloneIntoDraft(targetPath, sessionID, owner, buf)
     return `Cloned ${input.filePath} to draft for ${input.targetPath} (L3 Format preserved)`
   }
 
@@ -1054,9 +931,7 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
       fail("invalid data JSON")
     }
     if (!isDataObject(parsed)) fail("data must be a JSON object with string or number values")
-    const filePathHash = getFilePathHash(input.filePath)
-    const ext = extname(input.filePath)
-    const draftPath = getDraftPath(filePathHash, sessionID, ext)
+    const draftPath = Draft.draftPath(input.filePath, sessionID)
     const buf = readFileSync(draftPath)
     const isZip = buf.length >= 2 && buf[0] === 0x50 && buf[1] === 0x4b
     if (!isZip) fail("substitute only supported on OOXML drafts (clone first for L3)")
@@ -1099,16 +974,16 @@ function isFraction(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1
 }
 
+// ponytail: metadata/watermark/annotate/substitute predate typed errors and map the error
+// string themselves; one call into the Draft module keeps the preamble in one place
 function requireDraftFor(filePath: string, sessionID: string): string | null {
-  const filePathHash = getFilePathHash(filePath)
-  const lock = getLock(filePathHash)
-  if (!lock || lock.sessionID !== sessionID) {
-    return "no active draft"
+  try {
+    Draft.requireOwned(filePath, sessionID, "no active draft")
+    Draft.requireDraftExists(filePath, sessionID)
+    return null
+  } catch (error) {
+    return (error as Error).message
   }
-  if (!draftExists(filePathHash, sessionID)) {
-    return "draft not found"
-  }
-  return null
 }
 
 function isFractionPoint(value: unknown): value is { x: number; y: number } {
