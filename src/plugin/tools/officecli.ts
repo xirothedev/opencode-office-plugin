@@ -153,7 +153,7 @@ const officecliOutput = S.String
 export const officecliTool: Tool.Info<typeof officecliInput, typeof officecliOutput> = {
   name: "officecli",
   description:
-    "MAIN method for all Office and PDF files (.docx/.doc/.dotx/.xlsx/.xls/.xlsm/.pptx/.ppt/.pdf and images) — handle every read, create, edit, accept, undo, history, revert, comment, track-change, metadata, watermark, export through this tool. The native read/edit/write tools are blocked for these extensions and will error with 'use officecli'. Draft lifecycle: create/edit → accept (writes real file, snapshots version). Preview renders draft to HTML, validate checks draft against rules, lock-status/force-release manage stale locks (default 24h). Comments for DOCX/XLSX/PPTX, track changes for DOCX, suggestions via comment+suggestedText+approve (PPTX approve accepts optional targetText to pick the box). Comment lifecycle: open/resolved/denied via edit-comment/delete-comment/resolve-comment/deny-comment; list-comments/review surface status. L3 Fidelity: clone (copy Reference ZIP verbatim for 100% Format), substitute (run-preserving {{placeholder}} replace on Draft ZIP), verify-l3 (OOXML diff except text nodes).",
+    "MAIN method for all Office and PDF files (.docx/.doc/.dotx/.xlsx/.xls/.xlsm/.pptx/.ppt/.pdf and images) — handle every read, create, edit, accept, undo, history, revert, comment, track-change, metadata, watermark, export through this tool. The native read/edit/write tools are blocked for these extensions and will error with 'use officecli'. Draft lifecycle: create/edit → accept (writes real file, snapshots version). Preview renders draft to HTML, validate checks draft against rules, lock-status/force-release manage stale locks (default 24h). Comments for DOCX/XLSX/PPTX, track changes for DOCX, suggestions via comment+suggestedText+approve (PPTX approve accepts optional targetText to pick the box; denied suggestions cannot be approved). Comment lifecycle: open/resolved/denied via edit-comment/delete-comment/resolve-comment/deny-comment; list-comments/review surface status. L3 Fidelity: clone (copy Reference ZIP verbatim for 100% Format), substitute (run-preserving {{placeholder}} replace on Draft ZIP), verify-l3 (OOXML diff except text nodes).",
   input: officecliInput,
   output: officecliOutput,
   options: { codemode: false },
@@ -536,6 +536,9 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     }
     if (result === "no-suggestion") {
       fail(`comment ${input.commentId} has no suggestion to approve`)
+    }
+    if (result === "denied") {
+      fail(`comment ${input.commentId} was denied — suggestion not applied`)
     }
     return `Approved comment ${input.commentId} on ${input.filePath}: suggestion applied`
   }

@@ -62,6 +62,19 @@ describe("Comment intake module", () => {
     expect(await Comments.applySuggestion(file, "nope")).toBe("not-found")
   })
 
+  it("refuses to approve a denied suggestion, on every format", async () => {
+    for (const ext of Object.keys(FIXTURES)) {
+      const file = fixture(ext)
+      await Comments.add(file, { ...baseInput(ext), suggestedText: "SHOULD-NOT-APPLY" })
+      const id = (await Comments.list(file))[0].id
+      expect(await Comments.setStatus(file, id, "denied")).toBe("ok")
+      expect(await Comments.applySuggestion(file, id)).toBe("denied")
+      const after = await Comments.list(file)
+      expect(after).toHaveLength(1)
+      expect(after[0].status).toBe("denied")
+    }
+  })
+
   it("strips XML-illegal control characters at the seam", async () => {
     const file = fixture(".xlsx")
     await Comments.add(file, { id: "c1", author: "a", text: "a\x03b", cellRef: "B2" })

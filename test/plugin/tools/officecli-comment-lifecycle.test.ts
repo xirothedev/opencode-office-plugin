@@ -271,6 +271,27 @@ describe("officecli comment lifecycle actions", () => {
     expect(result).toContain('"status": "denied"');
   });
 
+  it("approve refuses a denied suggestion and leaves content untouched", async () => {
+    await seedDraftWithDocx();
+    await addComment("comment-1", "change needed");
+    await runTool(officecliTool, {
+      action: "edit-comment",
+      filePath: testFile,
+      commentId: "comment-1",
+      suggestedText: "SHOULD-NOT-APPLY",
+    });
+    await runTool(officecliTool, {
+      action: "deny-comment",
+      filePath: testFile,
+      commentId: "comment-1",
+    });
+    await expect(
+      runTool(officecliTool, { action: "approve", filePath: testFile, commentId: "comment-1" }),
+    ).rejects.toThrow(/was denied/);
+    const result = await runTool(officecliTool, { action: "list-comments", filePath: testFile });
+    expect(JSON.parse(result.slice(result.indexOf("\n") + 1))[0].status).toBe("denied");
+  });
+
   it("lifecycle actions reject unsupported formats", async () => {
     const mdFile = "/tmp/comment-lifecycle.md";
     writeFileSync(mdFile, "hello");

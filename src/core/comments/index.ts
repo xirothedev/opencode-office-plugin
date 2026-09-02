@@ -32,7 +32,7 @@ import {
 import type { CommentStatus } from "@/core/format/ooxml/parts"
 import { sanitizeXmlText } from "@/core/format/sanitize"
 
-export type ApproveResult = "applied" | "not-found" | "no-suggestion"
+export type ApproveResult = "applied" | "not-found" | "no-suggestion" | "denied"
 export type AnyComment = Comment | XlsxComment | PptxComment
 
 export interface NewComment {
@@ -137,6 +137,11 @@ export async function add(filePath: string, input: NewComment): Promise<void> {
 
 export async function applySuggestion(filePath: string, commentId: string): Promise<ApproveResult> {
   const ext = requireFormat(filePath, "suggestions")
+  // Deny is final (COMMENT-WORKFLOW.md: content stays untouched) — the adapters store
+  // status in per-format shapes, so the refusal lives here where all reads are uniform.
+  if ((await readBy(ext, filePath)).some((c) => c.id === commentId && c.status === "denied")) {
+    return "denied"
+  }
   if (ext === ".xlsx") return applyCellSuggestion(filePath, commentId)
   if (ext === ".pptx") return applySlideSuggestion(filePath, commentId)
   return applyCommentSuggestion(filePath, commentId)
@@ -175,6 +180,10 @@ export async function setStatus(
 
 export async function list(filePath: string): Promise<AnyComment[]> {
   const ext = requireFormat(filePath, "comments")
+  return readBy(ext, filePath)
+}
+
+async function readBy(ext: string, filePath: string): Promise<AnyComment[]> {
   if (ext === ".xlsx") return readXlsxComments(filePath)
   if (ext === ".pptx") return readPptxComments(filePath)
   return readComments(filePath)
