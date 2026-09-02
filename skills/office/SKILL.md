@@ -25,16 +25,18 @@ Every write runs through a **draft**: nothing reaches the real file until `accep
 
 > **Enduser report rule:** endusers are office staff, not developers. Report after every office task in the **user's language**, plain words, fixed shape — never paste tool output, JSON, hashes, or tool names (`draft`, `lock`, `accept` stay internal):
 >
-> ```
-> Đã xong: 3 sửa đổi trong Hợp đồng.docx
-> 1. Điều 2 — sửa thời hạn thanh toán (đang chờ bạn duyệt)
-> 2. Biểu giá — cộng lại cột Thành tiền (đã áp dụng)
-> 3. Trang bìa — cập nhật ngày (đang chờ bạn duyệt)
+> English template (render it in the user's language — never send it as-is to a non-English Enduser):
 >
-> Bạn cần làm gì: trả lời "duyệt 1 và 3" để áp dụng, hoặc "từ chối 1" và tôi sẽ giữ nguyên.
+> ```
+> Done: 3 changes in <Contract.docx>
+> 1. <Clause 2 — payment term fixed> — waiting for you
+> 2. <Pricing sheet — totals recomputed> — applied
+> 3. <Cover page — date updated> — waiting for you
+>
+> Next: reply "approve 1 and 3" to apply, or "reject 1" to keep the old text.
 > ```
 >
-> Shape: 1 line result → numbered changes (what + where + state: applied / waiting for you) → one clear next action phrased so a one-word reply works. Pending suggestions must be numbered the same way as comment ids so "duyệt 2" is unambiguous. The full standard — 8 rules, the four message shapes (report/question/failure/reminder), Vietnamese number & register conventions, and the pre-send self-check — is [references/enduser-output.md](references/enduser-output.md); apply it to every user-facing message.
+> Shape: 1 line result → numbered changes (what + where + state: applied / waiting for you) → one clear next action phrased so a one-word reply works. Pending suggestions must be numbered the same way as comment ids so "approve 2" is unambiguous. The full standard — 8 rules, the four message shapes (report/question/failure/reminder), Vietnamese number & register conventions, and the pre-send self-check — is [references/enduser-output.md](references/enduser-output.md); apply it to every user-facing message.
 
 > **Suggest-first rule:** when the target is a document you did **not** author this session (`create` reports *pre-existing document*), seed the draft with `edit` from the markdown you just `read`, then make every content change as `comment` + `suggestedText` on the exact range/cell/box (`approve` applies a suggestion into the draft). Direct content edits to such a draft are allowed only when the user chose that mode — if it is not clear whether the task wants suggested edits or direct edit, **ask the user before writing any content change, in the exact format of the mode question in [references/reviewing.md](references/reviewing.md)** — then wait for the answer. Bulk generation from a Reference (L3 `clone` + `substitute`) is direct by design and does not need to ask.
 
