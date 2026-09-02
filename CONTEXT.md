@@ -40,6 +40,10 @@ _Avoid_: Patch, hotfix, direct fix
 An editable copy of a document held under `.opencode/office/drafts/` with an exclusive lock.
 _Avoid_: Working copy, edit buffer
 
+**Comment intake**:
+The single core module (`core/comments`) that routes comment operations to the DOCX/XLSX/PPTX adapters, sanitizing at the seam. The only comment surface the plugin layer may import.
+_Avoid_: comment helper, comment utils
+
 **Sidecar**:
 A `.json` file next to a document storing non-content mutations (comments, track-changes state) that cannot be stored in the draft itself.
 _Avoid_: Meta file, companion file
