@@ -19,7 +19,7 @@ The exact plugin list the Isolated Runtime loads. Strict baseline is only `@xiro
 _Avoid_: Allowed plugins, pollution set
 
 **Capture**:
-JSON traces of each `officecli` invoke (input, output, duration, error) written to `tests/isolated-workspace/.capture/` during a run. For Skill Learning, also written to `.opencode/office/.capture/` on real office runs, same shape.
+JSON records of every `officecli` invoke (input, output, duration, error) written to `tests/isolated-workspace/.capture/` during a run, and, unconditionally since ADR 0014, to the plugin captures dir on real office runs, same shape.
 _Avoid_: Logs, traces, dumps
 
 **Report**:

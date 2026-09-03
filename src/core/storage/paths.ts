@@ -22,6 +22,10 @@ export function getSidecarsDir(): string {
   return join(getPluginDataDir(), "sidecars")
 }
 
+export function getCapturesDir(): string {
+  return join(getPluginDataDir(), ".capture")
+}
+
 export function getFilePathHash(absolutePath: string): string {
   return createHash("sha256").update(absolutePath).digest("hex")
 }

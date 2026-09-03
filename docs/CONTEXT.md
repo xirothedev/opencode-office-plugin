@@ -217,7 +217,7 @@ A typed JSON entry in `.opencode/office/learned/learned.json` (per-project) plus
 _Avoid_: learned lesson, memo
 
 **Capture** (extended):
-JSON traces of each `officecli` invoke (input, output, duration, error) written to `tests/isolated-workspace/.capture/` during a run. For Skill Learning, also written to `.opencode/office/.capture/` on real office runs, same shape.
+JSON records of every `officecli` invoke (input, output, duration, error) written to `tests/isolated-workspace/.capture/` during a run, and, unconditionally since ADR 0014, to the plugin captures dir on real office runs, same shape.
 _Avoid_: logs, traces, dumps
 
 **Report**:

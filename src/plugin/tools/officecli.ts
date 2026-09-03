@@ -18,6 +18,7 @@ import { METADATA_EXTENSIONS, parseMetadataProperties } from "@/core/format/meta
 import { parseAnnotationOps, ANNOTATE_EXTENSIONS } from "@/core/format/annotate"
 import { sanitizeMarkdown, sanitizeXmlText } from "@/core/format/sanitize"
 import { fail, tryExecute } from "@/plugin/tools/boundary"
+import { capture, captureQuiet } from "@/plugin/capture"
 import { tmpdir } from "os"
 
 const S = Schema
@@ -158,7 +159,14 @@ export const officecliTool: Tool.Info<typeof officecliInput, typeof officecliOut
   output: officecliOutput,
   options: { codemode: false },
   execute: (input, context) =>
-    tryExecute(async () => ({ output: await runAction(input, context) })),
+    tryExecute(async () => ({
+      output: await capture(
+        context.agent === "openoffice-invoke" ? "host" : "agent",
+        input.action,
+        input,
+        () => runAction(input, context),
+      ),
+    })),
 }
 
 async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<string> {
@@ -378,8 +386,9 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     if (input.live === true) {
       try {
         return await readLiveOrFileAsMarkdown(input.filePath, true, readOpts)
-      } catch {
-        // ponytail: live best-effort failed, fall through to file check
+      } catch (error) {
+        // ponytail: live best-effort failed, fall through to file check — captured so the failure is not invisible
+        captureQuiet(context.agent === "openoffice-invoke" ? "host" : "agent", "live-read-fallback", { filePath: input.filePath }, error)
       }
     }
     if (!existsSync(input.filePath)) {
