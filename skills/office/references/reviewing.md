@@ -8,7 +8,24 @@
 
 - User asked for direct changes → plain `edit` + `accept`
 - File carries user-authored content worth preserving visibly → **suggestions** or **track changes** below
-- Unsure → suggestions; they are reversible and visible in Office apps
+- Unsure which mode the user wants → **ask the user with the mode question below** before writing any content change; if asking is impossible, default to suggestions — they are reversible and visible in Office apps
+
+**Mode question** — keep the two-option structure and ask in the **user's language** (Vietnamese endusers get the Vietnamese version; translate faithfully, do not reword the options), then stop and wait for the answer:
+
+```
+How should I apply changes to <file>?
+
+1. Suggested edits (recommended for content you wrote)
+   Each change is a comment with proposed text. You review with
+   list-comments, approve what you want, deny the rest. I accept after.
+2. Direct edit
+   I rewrite the draft and accept. Nothing changes the file until accept.
+   history/revert can undo any accepted version.
+
+Which one? (1 = suggested, 2 = direct)
+```
+
+One question per file, asked once. After the user answers, keep that mode for the whole task on that file.
 
 Suggestions and comments belong to files that already have content. On a file created this session, write the content directly and skip comments entirely.
 

@@ -3,7 +3,7 @@ import JSZip from "jszip"
 import { readFileSync, writeFileSync } from "fs"
 import { detectFormat } from "@/core/format/detect"
 import { addRelationship, ensureContentType, escapeXml } from "@/core/format/ooxml/parts"
-import type { WatermarkConfig } from "@/core/draft/sidecar"
+import type { WatermarkConfig, WatermarkPosition } from "@/core/draft/sidecar"
 
 const HEADER_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/header"
 const FOOTER_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer"
@@ -105,6 +105,39 @@ async function applyDocxWatermark(absolutePath: string, config: WatermarkConfig)
   }
   zip.file(documentPath, documentXml)
   writeFileSync(absolutePath, await zip.generateAsync({ type: "nodebuffer" }))
+}
+
+export const WATERMARK_EXTENSIONS = [".docx", ".pdf"]
+
+export interface WatermarkRequest {
+  text: string
+  position?: string
+  size?: number
+  opacity?: number
+}
+
+// Format policy for the watermark Sidecar write: per-Format defaults and
+// rejections live here, not in the tool layer.
+export function buildWatermarkConfig(ext: string, input: WatermarkRequest): WatermarkConfig {
+  if (!WATERMARK_EXTENSIONS.includes(ext)) {
+    throw new Error("watermark only supported for DOCX and PDF files")
+  }
+  const defaultPosition: WatermarkPosition = ext === ".docx" ? "top-center" : "diagonal-center"
+  const position = (input.position as WatermarkPosition | undefined) ?? defaultPosition
+  const validPositions: WatermarkPosition[] = ["diagonal-center", "top-center", "bottom-center"]
+  if (!validPositions.includes(position)) {
+    throw new Error(`invalid position "${position}" (supported: diagonal-center, top-center, bottom-center)`)
+  }
+  if (ext === ".docx" && position === "diagonal-center") {
+    throw new Error("diagonal-center watermark not supported for DOCX (supported: top-center, bottom-center)")
+  }
+  if (ext === ".docx" && input.opacity !== undefined) {
+    throw new Error("opacity not supported for DOCX watermarks (supported: PDF only)")
+  }
+  const config: WatermarkConfig = { text: input.text, position }
+  if (input.size !== undefined) config.size = input.size
+  if (input.opacity !== undefined) config.opacity = input.opacity
+  return config
 }
 
 export async function applyWatermarkToFile(absolutePath: string, config: WatermarkConfig): Promise<void> {

@@ -118,6 +118,33 @@ async function readPdfMetadata(absolutePath: string): Promise<FileMetadata> {
   return result
 }
 
+export function parseMetadataProperties(propertiesJson: string): FileMetadata {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(propertiesJson)
+  } catch {
+    throw new Error("invalid properties JSON")
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error("properties must be a JSON object")
+  }
+  for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+    if (key === "custom") {
+      if (
+        typeof value !== "object" ||
+        value === null ||
+        Array.isArray(value) ||
+        !Object.values(value as Record<string, unknown>).every((v) => typeof v === "string")
+      ) {
+        throw new Error("custom must be an object with string values")
+      }
+    } else if (typeof value !== "string") {
+      throw new Error(`property "${key}" must be a string`)
+    }
+  }
+  return parsed as FileMetadata
+}
+
 export async function readMetadata(absolutePath: string): Promise<FileMetadata> {
   const format = detectFormat(absolutePath)
   if (format === "pdf") {

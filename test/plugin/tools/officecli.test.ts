@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { officecliTool } from "@/plugin/tools/officecli"
 import { runTool, setupHermeticDirs, cleanupTestFile } from "./harness"
-import { readFileSync, existsSync } from "fs"
+import { readFileSync, existsSync, writeFileSync } from "fs"
 
 describe("officecli tool", () => {
   const testFile = "/tmp/officecli-test.txt"
@@ -20,6 +20,13 @@ describe("officecli tool", () => {
     expect(existsSync(testFile)).toBe(true)
     const content = readFileSync(testFile, "utf-8")
     expect(content).toBe("draft content")
+  })
+
+  it("create on a pre-existing document signals suggest-first", async () => {
+    writeFileSync(testFile, "existing user content")
+    const result = await runTool(officecliTool, { action: "create", filePath: testFile, content: "rewrite" })
+    expect(result).toContain("pre-existing document")
+    await runTool(officecliTool, { action: "undo", filePath: testFile })
   })
 
   it("rejects empty content", async () => {

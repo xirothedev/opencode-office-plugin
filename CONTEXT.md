@@ -40,6 +40,10 @@ _Avoid_: Patch, hotfix, direct fix
 An editable copy of a document held under `.opencode/office/drafts/` with an exclusive lock.
 _Avoid_: Working copy, edit buffer
 
+**Comment intake**:
+The single core module (`core/comments`) that routes comment operations to the DOCX/XLSX/PPTX adapters, sanitizing at the seam. The only comment surface the plugin layer may import.
+_Avoid_: comment helper, comment utils
+
 **Sidecar**:
 A `.json` file next to a document storing non-content mutations (comments, track-changes state) that cannot be stored in the draft itself.
 _Avoid_: Meta file, companion file
@@ -117,6 +121,10 @@ _Avoid_: Validation loop, check loop
 **Skill Learning**:
 The `Capture → proposal → accept` loop where `skills/office` proposes a `Learned Record` after a `verify-l3 PASS` + `Accept`, and the Enduser accepts it. Follows `Single write path`, not runtime self-mutation.
 _Avoid_: Self improve, auto-learn
+
+**Enduser report**:
+A single portable English `.md` in `.opencode/office/reports/` written after the 4-question interview when the Enduser reports a problem for the developer. Self-contained: sanitized action trace inline, Captures referenced by id only. Distinct from a `Report` (test artifact); never a GitHub issue.
+_Avoid_: bug report file, feedback doc
 
 **Learned Record**:
 A typed JSON entry in `.opencode/office/learned/learned.json` (per-project) plus generated `learned.md` view, capturing a verified Template structure, `Format` requirement, or `Verify Loop` workaround that passed `verify-l3`. Replayed next session to avoid the loop.
