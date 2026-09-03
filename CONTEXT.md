@@ -18,6 +18,10 @@ _Avoid_: Clean env, test opencode, local opencode
 The exact plugin list the Isolated Runtime loads. Strict baseline is only `@xirothedev/openoffice-plugin-opencode`.
 _Avoid_: Allowed plugins, pollution set
 
+**Plugin Harness**:
+The set of `ctx` domains the installed opencode2 host binary actually passes to a plugin at load time. Ground truth is a runtime probe of the host, not the vendored `PluginContext` types — the host drifts (beta builds dropped `invoke`, shipped `tool`).
+_Avoid_: Runtime harness, host API, plugin surface
+
 **Capture**:
 JSON records of every `officecli` invoke (input, output, duration, error) written to `tests/isolated-workspace/.capture/` during a run, and, unconditionally since ADR 0014, to the plugin captures dir on real office runs, same shape.
 _Avoid_: Logs, traces, dumps

@@ -7,20 +7,11 @@ import { basename, extname } from "path"
 import * as Draft from "@/core/draft"
 import * as Comments from "@/core/comments"
 import { fail } from "@/plugin/tools/boundary"
+import { captureQuiet } from "@/plugin/capture"
 import { officecliInput, officecliTool, type OfficeCliInput } from "@/plugin/tools/officecli"
+import { officecliInvokes } from "@/plugin/invoke-names"
 
-// ponytail: host-facing invoke names mirror officecli actions so the app drives the same code path as the agent tool
-export const officecliInvokes: Record<string, OfficeCliInput["action"]> = {
-  "office.preview": "preview",
-  "office.edit.save": "edit",
-  "office.accept": "accept",
-  "office.comment.create": "comment",
-  "office.comment.edit": "edit-comment",
-  "office.comment.delete": "delete-comment",
-  "office.comment.resolve": "resolve-comment",
-  "office.comment.deny": "deny-comment",
-  "office.comment.approve": "approve",
-}
+export { officecliInvokes }
 
 // ponytail: data URLs above 20 MB would bloat the invoke payload; host falls back to the built-in preview
 const officePreviewFileCapBytes = 20 * 1024 * 1024
@@ -32,14 +23,30 @@ const officePreviewMimes: Record<string, string> = {
 }
 
 export async function runOfficecliInvoke(name: string, input: unknown): Promise<unknown> {
-  if (name === "office.preview") return officePreview(input)
-  const action = officecliInvokes[name]
-  if (!action) fail(`unknown invoke ${name}`)
+  // office.preview never reaches officecliTool, so its failures are captured here. Success is not:
+  // capturing it would JSON.stringify a data-URL preview of up to 20 MB on every UI poll.
+  if (name === "office.preview") {
+    try {
+      return await officePreview(input)
+    } catch (error) {
+      captureQuiet("host", "preview", input, error)
+      throw error
+    }
+  }
+  // early failures (unknown invoke, bad params) never reach officecliTool.execute where Captures live
   const params: Record<string, unknown> =
     input !== null && typeof input === "object" ? (input as Record<string, unknown>) : {}
+  let args: OfficeCliInput
   const filePath = strParam(params.filePath) ?? strParam(params.filename)
-  if (!filePath) fail(`${name} requires filePath`)
-  const args = decodeInvokeArgs(name, { ...params, action, filePath })
+  try {
+    const action = officecliInvokes[name]
+    if (!action) fail(`unknown invoke ${name}`)
+    if (!filePath) fail(`${name} requires filePath`)
+    args = decodeInvokeArgs(name, { ...params, action, filePath })
+  } catch (error) {
+    captureQuiet("host", name, input, error)
+    throw error
+  }
   const sessionID = strParam(params.sessionID) ?? Draft.lockSession(filePath) ?? "openoffice-invoke"
   const context = {
     sessionID,
@@ -90,8 +97,9 @@ async function officePreview(input: unknown): Promise<unknown> {
     // falls back to its built-in preview; raw zip bytes would render as garbage
     try {
       result.content = await Draft.draftMarkdown(filePath, draftSession)
-    } catch {
-      // no content key
+    } catch (error) {
+      // no content key — captured so the silent host-preview fallback is not invisible
+      captureQuiet("host", "preview-content", { filePath, draftSession }, error)
     }
   } else {
     result.fileUrl = officePreviewFileUrl(filePath, ext)
