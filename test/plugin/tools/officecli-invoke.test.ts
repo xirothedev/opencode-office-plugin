@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest"
 import { Tool } from "@opencode-ai/schema/tool"
-import { officecliTool, officecliInvokes, runOfficecliInvoke } from "@/plugin/tools/officecli"
+import { officecliTool } from "@/plugin/tools/officecli"
+import { officecliInvokes, runOfficecliInvoke } from "@/plugin/host"
 import { runTool, setupHermeticDirs, cleanupTestFile, mockContext } from "./harness"
 import { getFilePathHash } from "@/core/storage/paths"
 import { getDraftPath } from "@/core/draft/manager"
