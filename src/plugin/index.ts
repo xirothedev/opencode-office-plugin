@@ -1,7 +1,7 @@
 import { Effect } from "effect"
 import { define } from "@opencode-ai/plugin/v2/effect"
 import { Tool } from "@opencode-ai/schema/tool"
-import { officecliInvokes, runOfficecliInvoke } from "@/plugin/tools/officecli"
+import { officecliInvokes, runOfficecliInvoke } from "@/plugin/host"
 import { BINARY_EXTENSIONS, OFFICE_READ_EXTENSIONS } from "@/plugin/tools/edit"
 import { editTool } from "@/plugin/tools/edit"
 import { listActiveDrafts } from "@/core/draft/manager"

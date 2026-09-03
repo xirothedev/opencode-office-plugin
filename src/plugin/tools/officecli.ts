@@ -1,9 +1,9 @@
-import { Effect, Schema } from "effect"
+import { Schema } from "effect"
 import { Tool } from "@opencode-ai/schema/tool"
 import * as Draft from "@/core/draft"
 import { buildWatermarkConfig, WATERMARK_EXTENSIONS } from "@/core/format/watermark"
 import { writeFileSync, readFileSync, existsSync } from "fs"
-import { extname, resolve, join, basename } from "path"
+import { extname, resolve, join } from "path"
 import { detectFormat } from "@/core/format/detect"
 import { writeTrackChange, readTrackChanges, type TrackChange } from "@/core/format/ooxml/trackchanges"
 import * as Comments from "@/core/comments"
@@ -14,7 +14,7 @@ import { parseRules, renderValidationReport } from "@/core/format/validate"
 import { readLiveOrFileAsMarkdown, readRealFileAsMarkdown, type ReadOptions } from "@/core/format/read"
 import { renderMarkdownFileToHtml } from "@/core/format/render"
 import { writeDerivedFile, assertExportPaths } from "@/core/format/export"
-import { readMetadata, METADATA_EXTENSIONS, parseMetadataProperties, type FileMetadata } from "@/core/format/metadata"
+import { METADATA_EXTENSIONS, parseMetadataProperties } from "@/core/format/metadata"
 import { parseAnnotationOps, ANNOTATE_EXTENSIONS } from "@/core/format/annotate"
 import { sanitizeMarkdown, sanitizeXmlText } from "@/core/format/sanitize"
 import { fail, tryExecute } from "@/plugin/tools/boundary"
@@ -114,7 +114,7 @@ const verifyL3Args = S.Struct({ action: S.Literal("verify-l3"), filePath: S.Stri
 const validateArgs = S.Struct({ action: S.Literal("validate"), filePath: S.String, rules: S.String })
 const reviewArgs = S.Struct({ action: S.Literal("review"), filePath: S.String })
 
-const officecliInput = S.Union([
+export const officecliInput = S.Union([
   createArgs,
   acceptArgs,
   undoArgs,
@@ -146,7 +146,7 @@ const officecliInput = S.Union([
   substituteArgs,
   verifyL3Args,
 ])
-type OfficeCliInput = Schema.Schema.Type<typeof officecliInput>
+export type OfficeCliInput = Schema.Schema.Type<typeof officecliInput>
 
 const officecliOutput = S.String
 
@@ -159,108 +159,6 @@ export const officecliTool: Tool.Info<typeof officecliInput, typeof officecliOut
   options: { codemode: false },
   execute: (input, context) =>
     tryExecute(async () => ({ output: await runAction(input, context) })),
-}
-
-// ponytail: host-facing invoke names mirror officecli actions so the app drives the same code path as the agent tool
-export const officecliInvokes: Record<string, OfficeCliInput["action"]> = {
-  "office.preview": "preview",
-  "office.edit.save": "edit",
-  "office.accept": "accept",
-  "office.comment.create": "comment",
-  "office.comment.edit": "edit-comment",
-  "office.comment.delete": "delete-comment",
-  "office.comment.resolve": "resolve-comment",
-  "office.comment.deny": "deny-comment",
-  "office.comment.approve": "approve",
-}
-
-// ponytail: office.preview resolves a structured object for the host UI instead of the
-// agent-facing HTML-render string; every other invoke keeps returning the action's string
-const officePreviewMimes: Record<string, string> = {
-  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-}
-
-// ponytail: data URLs above 20 MB would bloat the invoke payload; host falls back to the built-in preview
-const officePreviewFileCapBytes = 20 * 1024 * 1024
-
-export async function runOfficecliInvoke(name: string, input: unknown): Promise<unknown> {
-  if (name === "office.preview") return officePreview(input)
-  const action = officecliInvokes[name]
-  if (!action) fail(`unknown invoke ${name}`)
-  const params: Record<string, unknown> =
-    input !== null && typeof input === "object" ? (input as Record<string, unknown>) : {}
-  const filePath = strParam(params.filePath) ?? strParam(params.filename)
-  if (!filePath) fail(`${name} requires filePath`)
-  const args = decodeInvokeArgs(name, { ...params, action, filePath })
-  const sessionID = strParam(params.sessionID) ?? Draft.lockSession(filePath) ?? "openoffice-invoke"
-  const context = {
-    sessionID,
-    agent: "openoffice-invoke",
-    messageID: "openoffice-invoke",
-    id: "openoffice-invoke",
-    progress: () => Effect.void,
-  } as never
-  const result = await Effect.runPromise(officecliTool.execute(args, context))
-  return result.output as string
-}
-
-function decodeInvokeArgs(name: string, value: Record<string, unknown>): OfficeCliInput {
-  try {
-    return Schema.decodeUnknownSync(officecliInput)(value)
-  } catch (error) {
-    fail(`invalid ${name} params: ${error instanceof Error ? error.message : String(error)}`)
-  }
-}
-
-function strParam(value: unknown): string | undefined {
-  return typeof value === "string" && value.length > 0 ? value : undefined
-}
-
-async function officePreview(input: unknown): Promise<unknown> {
-  const params: Record<string, unknown> =
-    input !== null && typeof input === "object" ? (input as Record<string, unknown>) : {}
-  const filePath = strParam(params.filePath) ?? strParam(params.filename)
-  if (!filePath) fail("office.preview requires filePath")
-  const ext = extname(filePath).toLowerCase()
-  const sessions = Draft.draftSessions(filePath)
-  const managed = sessions.length > 0 || (officePreviewMimes[ext] !== undefined && existsSync(filePath))
-  if (!managed) return { managed: false }
-  // ponytail: draft selection prefers the requesting session, else the most recent draft by mtime
-  const wanted = strParam(params.sessionID)
-  const draftSession = wanted !== undefined && sessions.includes(wanted) ? wanted : Draft.mostRecentDraftSession(filePath)
-  const target = draftSession ? Draft.draftPath(filePath, draftSession) : filePath
-  const lock = Draft.status(filePath)
-  const result: Record<string, unknown> = {
-    managed: true,
-    source: draftSession ? "draft" : "file",
-    filename: basename(filePath),
-    contentType: "markdown",
-    comments: await Comments.preview(target),
-  }
-  if (draftSession) {
-    // ponytail: zip draft can't be sent as markdown text — extract or fallback to fileUrl
-    try {
-      const buf = readFileSync(target)
-      const isZip = buf.length >= 2 && buf[0] === 0x50 && buf[1] === 0x4b
-      result.content = isZip ? await readRealFileAsMarkdown(target) : buf.toString("utf-8")
-    } catch {
-      result.content = readFileSync(target, "utf-8")
-    }
-  } else {
-    result.fileUrl = officePreviewFileUrl(filePath, ext)
-  }
-  if (lock) {
-    result.lock = { sessionID: lock.sessionID, owner: lock.owner, stale: lock.stale }
-  }
-  return result
-}
-
-function officePreviewFileUrl(filePath: string, ext: string): string | undefined {
-  const data = readFileSync(filePath)
-  if (data.length > officePreviewFileCapBytes) return undefined
-  return `data:${officePreviewMimes[ext]};base64,${data.toString("base64")}`
 }
 
 async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<string> {
@@ -409,18 +307,13 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     }
     if (input.properties !== undefined) {
       requireDraftFor(input.filePath, sessionID)
-      const sidecar = Draft.readSidecarFor(input.filePath, sessionID) ?? {}
-      sidecar.metadata = parseMetadataProperties(input.properties)
-      Draft.writeSidecarFor(input.filePath, sessionID, sidecar)
+      Draft.setSidecarMetadata(input.filePath, sessionID, parseMetadataProperties(input.properties))
       return `Metadata set for ${input.filePath}`
     }
     if (!existsSync(input.filePath)) {
       fail(`file not found: ${input.filePath}`)
     }
-    const real = await readMetadata(input.filePath)
-    const sidecar = Draft.readSidecarFor(input.filePath, sessionID)
-    const merged: FileMetadata = { ...real, ...(sidecar?.metadata) }
-    return JSON.stringify(merged, null, 2)
+    return JSON.stringify(await Draft.effectiveMetadata(input.filePath, sessionID), null, 2)
   }
 
   if (input.action === "watermark") {
@@ -429,19 +322,15 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
       fail("watermark only supported for DOCX and PDF files")
     }
     requireDraftFor(input.filePath, sessionID)
-    const sidecar = Draft.readSidecarFor(input.filePath, sessionID) ?? {}
     if (input.text === "") {
-      delete sidecar.watermark
-      Draft.writeSidecarFor(input.filePath, sessionID, sidecar)
+      Draft.setSidecarWatermark(input.filePath, sessionID, null)
       return `Watermark removed for ${input.filePath}`
     }
-    sidecar.watermark = buildWatermarkConfig(ext, {
-      text: input.text,
-      position: input.position,
-      size: input.size,
-      opacity: input.opacity,
-    })
-    Draft.writeSidecarFor(input.filePath, sessionID, sidecar)
+    Draft.setSidecarWatermark(
+      input.filePath,
+      sessionID,
+      buildWatermarkConfig(ext, { text: input.text, position: input.position, size: input.size, opacity: input.opacity }),
+    )
     return `Watermark set for ${input.filePath}: "${input.text}"`
   }
 
@@ -452,15 +341,10 @@ async function runAction(input: OfficeCliInput, context: Tool.Context): Promise<
     }
     requireDraftFor(input.filePath, sessionID)
     const ops = parseAnnotationOps(ext, input.annotations)
-    const sidecar = Draft.readSidecarFor(input.filePath, sessionID) ?? {}
-    if (ops === null) {
-      delete sidecar.annotations
-      Draft.writeSidecarFor(input.filePath, sessionID, sidecar)
-      return `Annotations cleared for ${input.filePath}`
-    }
-    sidecar.annotations = [...(sidecar.annotations ?? []), ...ops]
-    Draft.writeSidecarFor(input.filePath, sessionID, sidecar)
-    return `Annotations added to draft for ${input.filePath}: ${ops.length}`
+    Draft.appendSidecarAnnotations(input.filePath, sessionID, ops ?? [])
+    return ops === null
+      ? `Annotations cleared for ${input.filePath}`
+      : `Annotations added to draft for ${input.filePath}: ${ops.length}`
   }
 
   if (input.action === "export") {

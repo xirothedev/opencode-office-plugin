@@ -20,7 +20,8 @@ import {
   getDraftSessions,
   type ActiveDraft,
 } from "./manager"
-import { readSidecar, writeSidecar, type Sidecar } from "./sidecar"
+import { readSidecar, writeSidecar, type Sidecar, type WatermarkConfig, type AnnotationOp } from "./sidecar"
+import { readMetadata, type FileMetadata } from "@/core/format/metadata"
 import { substituteOoxml } from "@/core/template/substitute-ooxml"
 import type { TemplateData } from "@/core/template/generate"
 
@@ -181,10 +182,39 @@ export function forceRelease(filePath: string, sessionID: string, owner: string)
   lock.overrideLock(hash, sessionID, owner)
 }
 
-export function readSidecarFor(filePath: string, sessionID: string): Sidecar | null {
+function readSidecarFor(filePath: string, sessionID: string): Sidecar | null {
   return readSidecar(getFilePathHash(filePath), sessionID)
 }
 
-export function writeSidecarFor(filePath: string, sessionID: string, sidecar: Sidecar): void {
+function writeSidecarFor(filePath: string, sessionID: string, sidecar: Sidecar): void {
   writeSidecar(getFilePathHash(filePath), sessionID, sidecar)
+}
+
+// Intent-level Sidecar mutations: replace/clear/append semantics live here,
+// the raw read–mutate–write pair is private. null / empty clears the key.
+export function setSidecarMetadata(filePath: string, sessionID: string, metadata: FileMetadata | null): void {
+  const sidecar = readSidecarFor(filePath, sessionID) ?? {}
+  if (metadata) sidecar.metadata = metadata
+  else delete sidecar.metadata
+  writeSidecarFor(filePath, sessionID, sidecar)
+}
+
+export function setSidecarWatermark(filePath: string, sessionID: string, config: WatermarkConfig | null): void {
+  const sidecar = readSidecarFor(filePath, sessionID) ?? {}
+  if (config) sidecar.watermark = config
+  else delete sidecar.watermark
+  writeSidecarFor(filePath, sessionID, sidecar)
+}
+
+export function appendSidecarAnnotations(filePath: string, sessionID: string, ops: AnnotationOp[]): void {
+  const sidecar = readSidecarFor(filePath, sessionID) ?? {}
+  if (ops.length === 0) delete sidecar.annotations
+  else sidecar.annotations = [...(sidecar.annotations ?? []), ...ops]
+  writeSidecarFor(filePath, sessionID, sidecar)
+}
+
+// Effective metadata = real file properties overridden by pending Sidecar metadata
+export async function effectiveMetadata(filePath: string, sessionID: string): Promise<FileMetadata> {
+  const real = await readMetadata(filePath)
+  return { ...real, ...(readSidecarFor(filePath, sessionID)?.metadata) }
 }
