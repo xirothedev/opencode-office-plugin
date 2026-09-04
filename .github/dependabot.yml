@@ -5,7 +5,7 @@
 version: 2
 updates:
   # package.json + bun.lock (npm ecosystem covers bun)
-  - package-ecosystem: npm
+  - package-ecosystem: bun
     directory: /
     schedule:
       interval: weekly
@@ -31,7 +31,7 @@ updates:
       - dependency-name: "@opencode-ai/schema"
 
   # tests/isolated-workspace (opencode2 CLI pin for the Isolated Runtime)
-  - package-ecosystem: npm
+  - package-ecosystem: bun
     directory: /tests/isolated-workspace
     schedule:
       interval: weekly
@@ -53,7 +53,7 @@ updates:
       - dependency-name: "@opencode-ai/cli"
 
   # .opencode/package.json — V1 plugin dep for the opencode 1.x stable line
-  - package-ecosystem: npm
+  - package-ecosystem: bun
     directory: /.opencode
     schedule:
       interval: weekly
@@ -83,18 +83,9 @@ updates:
       prefix: ci
     open-pull-requests-limit: 5
 
-  # the packageManager field (bun binary). The npm ecosystem does not touch it.
-  - package-ecosystem: package-manager-versions
-    directory: /
-    schedule:
-      interval: weekly
-      day: monday
-    cooldown:
-      default-days: 7
-    labels: [dependencies, automated]
-    commit-message:
-      prefix: chore
-    open-pull-requests-limit: 5
+  # NOTE: the packageManager field (bun binary) has no dependabot ecosystem on this
+  # instance (package-manager-versions is not accepted by the config schema).
+  # Bump bun@1.3.14 by hand; run `git grep <old-version>` to catch the workflows.
 
   # FROM image tags — no Dockerfile today; "*" activates when one appears
   - package-ecosystem: docker
