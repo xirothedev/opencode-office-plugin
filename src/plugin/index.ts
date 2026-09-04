@@ -1,90 +1,85 @@
 import { Effect } from "effect"
 import { define } from "@opencode-ai/plugin/v2/effect"
 import { Tool } from "@opencode-ai/schema/tool"
-import { officecliInvokes, runOfficecliInvoke } from "@/plugin/host"
-import { BINARY_EXTENSIONS, OFFICE_READ_EXTENSIONS } from "@/plugin/tools/edit"
+import { officecliInvokes } from "@/plugin/invoke-names"
+import { officecliTool } from "@/plugin/tools/officecli"
 import { editTool } from "@/plugin/tools/edit"
-import { listActiveDrafts } from "@/core/draft/manager"
+import { BINARY_EXTENSIONS, OFFICE_READ_EXTENSIONS } from "@/core/format/detect"
 import { configureOptions } from "@/core/options"
 
 export function isBlockedTool(tool: string): boolean {
   return tool === "edit" || tool === "write"
 }
 
-// ponytail: all tool-domain hooks dormant until host ships ctx.tool — global check, per-tool hook when throughput matters
+// ponytail: live host ctx drifts from the pinned vendored types in both directions (beta dropped invoke, shipped tool) — feature-detect at the seam
+interface ToolEditorLike {
+  add: (tool: unknown) => void
+}
+interface LiveCtx {
+  options?: unknown
+  invoke?: { register: (name: string, h: (i: unknown) => Effect.Effect<unknown>) => Effect.Effect<unknown> }
+  tool?: {
+    transform: (cb: (editor: ToolEditorLike) => void) => Effect.Effect<unknown>
+    hook: (name: string, cb: (e: { tool: string; input?: unknown }) => void) => Effect.Effect<unknown>
+  }
+}
+
+const blockMessage = "use officecli tool for office/PDF files — office is the main method for read + handle"
+
+export function blockBinary(tool: string, input: unknown): void {
+  const args = (input ?? {}) as Record<string, unknown>
+  const fp = typeof args.filePath === "string" ? args.filePath : typeof args.path === "string" ? args.path : ""
+  const ext = fp.includes(".") ? fp.slice(fp.lastIndexOf(".")).toLowerCase() : ""
+  if ((isBlockedTool(tool) && BINARY_EXTENSIONS.has(ext)) || (tool === "read" && OFFICE_READ_EXTENSIONS.has(ext))) {
+    throw new Tool.Error({ message: blockMessage })
+  }
+}
+
 export const OpenOfficePlugin = define({
   id: "openoffice",
-  effect: (ctx: unknown) =>
+  effect: (rawCtx) =>
     Effect.gen(function* () {
-      const safeCtx = ctx as {
-        options: unknown
-        invoke: {
-          register: (name: string, handler: (input: unknown) => Effect.Effect<unknown>) => Effect.Effect<unknown>
+      const ctx = rawCtx as unknown as LiveCtx
+      configureOptions(ctx.options as never)
+
+      if (ctx.invoke) {
+        for (const name of Object.keys(officecliInvokes)) {
+          yield* ctx.invoke.register(
+            name,
+            (input: unknown) =>
+              Effect.tryPromise({
+                try: async () => {
+                  const { runOfficecliInvoke } = await import("@/plugin/host")
+                  return runOfficecliInvoke(name, input)
+                },
+                catch: (error) => (error instanceof Error ? error : new Error(String(error))),
+              }) as unknown as Effect.Effect<unknown>,
+          )
         }
-      } & Record<string, unknown>
-      configureOptions(safeCtx.options as never)
-
-      for (const name of Object.keys(officecliInvokes)) {
-        // ponytail: InvokeHooks types handlers as Effect<unknown> (E = never), but the core
-        // registry yields* the handler so typed failures still propagate at runtime — cast
-        yield* safeCtx.invoke.register(
-          name,
-          (input: unknown) =>
-            Effect.tryPromise({
-              try: () => runOfficecliInvoke(name, input),
-              catch: (error) => (error instanceof Error ? error : new Error(String(error))),
-            }) as unknown as Effect.Effect<unknown>,
-        )
       }
 
-      // ponytail: defensive guard — compiles on 1.18.22, activates when host ships ctx.tool; single global check
-      const toolDomain =
-        typeof ctx === "object" && ctx !== null && "tool" in ctx
-          ? (ctx as Record<string, unknown>)["tool"] as
-              | {
-                  transform?: (cb: (r: { add: (t: unknown) => void }) => void) => Effect.Effect<unknown>
-                  hook?: (name: string, cb: (e: unknown) => unknown) => Effect.Effect<unknown>
-                }
-              | undefined
-          : undefined
-      if (toolDomain?.transform) {
-        yield* toolDomain.transform((registry) => {
-          registry.add(editTool as unknown)
-        }) as unknown as Effect.Effect<void>
-      }
-      if (toolDomain?.hook) {
-        // ponytail: proactive guidance — model sees warning in tool description before choosing edit/write
-        yield* toolDomain.hook("definition", (event: unknown) => {
-          const e = event as { toolID?: string; description?: string }
-          if ((e.toolID === "edit" || e.toolID === "write") && e.description) {
-            e.description += "\n\nIMPORTANT: Do NOT use on binary files (.docx, .xlsx, .pptx, .pdf, images). Use officecli instead."
-          }
-        }) as unknown as Effect.Effect<void>
-
-        // ponytail: safety net — catches binary file attempts after model ignores description warning
-        yield* toolDomain.hook("execute.before", (event: unknown) => {
-          const e = event as { tool?: string; args?: { filePath?: string; path?: string } }
-          const tool = (e.tool ?? "").toLowerCase()
-          const fp = e.args?.filePath ?? e.args?.path ?? ""
-          const ext = fp.includes(".") ? fp.slice(fp.lastIndexOf(".")).toLowerCase() : ""
-          if (isBlockedTool(tool) && BINARY_EXTENSIONS.has(ext)) {
-            throw new Tool.Error({ message: "use officecli tool for office/PDF files — office is the main method for read + handle" })
-          }
-          // ponytail: read hook for office/pdf — officecli read is the main method, not raw binary read
-          if (tool === "read" && OFFICE_READ_EXTENSIONS.has(ext)) {
-            throw new Tool.Error({ message: "use officecli tool for office/PDF files — office is the main method for read + handle" })
-          }
-        }) as unknown as Effect.Effect<void>
+      if (ctx.tool) {
+        // add(editTool) replaces the builtin edit by name (ADR 0010) — draft lifecycle covers every write
+        yield* ctx.tool.transform((editor) => {
+          editor.add(officecliTool)
+          editor.add(editTool)
+        })
+        // ponytail: host runs hook callbacks through yield* — the non-throwing path must return an Effect, not undefined
+        yield* ctx.tool.hook("execute.before", (event) => {
+          blockBinary(event.tool, event.input)
+          return Effect.void
+        })
       }
 
       yield* Effect.addFinalizer(() =>
-        Effect.sync(() => {
+        Effect.promise(async () => {
+          const { listActiveDrafts } = await import("@/core/draft/manager")
           for (const draft of listActiveDrafts()) {
             if (draft.orphaned) {
               console.log(`[office-plugin] Orphaned draft: ${draft.filePath}`)
             }
           }
-        })
+        }).pipe(Effect.ignore),
       )
     }),
 })

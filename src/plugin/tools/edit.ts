@@ -1,33 +1,14 @@
 import { Schema } from "effect"
 import { Tool } from "@opencode-ai/schema/tool"
-import { createDraft, draftExists, getDraftPath } from "@/core/draft/manager"
 import { acquireLock, getLock } from "@/core/draft/lock"
 import { getFilePathHash } from "@/core/storage/paths"
 import { readFileSync, writeFileSync, existsSync } from "fs"
 import { extname } from "path"
 import { fail, tryExecute } from "@/plugin/tools/boundary"
 
-// ponytail: office is the main method for read + handle of office/pdf — single source for guard
-export const OFFICE_READ_EXTENSIONS = new Set([
-  ".docx",
-  ".doc",
-  ".dotx",
-  ".dotm",
-  ".xlsx",
-  ".xls",
-  ".xlsm",
-  ".xlsb",
-  ".xltx",
-  ".xltm",
-  ".pptx",
-  ".ppt",
-  ".potx",
-  ".potm",
-  ".ppsx",
-  ".pdf",
-])
-// ponytail: binary guard = office (all variants) + images — edit/write on any of these must go through officecli
-export const BINARY_EXTENSIONS = new Set([...OFFICE_READ_EXTENSIONS, ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".tiff", ".webp"])
+// ponytail: editTool is unregistered until host ships ctx.tool; extensions live in detect for the plugin-level permission guard
+import { BINARY_EXTENSIONS, OFFICE_READ_EXTENSIONS } from "@/core/format/detect"
+export { BINARY_EXTENSIONS, OFFICE_READ_EXTENSIONS }
 
 const S = Schema
 
@@ -51,6 +32,8 @@ export const editTool: Tool.Info<typeof editInput, typeof editOutput> = {
 }
 
 async function runEdit(input: EditInput, context: Tool.Context): Promise<string> {
+  // ponytail: manager pulls the docx backend — load it only when an edit actually runs
+  const { createDraft, draftExists, getDraftPath } = await import("@/core/draft/manager")
   const sessionID = context.sessionID
   const ext = extname(input.filePath).toLowerCase()
 

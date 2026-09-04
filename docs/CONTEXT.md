@@ -97,7 +97,7 @@ Content of a document as held in the running Word application (`Application.Word
 _Avoid_: active window, unsaved buffer
 
 **Invoke**:
-Host-facing named entry point registered via `ctx.invoke.register(name, handler)` on the v2 plugin API; the opencode host (not the agent) calls it with a params object through the server API. This plugin maps `office.preview`, `office.edit.save`, `office.accept`, and `office.comment.{create,edit,delete,resolve,deny,approve}` onto the matching officecli actions, running as the session that holds the file lock (override with a `sessionID` param).
+Host-facing named entry point registered via `ctx.invoke.register(name, handler)` on the v2 plugin API; the opencode host (not the agent) calls it with a params object through the server API. Registered only when the host exposes the `invoke` domain — recent opencode2 beta builds dropped it (see **Plugin Harness**); without it the app-driven surfaces are unavailable and the agent tool remains the only path. This plugin maps `office.preview`, `office.edit.save`, `office.accept`, and `office.comment.{create,edit,delete,resolve,deny,approve}` onto the matching officecli actions, running as the session that holds the file lock (override with a `sessionID` param).
 _Avoid_: endpoint, api, webhook
 
 **Force release**:
