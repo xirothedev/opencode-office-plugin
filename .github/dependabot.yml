@@ -1,18 +1,110 @@
+# Dependabot — org baseline (rules/dependabot.md) + 7-day version cooldown.
+# Cooldown is native (GA 2025-07): Dependabot opens a version-update PR only
+# when the new version is at least default-days old. Security updates bypass
+# cooldown by design.
 version: 2
 updates:
+  # package.json + bun.lock (npm ecosystem covers bun)
   - package-ecosystem: npm
     directory: /
     schedule:
       interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
     groups:
-      dependencies:
+      minor-and-patch:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
+    labels: [dependencies, automated]
+    commit-message:
+      prefix: chore
+      prefix-development: chore(dev)
+      include: scope
+    open-pull-requests-limit: 5
+    # Host-coupled pins: current opencode2 hosts reject plugin-tool input decode
+    # in every effect/schema era (docs/reports/2026-09-03-opencode-beta-interop.md).
+    # A bump here is only meaningful paired with a host whose decode reads the
+    # matching AST — gate on the probe_simple test from the report.
+    ignore:
+      - dependency-name: effect
+      - dependency-name: "@opencode-ai/schema"
+
+  # tests/isolated-workspace (opencode2 CLI pin for the Isolated Runtime)
+  - package-ecosystem: npm
+    directory: /tests/isolated-workspace
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    groups:
+      minor-and-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+    labels: [dependencies, automated]
+    commit-message:
+      prefix: chore
+      include: scope
+    open-pull-requests-limit: 5
+    # The Plugin Harness couples the host binary to the plugin API pins above;
+    # host bumps are a deliberate, tested event, not a routine bump.
+    ignore:
+      - dependency-name: "@opencode-ai/cli"
+
+  # .opencode/package.json — V1 plugin dep for the opencode 1.x stable line
+  - package-ecosystem: npm
+    directory: /.opencode
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    labels: [dependencies, automated]
+    commit-message:
+      prefix: chore
+      include: scope
     open-pull-requests-limit: 5
 
+  # action refs in .github/workflows (SHA-pinned; Dependabot syncs the SHA + comment)
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
     groups:
-      actions:
+      minor-and-patch:
         patterns: ["*"]
+        update-types: ["minor", "patch"]
+    labels: [dependencies, automated]
+    commit-message:
+      prefix: ci
+    open-pull-requests-limit: 5
+
+  # the packageManager field (bun binary). The npm ecosystem does not touch it.
+  - package-ecosystem: package-manager-versions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    labels: [dependencies, automated]
+    commit-message:
+      prefix: chore
+    open-pull-requests-limit: 5
+
+  # FROM image tags — no Dockerfile today; "*" activates when one appears
+  - package-ecosystem: docker
+    directories: ["*"]
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
+    labels: [dependencies, automated]
+    commit-message:
+      prefix: chore
+    open-pull-requests-limit: 5

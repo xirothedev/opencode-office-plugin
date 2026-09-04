@@ -4,7 +4,7 @@
   "type": "module",
   "packageManager": "bun@1.3.14",
   "dependencies": {
-    "@opencode-ai/cli": "latest"
+    "@opencode-ai/cli": "0.0.0-beta-19059"
   },
   "scripts": {
     "test:tracer": "bun run ./scripts/tracer.mjs"
