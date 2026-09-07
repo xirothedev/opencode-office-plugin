@@ -8,6 +8,7 @@ Office document automation plugin for opencode. Manage documents with draft life
 - [Quick Start](#quick-start)
 - [Real-World Example](#real-world-example-hospital-procurement)
 - [Install](#install)
+- [Skills](#-skills)
 - [Requirements](#requirements)
 - [Usage](#usage)
   - [Create draft](#create-draft)
@@ -96,6 +97,32 @@ Add the package to the `plugins` array in opencode 2 configuration — `opencode
 opencode installs the package and its dependencies on startup. For version pinning, plugin options, local development install, verification, and troubleshooting, see [docs/INSTALL.md](docs/INSTALL.md).
 
 > **Note**: This plugin targets the opencode 2 (V2) plugin API (`Plugin.define`, `plugins` config field, `opencode2` CLI). It does not load in opencode V1.
+
+## 🧩 Skills
+
+The plugin provides the `officecli` tool; skills teach the agent when and how to use it. Install at least `office` — without it the agent may not route document work through `officecli`.
+
+```bash
+# 1. With the plugin (installs the office skill too)
+./install.sh                  # macOS/Linux
+.\install.ps1                 # Windows
+# flags: --global | --project DIR | --skill-only | --plugin-only | --local
+
+# 2. Standalone (all skills, no plugin)
+npx skills add xirothedev/opencode-office-plugin
+
+# 3. Manual, one skill at a time
+cp -R skills/office ~/.config/opencode/skills/office   # global
+cp -R skills/office .opencode/skills/office            # this project only
+```
+
+| Skill | When the agent uses it |
+|-------|------------------------|
+| `office` | **Main entry point.** Every read/create/edit/review/convert of `.docx/.xlsx/.pptx/.pdf`/images goes through `officecli`. Start here. |
+| `docx` / `xlsx` / `pptx` / `pdf` | Format-deep work: polished Word reports, spreadsheet formulas/charts, slide decks, PDF merge/split/forms/OCR. |
+| `skill-creator` | Turn a repetitive document task into a reusable Task Skill (`grill` → `write`). |
+
+`install.sh` / `install.ps1` copy only `skills/office` — add the format skills with option 2 or 3. Project path is `.opencode/skills/<name>/`, global path is `~/.config/opencode/skills/<name>/` (`%APPDATA%\opencode\skills\<name>\` on Windows). Restart opencode after installing, then try: `Create a Word document at /tmp/test.docx` — the agent should invoke the `office` skill and call `officecli`.
 
 ## ✅ Requirements
 
@@ -286,7 +313,7 @@ Configure via the `plugins` entry's `options` object in opencode config:
 - [Comment Workflow](docs/COMMENT-WORKFLOW.md) - Comment approval and track changes
 - [Full Flow](docs/FULL-FLOW.md) - End-to-end orchestration
 - [ADRs](docs/adr/) - Architecture decisions (CI/CD, V2 plugin API target)
-- [Agent skill](skills/office/SKILL.md) - Teach agents the office workflows: `npx skills add xirothedev/opencode-office-plugin`, or copy `skills/office/` into your project's `.opencode/skills/office/`
+- [Agent skills](#-skills) - Teach agents the office workflows (`skills/office/`, `skills/docx/`, `skills/xlsx/`, `skills/pptx/`, `skills/pdf/`, `skills/skill-creator/`)
 
 ## 📄 License
 
