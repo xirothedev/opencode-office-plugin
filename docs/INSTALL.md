@@ -89,7 +89,7 @@ opencode2 api get /api/plugin
 
 ## For maintainers: creating a release
 
-Releases are automated with [Changesets](https://github.com/changesets/changesets) and the `Release` workflow:
+Releases are automated with [Changesets](https://github.com/changesets/changesets) and the `Release` workflow (`.github/workflows/cd.yml`):
 
 ```bash
 # 1. Describe each user-facing change (once per change, at PR time or before the release)
@@ -101,6 +101,44 @@ bunx changeset
 
 - Merging the Version Packages PR publishes to npm and creates the `v<version>` tag plus the GitHub Release (notes taken from the matching `CHANGELOG.md` section by `scripts/release-notes.ts`).
 - The bump type comes from the changesets (minor for features, patch for fixes); do not edit `package.json` or `CHANGELOG.md` by hand.
-- Publishing uses **Trusted Publishing (OIDC)** — no npm token secret in CI. The `@xirothedev` scope must have trusted publishing enabled in the npm web UI (Settings → Trusted Publishing): OIDC provider `https://token.actions.githubusercontent.com`, allowed repo `xirothedev/opencode-office-plugin`. CI authenticates via the workflow's `id-token: write` permission and signs with `--provenance`.
+- Publishing uses **Trusted Publishing (OIDC)** — no npm token secret in CI. CI authenticates via the workflow's `id-token: write` permission and signs with `--provenance`.
 - The workflow requires the repository setting **Allow GitHub Actions to create and approve pull requests** (Settings → Actions → General → Workflow permissions).
-- Until the scope has trusted publishing configured, a publish fails with `E403`/`EOTP`; run `npm publish --provenance --access public` locally once (with `--otp=<code>` if 2FA-protected) to claim the scope, then enable trusted publishing.
+
+### (Re)setting up npm Trusted Publishing
+
+npm pins a trusted publisher to an exact **workflow filename** (case-sensitive). If a publish fails with `E404: Not Found - PUT https://registry.npmjs.org/...`, the configured workflow and the one that ran no longer match.
+
+Check and update it with npm 11.19+:
+
+```bash
+npm login --auth-type=web     # browser + 2FA
+npm whoami                    # must be the package owner
+npm trust list @xirothedev/openoffice-plugin-opencode
+```
+
+The entry must read: repository `xirothedev/opencode-office-plugin`, file `cd.yml`, permissions `publish`. To replace it:
+
+```bash
+npm trust revoke @xirothedev/openoffice-plugin-opencode --id=<trust-id>
+npm trust github @xirothedev/openoffice-plugin-opencode \
+  --file cd.yml \
+  --repo xirothedev/opencode-office-plugin \
+  --allow-publish -y
+```
+
+Or configure it in the npm web UI — package → **Settings → Trusted Publishing** → Add trusted publisher → GitHub Actions:
+
+| Field | Value |
+| --- | --- |
+| Organization or user | `xirothedev` |
+| Repository | `opencode-office-plugin` |
+| Workflow filename | `cd.yml` — must match exactly; rename the workflow only after updating this |
+| Environment | leave empty |
+| Allowed actions | npm publish |
+
+Notes:
+
+- A brand-new scoped package cannot use OIDC for its first publish (npm answers 404 until the package exists with a trusted publisher configured). Publish once locally with `npm login` + `npm publish --access public` (`--otp=<code>` if 2FA-protected), then add the trusted publisher.
+- Verify the configuration without cutting a release: `gh workflow run cd.yml`. It publishes only when `package.json` holds a version that is not on npm yet.
+- Trusted publishing only works from GitHub-hosted runners, and the workflow must keep `id-token: write`.
+- The registry read (`npm view`) can lag right after a publish (packument CDN). The release workflow handles this by trusting the Changesets `published` output first and retrying the registry check.
