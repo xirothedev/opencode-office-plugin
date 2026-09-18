@@ -89,15 +89,18 @@ opencode2 api get /api/plugin
 
 ## For maintainers: creating a release
 
-Releases are tag-driven. CI publishes to npm when a `v*` tag is pushed:
+Releases are automated with [Changesets](https://github.com/changesets/changesets) and the `Release` workflow:
 
 ```bash
-bun run build
-bun run test
-git tag v0.2.1
-git push origin v0.2.1
+# 1. Describe each user-facing change (once per change, at PR time or before the release)
+bunx changeset
+
+# 2. Push to main — the workflow opens or updates the "Version Packages" PR
+#    (version bump + CHANGELOG.md). Merge that PR to release.
 ```
 
-- The npm version is taken from the tag (`v0.2.0` → `0.2.0`); do not bump `package.json` by hand.
+- Merging the Version Packages PR publishes to npm and creates the `v<version>` tag plus the GitHub Release (notes taken from the matching `CHANGELOG.md` section by `scripts/release-notes.ts`).
+- The bump type comes from the changesets (minor for features, patch for fixes); do not edit `package.json` or `CHANGELOG.md` by hand.
 - Publishing uses **Trusted Publishing (OIDC)** — no npm token secret in CI. The `@xirothedev` scope must have trusted publishing enabled in the npm web UI (Settings → Trusted Publishing): OIDC provider `https://token.actions.githubusercontent.com`, allowed repo `xirothedev/opencode-office-plugin`. CI authenticates via the workflow's `id-token: write` permission and signs with `--provenance`.
+- The workflow requires the repository setting **Allow GitHub Actions to create and approve pull requests** (Settings → Actions → General → Workflow permissions).
 - Until the scope has trusted publishing configured, a publish fails with `E403`/`EOTP`; run `npm publish --provenance --access public` locally once (with `--otp=<code>` if 2FA-protected) to claim the scope, then enable trusted publishing.
