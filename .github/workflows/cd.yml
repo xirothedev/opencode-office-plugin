@@ -49,18 +49,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          git fetch --tags --force --quiet
           version="$(node -p "require('./package.json').version")"
           tag="v$version"
-          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
-            echo "Tag $tag already exists"
+          if git ls-remote --tags --exit-code origin "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "Tag $tag already exists on origin"
           else
             published="$(npm view "@xirothedev/openoffice-plugin-opencode@$version" version 2>/dev/null || true)"
             if [ "$published" != "$version" ]; then
               echo "Version $version is not on npm yet — nothing to tag"
               exit 0
             fi
-            git tag "$tag"
+            # `changeset publish` creates v<version> locally for root packages; push it when the remote is missing it.
+            git rev-parse -q --verify "refs/tags/$tag" >/dev/null || git tag "$tag"
             git push origin "$tag"
           fi
           bun scripts/release-notes.ts "$tag" > release-notes.md
