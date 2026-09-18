@@ -35,7 +35,7 @@
     "@firecrawl/anydoc": "^0.2.4",
     "@firecrawl/pdf-inspector": "^1.13.0",
     "@opencode-ai/plugin": "file:./vendor/opencode-plugin",
-    "@opencode-ai/schema": "0.0.0-next-17444",
+    "@opencode-ai/schema": "0.0.0-reserved.0",
     "diff": "^9.0.0",
     "docx": "^9.7.1",
     "effect": "4.0.0-beta.101",
