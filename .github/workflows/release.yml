@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Publish runs are serialized per branch and never cancelled mid-flight.
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # push the Version PR branch, tags, and releases
+      pull-requests: write # open and update the Version Packages PR
+      id-token: write # npm Trusted Publishing (OIDC) + provenance
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          # Trusted publishing (OIDC) requires npm 11.5.1+ / Node 22.14+;
+          # Node 22.x has a known E404-on-publish bug with OIDC exchange —
+          # Node 24 is the documented working combination.
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: bun install --frozen-lockfile
+      - name: Create Version PR or publish
+        uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
+        with:
+          publish-script: bun run release
+          # Single package: keep the repo's v<version> tag convention instead of
+          # changesets' default <package>@<version>. The finalize step owns tags
+          # and releases.
+          push-git-tags: false
+          create-github-releases: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_CONFIG_PROVENANCE: 'true'
+      - name: Tag and create GitHub Release
+        # Idempotent and version-based rather than gated on the action's `published`
+        # output, so a rerun after a partial failure still completes the release.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git fetch --tags --force --quiet
+          version="$(node -p "require('./package.json').version")"
+          tag="v$version"
+          if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+            echo "Tag $tag already exists"
+          else
+            published="$(npm view "@xirothedev/openoffice-plugin-opencode@$version" version 2>/dev/null || true)"
+            if [ "$published" != "$version" ]; then
+              echo "Version $version is not on npm yet — nothing to tag"
+              exit 0
+            fi
+            git tag "$tag"
+            git push origin "$tag"
+          fi
+          bun scripts/release-notes.ts "$tag" > release-notes.md
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release edit "$tag" --notes-file release-notes.md
+          else
+            gh release create "$tag" --title "$tag" --notes-file release-notes.md
+          fi

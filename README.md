@@ -1,92 +1,87 @@
 # @xirothedev/openoffice-plugin-opencode
 
-Office document automation plugin for opencode. Manage documents with draft lifecycle, version history, and format conversion.
+[![npm version](https://img.shields.io/npm/v/@xirothedev/openoffice-plugin-opencode.svg)](https://www.npmjs.com/package/@xirothedev/openoffice-plugin-opencode)
+[![CI](https://github.com/xirothedev/opencode-office-plugin/actions/workflows/ci.yml/badge.svg)](https://github.com/xirothedev/opencode-office-plugin/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+Office document automation for opencode 2 — draft lifecycle, version history, and format conversion for DOCX, XLSX, PPTX, PDF, images, and text.
+
+**English** · [Tiếng Việt](README.vi.md)
 
 ## Contents
 
 - [Overview](#overview)
-- [Quick Start](#quick-start)
-- [Real-World Example](#real-world-example-hospital-procurement)
+- [The problem it solves](#the-problem-it-solves)
+- [Why use it](#why-use-it)
 - [Install](#install)
-- [Skills](#-skills)
-- [Requirements](#requirements)
+- [Quick start](#quick-start)
 - [Usage](#usage)
-  - [Create draft](#create-draft)
-  - [Read document](#read-document)
-  - [Edit draft](#edit-draft)
-  - [Accept changes](#accept-changes)
-  - [Undo changes](#undo-changes)
-  - [View history](#view-history)
-  - [Revert to snapshot](#revert-to-snapshot)
-  - [Comment approval](#comment-approval)
 - [How it works](#how-it-works)
+- [Core concepts](#core-concepts)
 - [Supported formats](#supported-formats)
-- [New Features](#new-features)
-- [Data storage](#data-storage)
-- [Plugin options](#plugin-options)
+- [Data storage and options](#data-storage-and-options)
 - [Documentation](#documentation)
 - [License](#license)
 
-## 📖 Overview
+## Overview
 
-```mermaid
-graph LR
-    A[User Prompt] --> B[Agent]
-    B --> C[officecli tool]
-    C --> D[Draft Lifecycle]
-    D --> E[Format Conversion]
-    E --> F[Real File]
-    F --> G[Version History]
-```
+`@xirothedev/openoffice-plugin-opencode` is a plugin for **opencode 2** that gives the agent a single safe path for every Office document operation: it registers the `officecli` tool (31 actions) and intercepts the builtin `read`/`edit`/`write` tools for office formats, so document work cannot bypass the lifecycle.
 
-## 🚀 Quick Start
+The agent never touches a real file directly. Every change lands in a **Draft** held under an exclusive lock; the real file is written only on `accept`, which also records a **Snapshot** for `history` and `revert`.
 
-1. **Install plugin** (see [Install](#install) below)
+## The problem it solves
 
-2. **Start opencode** in your project directory
+Text-first agents are bad at binary documents:
 
-3. **Try a document operation**:
-   ```
-   Create a Word document at /tmp/report.docx with a project summary table
-   ```
+1. **Text tools corrupt Office files** — editing a DOCX/XLSX/PPTX/PDF as plain text breaks the ZIP/XML structure and the file stops opening.
+2. **Direct writes have no undo** — a wrong overwrite destroys the original.
+3. **Parallel sessions collide** — two sessions editing the same file silently overwrite each other.
+4. **Agent edits are invisible** — no audit trail of what changed, when, or by which session.
+5. **Repetitive document chains don't scale** — real workflows produce the same set of documents over and over (see below).
 
-4. **Agent calls officecli**:
-   - `create` → draft born (real file not yet written)
-   - `accept` → draft flushed to real file, version recorded
-   - `read` → extract text from any format as markdown
-   - `history` → see all versions
-   - `revert` → restore old version
+### Real-world example: hospital procurement
 
-5. **Binary files** (DOCX/XLSX/PPTX/PDF/images) require `officecli`. Text files work with both `edit` and `officecli`.
+A Vietnamese hospital procurement dossier needs ~23 ordered documents (B1 purchase request → B23 payment settlement). With a `{{placeholder}}` template, the plugin generates the whole chain in one call:
 
-## 🏥 Real-World Example: Hospital Procurement
-
-Vietnamese hospitals require 23 sequential procurement documents (purchase request → approval → technical specs → budget → contract → payment). This plugin automates the chain:
-
-```
-B1: Purchase request → B2: Approval decision → B3: Technical specs minutes
-→ ... → B23: Payment settlement
-```
-
-**Template-based batch generation**:
-```bash
-# Create template with {{var}} placeholders
+```text
+# 1. Create a template with {{var}} placeholders
 officecli(action="create", filePath="./templates/decision-template.md",
   content="# Decision {{NUMBER}}\n\nDepartment: {{DEPT}}\n\nAmount: {{AMOUNT}}")
 officecli(action="accept", filePath="./templates/decision-template.md")
 
-# Generate 50 decisions in one call (filePaths/dataArray are JSON strings)
+# 2. Generate 50 decisions in one call (filePaths/dataArray are JSON strings)
 officecli(action="generate",
   templatePath="./templates/decision-template.md",
   filePaths='["./decisions/dept-001.docx","./decisions/dept-002.docx", ...]',
   dataArray='[{"DEPT": "Microbiology", "NUMBER": 1, "AMOUNT": 10000}, ...]')
 ```
 
-See [WORKFLOWS.md](docs/WORKFLOWS.md) for full procurement workflow examples.
+See [docs/WORKFLOWS.md](docs/WORKFLOWS.md) for the full procurement chain.
 
-## 📦 Install
+## Why use it
 
-Add the package to the `plugins` array in opencode 2 configuration — `opencode.json` in your project, or the global config for all projects:
+- **Nothing lands until `accept`** — a wrong edit is discarded with `undo`, not recovered from a backup.
+- **Version history built in** — every `accept` snapshots the file; `history` lists versions, `revert` restores one.
+- **One writer at a time** — a per-file lock stops concurrent sessions from clobbering each other; stale locks are reclaimed after 24h by default.
+- **One tool, every format** — read DOCX/XLSX/PPTX/PDF/images as Markdown, edit, write back to the original format.
+- **Reviewable changes** — suggestion comments and DOCX track changes survive Office round-trips, so a human can approve edits in Word/Excel/PowerPoint.
+- **Format-preserving generation** — `clone` + `substitute` + `verify-l3` keep OOXML byte-identical except text nodes (L3 Fidelity), ideal for procurement templates.
+- **Local by default** — data stays on your machine; runtime captures are local JSON with no telemetry endpoint (ADR-0014).
+
+## Install
+
+### Requirements
+
+| Requirement | Needed for | Notes |
+|---|---|---|
+| opencode 2 | everything | V2 plugin API (`Plugin.define`, `plugins` config field, `opencode2` CLI). Does not load in opencode V1. |
+| pandoc | DOCX/XLSX/PPTX read & write | `brew install pandoc` (macOS) · `sudo apt-get install pandoc` (Linux) |
+| LaTeX engine | PDF write | `xelatex` by default; override with `pdfEngine` or `OFFICECLI_PDF_ENGINE` (e.g. `typst`) |
+| — | PDF extraction, image OCR | built in (`pdfjs-dist`, `pdf-inspector`, `anydoc`) |
+
+### Plugin
+
+Add the package to the `plugins` array in your opencode 2 config — `opencode.json` in the project, or the global config for all projects:
 
 ```json
 {
@@ -94,130 +89,85 @@ Add the package to the `plugins` array in opencode 2 configuration — `opencode
 }
 ```
 
-opencode installs the package and its dependencies on startup. For version pinning, plugin options, local development install, verification, and troubleshooting, see [docs/INSTALL.md](docs/INSTALL.md).
+opencode installs the package and its dependencies on startup. Version pinning, local development install, verification, and troubleshooting: [docs/INSTALL.md](docs/INSTALL.md).
 
-> **Note**: This plugin targets the opencode 2 (V2) plugin API (`Plugin.define`, `plugins` config field, `opencode2` CLI). It does not load in opencode V1.
+### Skills
 
-## 🧩 Skills
-
-The plugin provides the `officecli` tool; skills teach the agent when and how to use it. Install at least `office` — without it the agent may not route document work through `officecli`.
+The plugin provides the tool; skills teach the agent when to use it. Install at least `office` — without it the agent may not route document work through `officecli`.
 
 ```bash
-# 1. With the plugin (installs the office skill too)
+# With the plugin
 ./install.sh                  # macOS/Linux
 .\install.ps1                 # Windows
 # flags: --global | --project DIR | --skill-only | --plugin-only | --local
 
-# 2. Standalone (all skills, no plugin)
+# Standalone (all skills, no plugin)
 npx skills add xirothedev/opencode-office-plugin
 
-# 3. Manual, one skill at a time
+# Manual, one skill at a time
 cp -R skills/office ~/.config/opencode/skills/office   # global
 cp -R skills/office .opencode/skills/office            # this project only
 ```
 
 | Skill | When the agent uses it |
-|-------|------------------------|
+|---|---|
 | `office` | **Main entry point.** Every read/create/edit/review/convert of `.docx/.xlsx/.pptx/.pdf`/images goes through `officecli`. Start here. |
 | `docx` / `xlsx` / `pptx` / `pdf` | Format-deep work: polished Word reports, spreadsheet formulas/charts, slide decks, PDF merge/split/forms/OCR. |
 | `skill-creator` | Turn a repetitive document task into a reusable Task Skill (`grill` → `write`). |
 
-`install.sh` / `install.ps1` copy only `skills/office` — add the format skills with option 2 or 3. Project path is `.opencode/skills/<name>/`, global path is `~/.config/opencode/skills/<name>/` (`%APPDATA%\opencode\skills\<name>\` on Windows). Restart opencode after installing, then try: `Create a Word document at /tmp/test.docx` — the agent should invoke the `office` skill and call `officecli`.
+`install.sh` / `install.ps1` copy only `skills/office` — add the format skills with option 2 or 3. Restart opencode after installing, then try: `Create a Word document at /tmp/test.docx` — the agent should invoke the `office` skill and call `officecli`.
 
-## ✅ Requirements
+## Quick start
 
-- **PDF extraction**: Built-in (pdfjs-dist + pdf-inspector)
-- **Image OCR**: Built-in (anydoc)
-- **Office formats (DOCX/XLSX/PPTX)**: Requires [pandoc](https://pandoc.org/installing.html)
+1. Install the plugin and skills (above), then restart opencode.
+2. Ask for a document in plain language:
 
-```bash
-# macOS
-brew install pandoc
-
-# Linux
-sudo apt-get install pandoc
+```text
+Create a Word document at ./report.docx with a project summary table
 ```
 
-## 🛠️ Usage
+3. The agent calls `officecli`, and the draft lifecycle takes over:
 
-Plugin provides `officecli` tool with these actions:
+| Action | What happens |
+|---|---|
+| `create` | draft born — the real file is not written yet |
+| `edit` / `comment` | draft updated in place (locked) |
+| `read` / `diff` / `preview` | inspect the draft without touching the real file |
+| `accept` | real file written, Snapshot recorded, lock released |
+| `undo` | draft discarded, real file untouched |
 
-### Create draft
+## Usage
 
-```
+`officecli` is one tool with 31 actions:
+
+| Group | Actions |
+|---|---|
+| Lifecycle | `create` `edit` `read` `accept` `undo` `history` `revert` `diff` |
+| Drafts & locks | `list` `lock-status` `force-release` |
+| Comments & review | `comment` `list-comments` `approve` `deny-comment` `resolve-comment` `edit-comment` `delete-comment` `track-insert` `track-delete` `review` |
+| Conversion & output | `export` `preview` `metadata` `watermark` `annotate` `validate` |
+| Templates & fidelity | `clone` `substitute` `generate` `verify-l3` |
+
+### Core flow
+
+```text
 officecli(action="create", filePath="/path/to/doc.docx", content="# My Document\n\nContent here")
-```
-
-Creates new draft. Real file not written until `accept`.
-
-### Read document
-
-```
-officecli(action="read", filePath="/path/to/doc.pdf")
-```
-
-Returns markdown. For binary formats (PDF/DOCX/images), extracts text automatically.
-
-### Edit draft
-
-```
+officecli(action="read", filePath="/path/to/doc.pdf")          # any format → Markdown
 officecli(action="edit", filePath="/path/to/doc.docx", content="# Updated content")
-```
-
-Updates draft. Requires active lock (created by `create` or auto-acquired).
-
-### Accept changes
-
-```
-officecli(action="accept", filePath="/path/to/doc.docx")
-```
-
-Writes draft to real file, records accept-point in history, releases lock. For binary formats, converts markdown → original format.
-
-### Undo changes
-
-```
-officecli(action="undo", filePath="/path/to/doc.docx")
-```
-
-Discards draft, releases lock. Real file unchanged.
-
-### View history
-
-```
-officecli(action="history", filePath="/path/to/doc.docx")
-```
-
-Returns JSON array with timestamps and session IDs:
-
-```json
-[
-  {"timestamp": 1234567890, "sessionID": "abc123"},
-  {"timestamp": 1234567900, "sessionID": "abc123"}
-]
-```
-
-### Revert to snapshot
-
-```
+officecli(action="diff", filePath="/path/to/doc.docx")         # draft vs real file
+officecli(action="accept", filePath="/path/to/doc.docx")       # write + snapshot + unlock
+officecli(action="undo", filePath="/path/to/doc.docx")         # discard draft
+officecli(action="history", filePath="/path/to/doc.docx")      # list snapshots
 officecli(action="revert", filePath="/path/to/doc.docx", timestamp=1234567890)
 ```
 
-Creates draft from historical snapshot. Must `accept` to write.
+`revert` creates a draft from a Snapshot — call `accept` to write it.
 
-### Comment approval
+### Review before overwrite
 
-For files that already have content, propose changes as **suggestion comments** instead of overwriting text. Each proposed change is tracked in a comment and stays visible until explicitly approved:
+On documents the agent did not create in the current session, content changes default to **suggestion comments** instead of direct edits:
 
-1. `edit` the existing file to open its draft (auto-acquires lock)
-2. Attach a suggestion comment to the changed spot
-3. `list-comments` to inspect pending suggestions
-4. `approve` to apply one suggestion into the draft (comment removed)
-5. `accept` to write the file
-
-DOCX example:
-
-```
+```text
 officecli(action="edit", filePath="/path/to/report.docx", content="# Updated draft")
 officecli(action="comment", filePath="/path/to/report.docx", commentId="c1",
   author="AI Agent", commentText="Tighten summary",
@@ -228,61 +178,102 @@ officecli(action="approve", filePath="/path/to/report.docx", commentId="c1")
 officecli(action="accept", filePath="/path/to/report.docx")
 ```
 
-- Suggestions anchor to paragraph (DOCX), cell (`cellRef`, XLSX) or slide (`slide`, PPTX)
-- `approve` only accepts comments carrying `suggestedText`; approving a plain note errors
-- DOCX additionally supports native track changes via `track-insert`/`track-delete`
-- Comments survive Office round-trips, so a user can review/resolve them in Word/Excel/PowerPoint; `review` summarizes comments + track changes on any file
+Suggestions anchor to a paragraph (DOCX), cell (`cellRef`, XLSX), or slide (`slide`, PPTX). Comments survive Office round-trips, so a user can review or resolve them in Word/Excel/PowerPoint; `review` summarizes comments and track changes on any file. Details: [docs/COMMENT-WORKFLOW.md](docs/COMMENT-WORKFLOW.md).
 
-See [docs/COMMENT-WORKFLOW.md](docs/COMMENT-WORKFLOW.md) for full API details, OOXML structure, and limitations.
+## How it works
 
-## ⚙️ How it works
+```mermaid
+flowchart LR
+    P[User prompt] --> A[Agent]
+    A --> C[officecli]
+    C --> D[Draft + lock]
+    D -->|edit, comment, diff| D
+    D -->|accept| F[Real file]
+    D -->|accept| H[Snapshot in history]
+    H -->|revert| D
+```
 
-**Draft lifecycle**: All edits happen in draft files. Real files only written on `accept`. This prevents accidental overwrites and enables undo.
+- **Draft lifecycle** — every change lands in a draft; only `accept` promotes it to the real file.
+- **Lock = claim** — the first mutating action acquires a per-file lock; it releases on `accept`/`undo`, and stale locks are reclaimed after `staleLockHours` (default 24).
+- **Format conversion** — binary formats convert to Markdown for reading and back for writing (PDF via pandoc + xelatex); text files are handled directly.
 
-**Lock system**: First mutating action (`create`/`edit`) acquires lock. Lock prevents concurrent edits from different sessions. Released on `accept` or `undo`.
+### Architecture
 
-**Format conversion**: Binary formats (PDF/DOCX/XLSX/PPTX/images) automatically converted to markdown for reading, and from markdown for writing (PDF via pandoc + xelatex). Text files handled directly.
+```text
+src/
+├── plugin/    # opencode entry: Plugin.define, tool registration, edit-tool override, blocking hook
+└── core/
+    ├── draft/     # draft lifecycle, locks, diff, sidecars
+    ├── format/    # read/write/convert: docx, xlsx, pdf, image, OOXML parts
+    ├── template/  # clone + substitute, batch generate
+    ├── comments/  # single comment intake for OOXML comments
+    └── storage/   # paths + registry (SHA-256 path hash → document)
+```
 
-**Version history**: Each `accept` records snapshot with timestamp. Use `history` to view, `revert` to restore.
+The plugin targets the opencode V2 plugin API: `Plugin.define({ id: "openoffice", effect })`, tools added through `ctx.tool.transform`, options read from `ctx.options`, and real failures thrown as typed `Tool.Error`. Full design: [docs/DESIGN.md](docs/DESIGN.md) · decisions: [docs/adr/](docs/adr/).
 
-## 📂 Supported formats
+### Tech stack
+
+| Layer | Choice |
+|---|---|
+| Language | TypeScript (strict, ES2022) |
+| Runtime & package manager | Bun |
+| Plugin API | opencode V2 (`@opencode-ai/plugin`, `effect`) |
+| Office backends | `docx`, `exceljs`, `pdf-lib`, `pdfjs-dist`, `jszip`, `xml2js`, `sharp`, pandoc |
+| Tests | Vitest + v8 coverage |
+| Lint & build | oxlint · `tsc` + `tsc-alias` · Turbo |
+| CI/CD | GitHub Actions → npm publish on `v*` tags with provenance |
+
+### Development
+
+```bash
+bun install
+bun run check      # turbo: lint + typecheck + test + build
+bun run test       # vitest
+bun run build      # tsc + tsc-alias → dist/
+```
+
+Release: tag `vX.Y.Z` and push — CD takes the npm version from the tag and publishes with provenance. More in [docs/TESTING.md](docs/TESTING.md); the end-to-end harness lives in [tests/isolated-workspace](tests/isolated-workspace/).
+
+## Core concepts
+
+| Term | Meaning |
+|---|---|
+| **Draft** | Editable copy of a document under an exclusive lock; all edits happen here. |
+| **Accept** | Promotes a Draft to a Snapshot and writes the real file — the single write path. |
+| **Snapshot** | Immutable version stored on each `accept`; powers `history` and `revert`. |
+| **Lock** | Claim on a file held by one session; prevents concurrent writes. |
+| **Sidecar** | JSON holding non-content mutations (comments, track-change state) applied at `accept`. |
+| **Task Skill** | An opencode skill that automates one repetitive document task (`grill` → `write`). |
+
+Canonical definitions: [CONTEXT.md](CONTEXT.md) · language rules: [docs/CONTEXT.md](docs/CONTEXT.md).
+
+## Supported formats
 
 | Format | Read | Write | Backend |
-|--------|------|-------|---------|
-| Text (txt, md, etc.) | ✅ | ✅ | Native |
+|---|---|---|---|
+| Text (txt, md, …) | ✅ | ✅ | Native |
 | PDF | ✅ | ✅ | pandoc + xelatex (read: pdfjs-dist + pdf-inspector) |
 | DOCX | ✅ | ✅ | anydoc + docx library |
 | XLSX | ✅ | ✅ | anydoc + exceljs |
 | PPTX | ✅ | ✅ | anydoc + pandoc |
 | Images (PNG, JPG) | ✅ | ✅ | anydoc + sharp |
 
-All formats support full read/write cycle. PDF write requires a LaTeX engine (xelatex); override with the `pdfEngine` plugin option (e.g. `typst`) or the `OFFICECLI_PDF_ENGINE` environment variable.
+All formats support a full read/write cycle. PDF write requires a LaTeX engine (xelatex); override with the `pdfEngine` option (e.g. `typst`) or `OFFICECLI_PDF_ENGINE`.
 
-**Export fidelity**: `export` converts between PDF/DOCX/XLSX/PPTX through the markdown pipeline, so layout, tables, and styling are approximate — text content is preserved, fine formatting is not. Layout-sensitive conversions (e.g. PDF → DOCX) are best-effort; use them for text extraction and lightweight editing, not for pixel-perfect round-trips.
+**Export fidelity**: `export` converts between PDF/DOCX/XLSX/PPTX through the Markdown pipeline, so layout, tables, and styling are approximate — text content is preserved, fine formatting is not. Layout-sensitive conversions (e.g. PDF → DOCX) are best-effort: use them for text extraction and lightweight editing, not pixel-perfect round-trips.
 
-## ✨ New Features
+## Data storage and options
 
-### V2 Plugin API
+Plugin data lives in `~/.local/share/opencode/plugins/openoffice/` by default:
 
-Plugin is built on the opencode 2 (V2) plugin API: `Plugin.define({ id: "openoffice", effect })` from `@opencode-ai/plugin/effect`. Tools (`officecli`, `edit`) are registered via `ctx.tool.transform` with `codemode: false` (direct provider exposure), and configured via `ctx.options` (`pdfEngine`, `staleLockHours`, `dataDir`). Real failures are thrown as typed `Tool.Error`; informational output stays a plain string. On shutdown, a scope finalizer logs orphaned drafts.
+- `drafts/` — active drafts
+- `locks/` — session locks
+- `history/` — Snapshot versions
+- `registry/` — hash → path index (powers `list`)
+- `sidecars/` — non-content mutations
 
-### Enhanced Formatting
-
-DOCX writes now use `docx` library instead of pandoc for explicit table formatting (borders, cell widths, heading styles). Better round-trip fidelity for simple documents.
-
-## 💾 Data storage
-
-Plugin data stored in `~/.local/share/opencode/plugins/openoffice/` by default (override with the `dataDir` plugin option):
-
-- `drafts/` - Active draft files
-- `locks/` - Session locks
-- `history/` - Version snapshots
-- `registry/` - Registry of draft file paths keyed by hash (powers `list`)
-- `sidecars/` - Non-content mutations (metadata, watermarks, annotations)
-
-## 🔧 Plugin options
-
-Configure via the `plugins` entry's `options` object in opencode config:
+Configure via the `options` object of the plugin entry:
 
 ```json
 {
@@ -299,22 +290,25 @@ Configure via the `plugins` entry's `options` object in opencode config:
 }
 ```
 
-- `pdfEngine` — pandoc PDF engine (default `xelatex`; env fallback `OFFICECLI_PDF_ENGINE`)
-- `staleLockHours` — lock staleness threshold (default 24)
-- `dataDir` — plugin data directory (default `~/.local/share/opencode/plugins/openoffice/`)
+| Option | Default | Purpose |
+|---|---|---|
+| `pdfEngine` | `xelatex` | pandoc PDF engine (env fallback `OFFICECLI_PDF_ENGINE`) |
+| `staleLockHours` | `24` | lock staleness threshold |
+| `dataDir` | `~/.local/share/opencode/plugins/openoffice/` | plugin data directory |
 
-## 📚 Documentation
+## Documentation
 
-- [Install](docs/INSTALL.md) - Install the plugin in opencode (published + local dev)
-- [Design](docs/DESIGN.md) - Architecture and data schema
-- [Context](docs/CONTEXT.md) - Domain glossary
-- [Testing](docs/TESTING.md) - Local development guide
-- [Workflows](docs/WORKFLOWS.md) - Common usage patterns
-- [Comment Workflow](docs/COMMENT-WORKFLOW.md) - Comment approval and track changes
-- [Full Flow](docs/FULL-FLOW.md) - End-to-end orchestration
-- [ADRs](docs/adr/) - Architecture decisions (CI/CD, V2 plugin API target)
-- [Agent skills](#-skills) - Teach agents the office workflows (`skills/office/`, `skills/docx/`, `skills/xlsx/`, `skills/pptx/`, `skills/pdf/`, `skills/skill-creator/`)
+- [Install](docs/INSTALL.md) — published and local dev install, verification, troubleshooting
+- [Changelog](CHANGELOG.md) — release history
+- [Design](docs/DESIGN.md) — architecture and data schema
+- [Context](docs/CONTEXT.md) — domain glossary and language rules
+- [Testing](docs/TESTING.md) — local development guide
+- [Workflows](docs/WORKFLOWS.md) — common usage patterns
+- [Comment Workflow](docs/COMMENT-WORKFLOW.md) — comments and track changes
+- [Full Flow](docs/FULL-FLOW.md) — end-to-end orchestration
+- [ADRs](docs/adr/) — architecture decisions
+- [Skills](skills/) — agent skills shipped with the plugin
 
-## 📄 License
+## License
 
 MIT
