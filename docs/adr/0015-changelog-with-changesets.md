@@ -14,7 +14,7 @@ ADR 0001 chose "changelog-free manual tags" while releases were a solo, rare eve
 ## Consequences
 
 - `cd.yml` runs on every push to `main` (and on manual dispatch): with pending changesets it opens/updates the Version Packages PR, otherwise it is a no-op. The file keeps the `cd.yml` name so npm's Trusted Publishing configuration (which pins the workflow filename) stays valid.
-- The finalize step is idempotent and version-based: it acts only when the current version is on npm, then creates the tag and release if missing, or updates the release notes if it already exists.
+- The finalize step is idempotent and self-healing: it trusts the run's `published` output first, falls back to a retried registry check (the packument CDN lags behind a fresh publish), then creates the tag and release if missing, or updates the release notes if they already exist.
 - Version Packages PRs are opened with `GITHUB_TOKEN`, so CI does not run on them (GitHub suppresses token-triggered workflow runs); CI still runs on the merge push to `main`. The repository setting "Allow GitHub Actions to create and approve pull requests" is required.
 - `package.json` is bumped by `changeset version` inside the Version PR, not by hand. The old tag-triggered publish path is deleted — one release path.
 - `CHANGELOG.md` is committed but not shipped in the npm tarball (`files: ["dist"]`) — npm renders only the README.
