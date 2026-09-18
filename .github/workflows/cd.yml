@@ -32,6 +32,7 @@ jobs:
           registry-url: https://registry.npmjs.org
       - run: bun install --frozen-lockfile
       - name: Create Version PR or publish
+        id: changesets
         uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
         with:
           publish-script: bun run release
@@ -44,18 +45,30 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_PROVENANCE: 'true'
       - name: Tag and create GitHub Release
-        # Idempotent and version-based rather than gated on the action's `published`
-        # output, so a rerun after a partial failure still completes the release.
+        # Idempotent and version-based rather than gated only on the action's
+        # `published` output, so a rerun after a partial failure still completes
+        # the release.
         env:
           GH_TOKEN: ${{ github.token }}
+          PUBLISHED_THIS_RUN: ${{ steps.changesets.outputs.published }}
         run: |
           version="$(node -p "require('./package.json').version")"
           tag="v$version"
           if git ls-remote --tags --exit-code origin "refs/tags/$tag" >/dev/null 2>&1; then
             echo "Tag $tag already exists on origin"
           else
-            published="$(npm view "@xirothedev/openoffice-plugin-opencode@$version" version 2>/dev/null || true)"
-            if [ "$published" != "$version" ]; then
+            # Trust this run's publish first; otherwise fall back to the registry,
+            # retrying because the packument CDN lags behind a fresh publish.
+            published="$PUBLISHED_THIS_RUN"
+            if [ "$published" != "true" ]; then
+              for attempt in 1 2 3 4 5 6; do
+                published="$(npm view "@xirothedev/openoffice-plugin-opencode@$version" version 2>/dev/null || true)"
+                [ "$published" = "$version" ] && break
+                echo "Waiting for $version on npm (attempt $attempt)..."
+                sleep 15
+              done
+            fi
+            if [ "$published" != "true" ] && [ "$published" != "$version" ]; then
               echo "Version $version is not on npm yet — nothing to tag"
               exit 0
             fi
