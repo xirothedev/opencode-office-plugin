@@ -41,7 +41,7 @@ _Avoid_: Patch, hotfix, direct fix
 ### Document Domain
 
 **Draft**:
-An editable copy of a document held under `.opencode/office/drafts/` with an exclusive lock.
+An editable copy of a document held under the plugin data directory (`drafts/`, default `~/.local/share/opencode/plugins/openoffice/drafts/`) with an exclusive lock.
 _Avoid_: Working copy, edit buffer
 
 **Comment intake**:
