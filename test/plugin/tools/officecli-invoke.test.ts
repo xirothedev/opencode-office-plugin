@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { Tool } from "@opencode-ai/schema/tool"
+import { Tool } from "@opencode/schema/tool"
 import { officecliTool } from "@/plugin/tools/officecli"
 import { officecliInvokes, runOfficecliInvoke } from "@/plugin/host"
 import { runTool, setupHermeticDirs, cleanupTestFile, mockContext } from "./harness"

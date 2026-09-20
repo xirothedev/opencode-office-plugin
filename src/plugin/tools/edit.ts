@@ -1,5 +1,5 @@
 import { Schema } from "effect"
-import { Tool } from "@opencode-ai/schema/tool"
+import { Tool } from "@opencode/schema/tool"
 import { acquireLock, getLock } from "@/core/draft/lock"
 import { getFilePathHash } from "@/core/storage/paths"
 import { readFileSync, writeFileSync, existsSync } from "fs"

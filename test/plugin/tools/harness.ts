@@ -1,5 +1,5 @@
 import { Effect, Schema } from "effect"
-import { Tool } from "@opencode-ai/schema/tool"
+import { Tool } from "@opencode/schema/tool"
 import type { officecliTool } from "@/plugin/tools/officecli"
 import type { editTool } from "@/plugin/tools/edit"
 import { beforeEach, afterEach } from "vitest"

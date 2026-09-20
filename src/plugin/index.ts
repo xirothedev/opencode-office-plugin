@@ -1,6 +1,6 @@
 import { Effect } from "effect"
-import { define } from "@opencode-ai/plugin/v2/effect"
-import { Tool } from "@opencode-ai/schema/tool"
+import { Plugin } from "@opencode/plugin/effect"
+import { Tool } from "@opencode/schema/tool"
 import { officecliInvokes } from "@/plugin/invoke-names"
 import { officecliTool } from "@/plugin/tools/officecli"
 import { editTool } from "@/plugin/tools/edit"
@@ -11,7 +11,7 @@ export function isBlockedTool(tool: string): boolean {
   return tool === "edit" || tool === "write"
 }
 
-// ponytail: live host ctx drifts from the pinned vendored types in both directions (beta dropped invoke, shipped tool) — feature-detect at the seam
+// ponytail: live host ctx drifts from the GA Context type (custom host ships invoke, stock ships tool) — feature-detect at the seam
 interface ToolEditorLike {
   add: (tool: unknown) => void
 }
@@ -35,7 +35,7 @@ export function blockBinary(tool: string, input: unknown): void {
   }
 }
 
-export const OpenOfficePlugin = define({
+export const OpenOfficePlugin = Plugin.define({
   id: "openoffice",
   effect: (rawCtx) =>
     Effect.gen(function* () {

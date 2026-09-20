@@ -58,7 +58,7 @@ opencode installs the package and its dependencies on startup. Then start openco
 
 The agent should call `officecli(action="create", ...)`.
 
-**Version matching**: this release pins `@opencode-ai/plugin@0.0.0-next-17444` (exact). The V2 plugin API is beta — the plugin loads only in opencode 2 builds that ship a compatible plugin package. Match your opencode 2 release to the pin, or upgrade the plugin when you upgrade opencode.
+**Version matching**: this release pins `@opencode/plugin@2.0.10` + `@opencode/schema@2.0.10` (exact). The plugin loads in opencode 2 GA builds that ship a compatible plugin package. Match your opencode 2 release to the pin, or upgrade the plugin when you upgrade opencode.
 
 ## Option 2: Local development install
 

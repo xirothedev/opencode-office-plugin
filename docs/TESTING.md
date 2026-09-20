@@ -110,7 +110,7 @@ This tests all actions without opencode.
 
 **Tools not visible to the model?**
 - Tools are registered with `codemode: false` for direct provider exposure
-- Restart opencode 2 after changing config; the plugin package version must match the opencode 2 release (ADR-0010 pins `@opencode-ai/plugin@0.0.0-next-17444`)
+- Restart opencode 2 after changing config; the plugin package version must match the opencode 2 release (ADR-0016 pins `@opencode/plugin@2.0.10` + `@opencode/schema@2.0.10`)
 
 **pandoc errors?**
 - Install pandoc: `brew install pandoc` (macOS) or `sudo apt-get install pandoc` (Linux)
