@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file. New releases follow [Semantic Versioning](https://semver.org/); entries are generated from [Changesets](https://github.com/changesets/changesets).
 
+## 1.0.0
+
+### Major Changes
+
+- 582e555: Migrate to GA opencode plugin registry pins (`@opencode/plugin@2.0.10`, `@opencode/schema@2.0.10`, `effect@4.0.0-rc.112`), delete the `file:./vendor` checkout, and import `Plugin.define` from `@opencode/plugin/effect`. Breaking for hosts on the beta plugin line — upgrade the host together with the plugin (ADR-0016).
+
 ## 0.3.0
 
 ### Minor Changes
