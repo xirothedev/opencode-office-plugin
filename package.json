@@ -62,7 +62,7 @@
     "@changesets/cli": "^3.0.2",
     "@types/node": "^26.2.0",
     "@types/xml2js": "^0.4.14",
-    "@vitest/coverage-v8": "^4.1.10",
+    "@vitest/coverage-v8": "^5.0.0",
     "oxlint": "^1.77.0",
     "tsc-alias": "^1.9.1",
     "turbo": "^2.10.9",
