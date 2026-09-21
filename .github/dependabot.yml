@@ -22,13 +22,14 @@ updates:
       prefix-development: chore(dev)
       include: scope
     open-pull-requests-limit: 5
-    # Host-coupled pins: current opencode2 hosts reject plugin-tool input decode
-    # in every effect/schema era (docs/reports/2026-09-03-opencode-beta-interop.md).
+    # Host-coupled pins: opencode 2 hosts decode plugin-tool input against the
+    # effect Schema AST the plugin was built with
+    # (docs/reports/2026-09-03-opencode-beta-interop.md).
     # A bump here is only meaningful paired with a host whose decode reads the
-    # matching AST — gate on the probe_simple test from the report.
+    # matching AST — gate on the tracer + isolated host probe.
     ignore:
       - dependency-name: effect
-      - dependency-name: "@opencode-ai/schema"
+      - dependency-name: "@opencode/schema"
 
   # tests/isolated-workspace (opencode2 CLI pin for the Isolated Runtime)
   - package-ecosystem: bun

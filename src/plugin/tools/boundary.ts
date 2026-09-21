@@ -1,5 +1,5 @@
 import { Effect } from "effect"
-import { Tool } from "@opencode-ai/schema/tool"
+import { Tool } from "@opencode/schema/tool"
 
 export function fail(message: string): never {
   throw new Tool.Error({ message })

@@ -19,7 +19,7 @@ The exact plugin list the Isolated Runtime loads. Strict baseline is only `@xiro
 _Avoid_: Allowed plugins, pollution set
 
 **Plugin Harness**:
-The set of `ctx` domains the installed opencode2 host binary actually passes to a plugin at load time. Ground truth is a runtime probe of the host, not the vendored `PluginContext` types — the host drifts (beta builds dropped `invoke`, shipped `tool`).
+The set of `ctx` domains the installed opencode2 host binary actually passes to a plugin at load time. Ground truth is a runtime probe of the host, not the `@opencode/plugin` `Context` type — the custom host ships `invoke`, stock GA does not.
 _Avoid_: Runtime harness, host API, plugin surface
 
 **Capture**:
@@ -133,4 +133,18 @@ _Avoid_: bug report file, feedback doc
 **Learned Record**:
 A typed JSON entry in `.opencode/office/learned/learned.json` (per-project) plus generated `learned.md` view, capturing a verified Template structure, `Format` requirement, or `Verify Loop` workaround that passed `verify-l3`. Replayed next session to avoid the loop.
 _Avoid_: Learned lesson, memo
+
+### Plugin Packaging
+
+**Publishable Artifact**:
+The npm tarball contents (`dist/`, READMEs) with entry `dist/index.js` and an exact-pinned `@opencode/plugin`. Loadable by any stock V2 host. Distinct from the repo, which is a platform (Task Skills, host invokes, isolated test workspace) that ships the artifact.
+_Avoid_: Package, build output
+
+**Entry Shim**:
+The root `index.ts` re-exporting `src/index.ts`, so a local directory path loads with no build step. Excluded from `dist` and npm. `src/index.ts` re-exports the plugin default so the published entry stays `dist/index.js` while the implementation lives under `src/plugin/`.
+_Avoid_: Main file, barrel
+
+**Stock V2 API**:
+The GA opencode2 plugin API (`@opencode/plugin@2.0.10`, `@opencode/schema@2.0.10`, `effect@4.0.0-rc.112` per the plugin manifest). Superseded the beta-era vendored API (`@opencode-ai/plugin` via `file:./vendor`, `next-17444` schema, `effect` beta) in ADR-0016.
+_Avoid_: V2, latest
 

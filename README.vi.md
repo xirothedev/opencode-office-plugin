@@ -218,7 +218,7 @@ Plugin dùng plugin API V2 của opencode: `Plugin.define({ id: "openoffice", ef
 |---|---|
 | Ngôn ngữ | TypeScript (strict, ES2022) |
 | Runtime & package manager | Bun |
-| Plugin API | opencode V2 (`@opencode-ai/plugin`, `effect`) |
+| Plugin API | opencode V2 (`@opencode/plugin`, `@opencode/schema`, `effect`) |
 | Backend Office | `docx`, `exceljs`, `pdf-lib`, `pdfjs-dist`, `jszip`, `xml2js`, `sharp`, pandoc |
 | Test | Vitest + coverage v8 |
 | Lint & build | oxlint · `tsc` + `tsc-alias` · Turbo |

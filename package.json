@@ -3,14 +3,23 @@
   "version": "0.3.0",
   "description": "Office document automation for opencode: draft lifecycle, version history, format conversion, template batch generation.",
   "type": "module",
-  "main": "dist/plugin/index.js",
-  "types": "dist/plugin/index.d.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "README.vi.md"
   ],
   "packageManager": "bun@1.3.14",
   "scripts": {
     "build": "tsc && tsc-alias",
+    "prepack": "bun run build",
     "prepublishOnly": "bun run build",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -37,11 +46,11 @@
   "dependencies": {
     "@firecrawl/anydoc": "^0.2.4",
     "@firecrawl/pdf-inspector": "^1.13.0",
-    "@opencode-ai/plugin": "file:./vendor/opencode-plugin",
-    "@opencode-ai/schema": "0.0.0-next-17444",
+    "@opencode/plugin": "2.0.10",
+    "@opencode/schema": "2.0.10",
     "diff": "^9.0.0",
     "docx": "^9.7.1",
-    "effect": "4.0.0-beta.101",
+    "effect": "4.0.0-rc.112",
     "exceljs": "^4.4.0",
     "jszip": "^3.10.1",
     "pdf-lib": "^1.17.1",

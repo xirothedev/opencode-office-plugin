@@ -17,7 +17,7 @@ import { parseAnnotationOps, ANNOTATE_EXTENSIONS } from "@/core/format/annotate"
 import { sanitizeMarkdown, sanitizeXmlText } from "@/core/format/sanitize"
 import { fail } from "@/plugin/tools/boundary"
 import { tmpdir } from "os"
-import { Tool } from "@opencode-ai/schema/tool"
+import { Tool } from "@opencode/schema/tool"
 import { captureQuiet } from "@/plugin/capture"
 import type { OfficeCliInput } from "@/plugin/tools/officecli"
 
