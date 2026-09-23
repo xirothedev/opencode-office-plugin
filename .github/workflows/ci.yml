@@ -42,6 +42,22 @@ jobs:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
 
+  format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: .turbo/cache
+          key: turbo-format-${{ runner.os }}-${{ github.ref }}
+          restore-keys: turbo-format-${{ runner.os }}-
+      - run: bun install --frozen-lockfile
+      - run: bunx turbo run format:check
+        env:
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+
   test:
     runs-on: ubuntu-latest
     steps:
@@ -66,7 +82,7 @@ jobs:
           path: coverage/lcov.info
 
   build:
-    needs: [lint, typecheck, test]
+    needs: [lint, format, typecheck, test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

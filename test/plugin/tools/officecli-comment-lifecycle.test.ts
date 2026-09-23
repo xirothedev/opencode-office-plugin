@@ -1,75 +1,83 @@
 import { describe, it, expect } from "bun:test";
-import JSZip from "jszip";
-import { officecliTool } from "@/plugin/tools/officecli";
-import { runTool, setupHermeticDirs, cleanupTestFile } from "./harness";
-import { getFilePathHash } from "@/core/storage/paths";
-import { getDraftPath } from "@/core/draft/manager";
 import { copyFileSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import path from "node:path";
+
+import JSZip from "jszip";
+
+import { getDraftPath } from "@/core/draft/manager";
+import { getFilePathHash } from "@/core/storage/paths";
+import { officecliTool } from "@/plugin/tools/officecli";
+
+import { runTool, setupHermeticDirs, cleanupTestFile } from "./harness";
 
 const testFile = "/tmp/comment-lifecycle.docx";
 const SESSION = "test-session";
-const DOCX_FIXTURE = join(process.cwd(), "test/fixtures/sample.docx");
+const DOCX_FIXTURE = path.join(process.cwd(), "test/fixtures/sample.docx");
 
 // computed lazily: the hermetic data dir is only configured in the describe body
-function draftPath(): string {
-  return getDraftPath(getFilePathHash(testFile), SESSION, ".docx");
-}
+const draftPath = (): string =>
+  getDraftPath(getFilePathHash(testFile), SESSION, ".docx");
 
-function parseList(result: string): {
+const parseList = (
+  result: string
+): {
   count: number;
-  comments: Array<Record<string, unknown>>;
-} {
+  comments: Record<string, unknown>[];
+} => {
   const space = result.indexOf(" ");
   const count = Number(result.slice(0, space));
-  const comments = JSON.parse(result.slice(result.indexOf("\n") + 1)) as Array<
-    Record<string, unknown>
-  >;
-  return { count, comments };
-}
+  const comments = JSON.parse(result.slice(result.indexOf("\n") + 1)) as Record<
+    string,
+    unknown
+  >[];
+  return { comments, count };
+};
 
-async function seedDraftWithDocx(): Promise<void> {
+const seedDraftWithDocx = async (): Promise<void> => {
   await runTool(officecliTool, {
     action: "create",
-    filePath: testFile,
     content: "stub",
+    filePath: testFile,
   });
   copyFileSync(DOCX_FIXTURE, draftPath());
-}
+};
 
-async function addComment(
+const addComment = async (
   commentId = "comment-1",
-  text = "This clause needs review",
-) {
+  text = "This clause needs review"
+) => {
   await runTool(officecliTool, {
     action: "comment",
-    filePath: testFile,
-    commentId,
     author: "AI Agent",
+    commentId,
     commentText: text,
-    rangeStartParagraph: 0,
-    rangeStartOffset: 0,
-    rangeEndParagraph: 0,
+    filePath: testFile,
     rangeEndOffset: 10,
+    rangeEndParagraph: 0,
+    rangeStartOffset: 0,
+    rangeStartParagraph: 0,
   });
-}
+};
 
-async function listParsed(): Promise<{
+const listParsed = async (): Promise<{
   count: number;
-  comments: Array<Record<string, unknown>>;
-}> {
-  return parseList(
+  comments: Record<string, unknown>[];
+}> =>
+  parseList(
     await runTool(officecliTool, {
       action: "list-comments",
       filePath: testFile,
-    }),
+    })
   );
-}
 
-async function readDraftPart(part: string): Promise<string> {
+const readDraftPart = async (part: string): Promise<string> => {
   const zip = await JSZip.loadAsync(readFileSync(draftPath()));
-  return await zip.file(part)!.async("string");
-}
+  const partFile = zip.file(part);
+  if (!partFile) {
+    throw new Error(`missing ${part} in draft`);
+  }
+  return await partFile.async("string");
+};
 
 describe("officecli comment lifecycle actions", () => {
   setupHermeticDirs();
@@ -91,13 +99,13 @@ describe("officecli comment lifecycle actions", () => {
     await addComment();
     await runTool(officecliTool, {
       action: "resolve-comment",
-      filePath: testFile,
       commentId: "comment-1",
+      filePath: testFile,
     });
     await runTool(officecliTool, {
       action: "edit-comment",
-      filePath: testFile,
       commentId: "comment-1",
+      filePath: testFile,
       text: "Revised wording",
     });
     const parsed = await listParsed();
@@ -111,20 +119,20 @@ describe("officecli comment lifecycle actions", () => {
     await seedDraftWithDocx();
     await runTool(officecliTool, {
       action: "comment",
-      filePath: testFile,
-      commentId: "comment-1",
       author: "AI Agent",
+      commentId: "comment-1",
       commentText: "Original note",
-      suggestedText: "Original suggestion",
-      rangeStartParagraph: 0,
-      rangeStartOffset: 0,
-      rangeEndParagraph: 0,
+      filePath: testFile,
       rangeEndOffset: 10,
+      rangeEndParagraph: 0,
+      rangeStartOffset: 0,
+      rangeStartParagraph: 0,
+      suggestedText: "Original suggestion",
     });
     await runTool(officecliTool, {
       action: "edit-comment",
-      filePath: testFile,
       commentId: "comment-1",
+      filePath: testFile,
       suggestedText: "Updated suggestion",
     });
     const parsed = await listParsed();
@@ -139,10 +147,10 @@ describe("officecli comment lifecycle actions", () => {
     await expect(
       runTool(officecliTool, {
         action: "edit-comment",
-        filePath: testFile,
         commentId: "comment-1",
-      }),
-    ).rejects.toThrow(/edit-comment requires text or suggestedText/);
+        filePath: testFile,
+      })
+    ).rejects.toThrow(/edit-comment requires text or suggestedText/u);
   });
 
   it("resolve-comment persists w:done on the DOCX comment", async () => {
@@ -150,14 +158,15 @@ describe("officecli comment lifecycle actions", () => {
     await addComment();
     const result = await runTool(officecliTool, {
       action: "resolve-comment",
-      filePath: testFile,
       commentId: "comment-1",
+      filePath: testFile,
     });
     expect(result).toContain("resolved");
     const xml = await readDraftPart("word/comments.xml");
     expect(xml).toContain('w:done="1"');
     expect(xml).not.toContain("oo:status");
-    expect((await listParsed()).comments[0].status).toBe("resolved");
+    const resolvedList = await listParsed();
+    expect(resolvedList.comments[0].status).toBe("resolved");
   });
 
   it("deny-comment persists the plugin-namespaced status attribute", async () => {
@@ -165,15 +174,16 @@ describe("officecli comment lifecycle actions", () => {
     await addComment();
     const result = await runTool(officecliTool, {
       action: "deny-comment",
-      filePath: testFile,
       commentId: "comment-1",
+      filePath: testFile,
     });
     expect(result).toContain("denied");
     const xml = await readDraftPart("word/comments.xml");
     expect(xml).toContain('xmlns:oo="http://opencode.ai/openoffice-plugin"');
     expect(xml).toContain('oo:status="denied"');
     expect(xml).not.toContain("w:done");
-    expect((await listParsed()).comments[0].status).toBe("denied");
+    const deniedList = await listParsed();
+    expect(deniedList.comments[0].status).toBe("denied");
   });
 
   it("deny after resolve replaces w:done with the denied marker", async () => {
@@ -181,18 +191,19 @@ describe("officecli comment lifecycle actions", () => {
     await addComment();
     await runTool(officecliTool, {
       action: "resolve-comment",
-      filePath: testFile,
       commentId: "comment-1",
+      filePath: testFile,
     });
     await runTool(officecliTool, {
       action: "deny-comment",
-      filePath: testFile,
       commentId: "comment-1",
+      filePath: testFile,
     });
     const xml = await readDraftPart("word/comments.xml");
     expect(xml).toContain('oo:status="denied"');
     expect(xml).not.toContain("w:done");
-    expect((await listParsed()).comments[0].status).toBe("denied");
+    const deniedAfterResolve = await listParsed();
+    expect(deniedAfterResolve.comments[0].status).toBe("denied");
   });
 
   it("delete-comment removes the comment and its range markers from the draft", async () => {
@@ -200,8 +211,8 @@ describe("officecli comment lifecycle actions", () => {
     await addComment();
     const result = await runTool(officecliTool, {
       action: "delete-comment",
-      filePath: testFile,
       commentId: "comment-1",
+      filePath: testFile,
     });
     expect(result).toContain("deleted");
     const parsed = await listParsed();
@@ -218,42 +229,42 @@ describe("officecli comment lifecycle actions", () => {
     await expect(
       runTool(officecliTool, {
         action: "edit-comment",
-        filePath: testFile,
         commentId: "nope",
+        filePath: testFile,
         text: "x",
-      }),
-    ).rejects.toThrow(/comment nope not found/);
+      })
+    ).rejects.toThrow(/comment nope not found/u);
     await expect(
       runTool(officecliTool, {
         action: "delete-comment",
-        filePath: testFile,
         commentId: "nope",
-      }),
-    ).rejects.toThrow(/comment nope not found/);
+        filePath: testFile,
+      })
+    ).rejects.toThrow(/comment nope not found/u);
     await expect(
       runTool(officecliTool, {
         action: "resolve-comment",
-        filePath: testFile,
         commentId: "nope",
-      }),
-    ).rejects.toThrow(/comment nope not found/);
+        filePath: testFile,
+      })
+    ).rejects.toThrow(/comment nope not found/u);
     await expect(
       runTool(officecliTool, {
         action: "deny-comment",
-        filePath: testFile,
         commentId: "nope",
-      }),
-    ).rejects.toThrow(/comment nope not found/);
+        filePath: testFile,
+      })
+    ).rejects.toThrow(/comment nope not found/u);
   });
 
   it("lifecycle actions require an active draft", async () => {
     await expect(
       runTool(officecliTool, {
         action: "resolve-comment",
-        filePath: testFile,
         commentId: "comment-1",
-      }),
-    ).rejects.toThrow(/no active draft/);
+        filePath: testFile,
+      })
+    ).rejects.toThrow(/no active draft/u);
   });
 
   it("review includes the comment status", async () => {
@@ -261,8 +272,8 @@ describe("officecli comment lifecycle actions", () => {
     await addComment();
     await runTool(officecliTool, {
       action: "deny-comment",
-      filePath: testFile,
       commentId: "comment-1",
+      filePath: testFile,
     });
     const result = await runTool(officecliTool, {
       action: "review",
@@ -276,20 +287,29 @@ describe("officecli comment lifecycle actions", () => {
     await addComment("comment-1", "change needed");
     await runTool(officecliTool, {
       action: "edit-comment",
-      filePath: testFile,
       commentId: "comment-1",
+      filePath: testFile,
       suggestedText: "SHOULD-NOT-APPLY",
     });
     await runTool(officecliTool, {
       action: "deny-comment",
-      filePath: testFile,
       commentId: "comment-1",
+      filePath: testFile,
     });
     await expect(
-      runTool(officecliTool, { action: "approve", filePath: testFile, commentId: "comment-1" }),
-    ).rejects.toThrow(/was denied/);
-    const result = await runTool(officecliTool, { action: "list-comments", filePath: testFile });
-    expect(JSON.parse(result.slice(result.indexOf("\n") + 1))[0].status).toBe("denied");
+      runTool(officecliTool, {
+        action: "approve",
+        commentId: "comment-1",
+        filePath: testFile,
+      })
+    ).rejects.toThrow(/was denied/u);
+    const result = await runTool(officecliTool, {
+      action: "list-comments",
+      filePath: testFile,
+    });
+    expect(JSON.parse(result.slice(result.indexOf("\n") + 1))[0].status).toBe(
+      "denied"
+    );
   });
 
   it("lifecycle actions reject unsupported formats", async () => {
@@ -299,10 +319,10 @@ describe("officecli comment lifecycle actions", () => {
       await expect(
         runTool(officecliTool, {
           action: "delete-comment",
-          filePath: mdFile,
           commentId: "c1",
-        }),
-      ).rejects.toThrow(/only supported for DOCX, XLSX and PPTX/);
+          filePath: mdFile,
+        })
+      ).rejects.toThrow(/only supported for DOCX, XLSX and PPTX/u);
     } finally {
       writeFileSync(mdFile, "");
     }

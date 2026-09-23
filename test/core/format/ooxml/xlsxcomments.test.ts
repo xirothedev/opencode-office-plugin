@@ -1,246 +1,314 @@
-import { describe, it, expect, beforeEach, afterEach } from "bun:test"
-import JSZip from "jszip"
-import { writeComment, readComments, applyCellSuggestion } from "@/core/format/ooxml/xlsxcomments"
-import { copyFileSync, unlinkSync, mkdirSync, existsSync, readFileSync, writeFileSync } from "node:fs"
-import { join } from "node:path"
-import { tmpdir } from "node:os"
+import { describe, it, expect, beforeEach, afterEach } from "bun:test";
+import {
+  copyFileSync,
+  unlinkSync,
+  mkdirSync,
+  existsSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
-const FIXTURE = join(process.cwd(), "test/fixtures/sample.xlsx")
+import JSZip from "jszip";
+
+import {
+  writeComment,
+  readComments,
+  applyCellSuggestion,
+} from "@/core/format/ooxml/xlsxcomments";
+
+const FIXTURE = path.join(process.cwd(), "test/fixtures/sample.xlsx");
 
 describe("OOXML XLSX Comment Writer", () => {
-  let testDir: string
-  let testXlsxPath: string
+  let testDir: string;
+  let testXlsxPath: string;
 
   beforeEach(() => {
-    testDir = join(tmpdir(), `ooxml-xlsx-test-${Date.now()}`)
+    testDir = path.join(tmpdir(), `ooxml-xlsx-test-${Date.now()}`);
     if (!existsSync(testDir)) {
-      mkdirSync(testDir, { recursive: true })
+      mkdirSync(testDir, { recursive: true });
     }
-    testXlsxPath = join(testDir, "test.xlsx")
-    copyFileSync(FIXTURE, testXlsxPath)
-  })
+    testXlsxPath = path.join(testDir, "test.xlsx");
+    copyFileSync(FIXTURE, testXlsxPath);
+  });
 
   afterEach(() => {
     if (existsSync(testXlsxPath)) {
-      unlinkSync(testXlsxPath)
+      unlinkSync(testXlsxPath);
     }
-  })
+  });
 
   it("writes single comment to XLSX", async () => {
     const comment = {
-      id: "comment-1",
       author: "AI Agent",
-      text: "This needs review",
-      timestamp: new Date("2026-08-12T10:30:00Z"),
       cellRef: "B2",
+      id: "comment-1",
       parentId: null,
       status: "open",
-    }
+      text: "This needs review",
+      timestamp: new Date("2026-08-12T10:30:00Z"),
+    };
 
-    await writeComment(testXlsxPath, comment)
+    await writeComment(testXlsxPath, comment);
 
-    const comments = await readComments(testXlsxPath)
-    expect(comments).toHaveLength(1)
-    expect(comments[0].id).toBe("B2-0")
-    expect(comments[0].author).toBe("AI Agent")
-    expect(comments[0].text).toBe("This needs review")
-    expect(comments[0].cellRef).toBe("B2")
-    expect(comments[0].status).toBe("open")
-  })
+    const comments = await readComments(testXlsxPath);
+    expect(comments).toHaveLength(1);
+    expect(comments[0].id).toBe("B2-0");
+    expect(comments[0].author).toBe("AI Agent");
+    expect(comments[0].text).toBe("This needs review");
+    expect(comments[0].cellRef).toBe("B2");
+    expect(comments[0].status).toBe("open");
+  });
 
   it("supports multiple comments from different authors", async () => {
     await writeComment(testXlsxPath, {
-      id: "c1",
       author: "AI Agent",
+      cellRef: "B2",
+      id: "c1",
+      parentId: null,
+      status: "open",
       text: "Check amount",
       timestamp: new Date("2026-08-12T10:30:00Z"),
-      cellRef: "B2",
+    });
+    await writeComment(testXlsxPath, {
+      author: "Reviewer",
+      cellRef: "B3",
+      id: "c2",
       parentId: null,
       status: "open",
-    })
-    await writeComment(testXlsxPath, {
-      id: "c2",
-      author: "Reviewer",
       text: "Confirmed",
       timestamp: new Date("2026-08-12T11:00:00Z"),
-      cellRef: "B3",
-      parentId: null,
-      status: "open",
-    })
+    });
 
-    const comments = await readComments(testXlsxPath)
-    expect(comments).toHaveLength(2)
-    expect(comments[0].author).toBe("AI Agent")
-    expect(comments[0].cellRef).toBe("B2")
-    expect(comments[1].author).toBe("Reviewer")
-    expect(comments[1].cellRef).toBe("B3")
-  })
+    const comments = await readComments(testXlsxPath);
+    expect(comments).toHaveLength(2);
+    expect(comments[0].author).toBe("AI Agent");
+    expect(comments[0].cellRef).toBe("B2");
+    expect(comments[1].author).toBe("Reviewer");
+    expect(comments[1].cellRef).toBe("B3");
+  });
 
   it("appends to existing comments instead of overwriting", async () => {
     await writeComment(testXlsxPath, {
-      id: "c1",
       author: "AI Agent",
+      cellRef: "A1",
+      id: "c1",
+      parentId: null,
+      status: "open",
       text: "First",
       timestamp: new Date("2026-08-12T10:30:00Z"),
-      cellRef: "A1",
+    });
+    await writeComment(testXlsxPath, {
+      author: "AI Agent",
+      cellRef: "C1",
+      id: "c2",
       parentId: null,
       status: "open",
-    })
-    await writeComment(testXlsxPath, {
-      id: "c2",
-      author: "AI Agent",
       text: "Second",
       timestamp: new Date("2026-08-12T10:31:00Z"),
-      cellRef: "C1",
-      parentId: null,
-      status: "open",
-    })
+    });
 
-    const comments = await readComments(testXlsxPath)
-    expect(comments).toHaveLength(2)
-    expect(comments.map((c) => c.text)).toEqual(["First", "Second"])
-  })
+    const comments = await readComments(testXlsxPath);
+    expect(comments).toHaveLength(2);
+    expect(comments.map((c) => c.text)).toEqual(["First", "Second"]);
+  });
 
   it("reads comment text from rich text runs (Excel/openpyxl style)", async () => {
-    const zip = await JSZip.loadAsync(readFileSync(testXlsxPath))
+    const zip = await JSZip.loadAsync(readFileSync(testXlsxPath));
     const rich = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<comments xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><authors><author>AI Agent</author></authors><commentList><comment ref="B2" authorId="0"><text><r><rPr><b/><sz val="9"/><color indexed="81"/><rFont val="Tahoma"/><family val="2"/></rPr><t xml:space="preserve">This needs review</t></r></text></comment><comment ref="B3" authorId="0"><text><r><rPr><sz val="10"/></rPr><t xml:space="preserve">First part</t></r><r><t>second part</t></r></text></comment></commentList></comments>`
-    zip.file("xl/comments1.xml", rich)
-    writeFileSync(testXlsxPath, await zip.generateAsync({ type: "uint8array" }))
+<comments xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><authors><author>AI Agent</author></authors><commentList><comment ref="B2" authorId="0"><text><r><rPr><b/><sz val="9"/><color indexed="81"/><rFont val="Tahoma"/><family val="2"/></rPr><t xml:space="preserve">This needs review</t></r></text></comment><comment ref="B3" authorId="0"><text><r><rPr><sz val="10"/></rPr><t xml:space="preserve">First part</t></r><r><t>second part</t></r></text></comment></commentList></comments>`;
+    zip.file("xl/comments1.xml", rich);
+    writeFileSync(
+      testXlsxPath,
+      await zip.generateAsync({ type: "uint8array" })
+    );
 
-    const comments = await readComments(testXlsxPath)
-    expect(comments).toHaveLength(2)
-    expect(comments[0].text).toBe("This needs review")
-    expect(comments[1].text).toBe("First partsecond part")
-  })
+    const comments = await readComments(testXlsxPath);
+    expect(comments).toHaveLength(2);
+    expect(comments[0].text).toBe("This needs review");
+    expect(comments[1].text).toBe("First partsecond part");
+  });
 
   it("uses unique VML shape ids and z-indexes for multiple comments", async () => {
     const base = {
       author: "AI Agent",
-      timestamp: new Date("2026-08-12T10:30:00Z"),
       parentId: null,
       status: "open",
-    }
-    await writeComment(testXlsxPath, { ...base, id: "c1", text: "First", cellRef: "A1" })
-    await writeComment(testXlsxPath, { ...base, id: "c2", text: "Second", cellRef: "C1" })
+      timestamp: new Date("2026-08-12T10:30:00Z"),
+    };
+    await writeComment(testXlsxPath, {
+      ...base,
+      cellRef: "A1",
+      id: "c1",
+      text: "First",
+    });
+    await writeComment(testXlsxPath, {
+      ...base,
+      cellRef: "C1",
+      id: "c2",
+      text: "Second",
+    });
 
-    const zip = await JSZip.loadAsync(readFileSync(testXlsxPath))
-    const vml = await zip.file("xl/drawings/vmlDrawing1.vml")!.async("string")
-    const shapeIds = [...vml.matchAll(/id="_x0000_s(\d+)"/g)].map((m) => m[1])
-    const zIndexes = [...vml.matchAll(/z-index:(\d+)/g)].map((m) => m[1])
-    expect(new Set(shapeIds).size).toBe(2)
-    expect(new Set(zIndexes).size).toBe(2)
-  })
+    const zip = await JSZip.loadAsync(readFileSync(testXlsxPath));
+    const vmlFile = zip.file("xl/drawings/vmlDrawing1.vml");
+    if (!vmlFile) {
+      throw new Error("missing xl/drawings/vmlDrawing1.vml in fixture");
+    }
+    const vml = await vmlFile.async("string");
+    const shapeIds = [...vml.matchAll(/id="_x0000_s(?<shapeId>\d+)"/gu)].map(
+      (m) => m.groups?.shapeId
+    );
+    const zIndexes = [...vml.matchAll(/z-index:(?<zIndex>\d+)/gu)].map(
+      (m) => m.groups?.zIndex
+    );
+    expect(new Set(shapeIds).size).toBe(2);
+    expect(new Set(zIndexes).size).toBe(2);
+  });
 
   it("does not duplicate sheet relationships across writes", async () => {
     const base = {
       author: "AI Agent",
-      timestamp: new Date("2026-08-12T10:30:00Z"),
       parentId: null,
       status: "open",
-    }
-    await writeComment(testXlsxPath, { ...base, id: "c1", text: "First", cellRef: "A1" })
-    await writeComment(testXlsxPath, { ...base, id: "c2", text: "Second", cellRef: "C1" })
+      timestamp: new Date("2026-08-12T10:30:00Z"),
+    };
+    await writeComment(testXlsxPath, {
+      ...base,
+      cellRef: "A1",
+      id: "c1",
+      text: "First",
+    });
+    await writeComment(testXlsxPath, {
+      ...base,
+      cellRef: "C1",
+      id: "c2",
+      text: "Second",
+    });
 
-    const zip = await JSZip.loadAsync(readFileSync(testXlsxPath))
-    const rels = await zip.file("xl/worksheets/_rels/sheet1.xml.rels")!.async("string")
-    const commentRels = (rels.match(/relationships\/comments/g) || []).length
-    const vmlRels = (rels.match(/relationships\/vmlDrawing/g) || []).length
-    expect(commentRels).toBe(1)
-    expect(vmlRels).toBe(1)
-  })
+    const zip = await JSZip.loadAsync(readFileSync(testXlsxPath));
+    const relsFile = zip.file("xl/worksheets/_rels/sheet1.xml.rels");
+    if (!relsFile) {
+      throw new Error("missing xl/worksheets/_rels/sheet1.xml.rels in fixture");
+    }
+    const rels = await relsFile.async("string");
+    const commentRels = (rels.match(/relationships\/comments/gu) || []).length;
+    const vmlRels = (rels.match(/relationships\/vmlDrawing/gu) || []).length;
+    expect(commentRels).toBe(1);
+    expect(vmlRels).toBe(1);
+  });
 
   it("writes value suggestion and reads it back", async () => {
     await writeComment(testXlsxPath, {
-      id: "s1",
       author: "AI Agent",
-      text: "Original note",
-      suggestedText: "42",
-      timestamp: new Date("2026-08-12T10:30:00Z"),
       cellRef: "B2",
+      id: "s1",
       parentId: null,
       status: "open",
-    })
+      suggestedText: "42",
+      text: "Original note",
+      timestamp: new Date("2026-08-12T10:30:00Z"),
+    });
 
-    const comments = await readComments(testXlsxPath)
-    expect(comments).toHaveLength(1)
-    expect(comments[0].text).toBe("Suggested value: 42")
-    expect(comments[0].suggestedText).toBe("42")
-  })
+    const comments = await readComments(testXlsxPath);
+    expect(comments).toHaveLength(1);
+    expect(comments[0].text).toBe("Suggested value: 42");
+    expect(comments[0].suggestedText).toBe("42");
+  });
 
   it("approve writes numeric value into the cell and removes comment and note shape", async () => {
     await writeComment(testXlsxPath, {
-      id: "s1",
       author: "AI Agent",
-      text: "Original note",
-      suggestedText: "42",
-      timestamp: new Date("2026-08-12T10:30:00Z"),
       cellRef: "B2",
+      id: "s1",
       parentId: null,
       status: "open",
-    })
+      suggestedText: "42",
+      text: "Original note",
+      timestamp: new Date("2026-08-12T10:30:00Z"),
+    });
 
-    const result = await applyCellSuggestion(testXlsxPath, "B2-0")
-    expect(result).toBe("applied")
+    const result = await applyCellSuggestion(testXlsxPath, "B2-0");
+    expect(result).toBe("applied");
 
-    expect(await readComments(testXlsxPath)).toHaveLength(0)
-    const zip = await JSZip.loadAsync(readFileSync(testXlsxPath))
-    const sheet = await zip.file("xl/worksheets/sheet1.xml")!.async("string")
-    expect(sheet).toMatch(/<c r="B2">\s*<v>42<\/v>\s*<\/c>/)
-    const vml = await zip.file("xl/drawings/vmlDrawing1.vml")!.async("string")
-    expect(vml).not.toContain("<v:shape")
-  })
+    expect(await readComments(testXlsxPath)).toHaveLength(0);
+    const zip = await JSZip.loadAsync(readFileSync(testXlsxPath));
+    const sheetFile = zip.file("xl/worksheets/sheet1.xml");
+    if (!sheetFile) {
+      throw new Error("missing xl/worksheets/sheet1.xml in fixture");
+    }
+    const sheet = await sheetFile.async("string");
+    expect(sheet).toMatch(/<c r="B2">\s*<v>42<\/v>\s*<\/c>/u);
+    const approvedVmlFile = zip.file("xl/drawings/vmlDrawing1.vml");
+    if (!approvedVmlFile) {
+      throw new Error("missing xl/drawings/vmlDrawing1.vml in fixture");
+    }
+    const vml = await approvedVmlFile.async("string");
+    expect(vml).not.toContain("<v:shape");
+  });
 
   it("approve writes string value as inline string into a new cell", async () => {
     await writeComment(testXlsxPath, {
-      id: "s2",
       author: "AI Agent",
-      text: "Original note",
-      suggestedText: "Pending approval",
-      timestamp: new Date("2026-08-12T10:30:00Z"),
       cellRef: "D1",
+      id: "s2",
       parentId: null,
       status: "open",
-    })
+      suggestedText: "Pending approval",
+      text: "Original note",
+      timestamp: new Date("2026-08-12T10:30:00Z"),
+    });
 
-    const result = await applyCellSuggestion(testXlsxPath, "D1-0")
-    expect(result).toBe("applied")
+    const result = await applyCellSuggestion(testXlsxPath, "D1-0");
+    expect(result).toBe("applied");
 
-    const zip = await JSZip.loadAsync(readFileSync(testXlsxPath))
-    const sheet = await zip.file("xl/worksheets/sheet1.xml")!.async("string")
-    expect(sheet).toMatch(/<c r="D1" t="inlineStr">\s*<is>\s*<t>Pending approval<\/t>\s*<\/is>\s*<\/c>/)
-  })
+    const zip = await JSZip.loadAsync(readFileSync(testXlsxPath));
+    const sheetFile = zip.file("xl/worksheets/sheet1.xml");
+    if (!sheetFile) {
+      throw new Error("missing xl/worksheets/sheet1.xml in fixture");
+    }
+    const sheet = await sheetFile.async("string");
+    expect(sheet).toMatch(
+      /<c r="D1" t="inlineStr">\s*<is>\s*<t>Pending approval<\/t>\s*<\/is>\s*<\/c>/u
+    );
+  });
 
   it("approve rejects plain comments and unknown ids", async () => {
     await writeComment(testXlsxPath, {
-      id: "c1",
       author: "AI Agent",
-      text: "Just a note",
-      timestamp: new Date("2026-08-12T10:30:00Z"),
       cellRef: "B2",
+      id: "c1",
       parentId: null,
       status: "open",
-    })
+      text: "Just a note",
+      timestamp: new Date("2026-08-12T10:30:00Z"),
+    });
 
-    expect(await applyCellSuggestion(testXlsxPath, "B2-0")).toBe("no-suggestion")
-    expect(await applyCellSuggestion(testXlsxPath, "Z9-9")).toBe("not-found")
-  })
+    expect(await applyCellSuggestion(testXlsxPath, "B2-0")).toBe(
+      "no-suggestion"
+    );
+    expect(await applyCellSuggestion(testXlsxPath, "Z9-9")).toBe("not-found");
+  });
 
   it("round-trips comment status", async () => {
     await writeComment(testXlsxPath, {
-      id: "s1",
       author: "AI Agent",
-      text: "Denied value",
-      timestamp: new Date("2026-08-12T10:30:00Z"),
       cellRef: "B2",
+      id: "s1",
       parentId: null,
       status: "denied",
-    })
-    const comments = await readComments(testXlsxPath)
-    expect(comments[0].status).toBe("denied")
-    const zip = await JSZip.loadAsync(readFileSync(testXlsxPath))
-    const xml = await zip.file("xl/comments1.xml")!.async("string")
-    expect(xml).toContain('oo:status="denied"')
-    expect(xml).toContain('xmlns:oo="http://opencode.ai/openoffice-plugin"')
-  })
-})
+      text: "Denied value",
+      timestamp: new Date("2026-08-12T10:30:00Z"),
+    });
+    const comments = await readComments(testXlsxPath);
+    expect(comments[0].status).toBe("denied");
+    const zip = await JSZip.loadAsync(readFileSync(testXlsxPath));
+    const statusXmlFile = zip.file("xl/comments1.xml");
+    if (!statusXmlFile) {
+      throw new Error("missing xl/comments1.xml in fixture");
+    }
+    const xml = await statusXmlFile.async("string");
+    expect(xml).toContain('oo:status="denied"');
+    expect(xml).toContain('xmlns:oo="http://opencode.ai/openoffice-plugin"');
+  });
+});

@@ -1,46 +1,67 @@
-import { Effect } from "effect"
-import { Plugin } from "@opencode/plugin/effect"
-import { Tool } from "@opencode/schema/tool"
-import { officecliInvokes } from "@/plugin/invoke-names"
-import { officecliTool } from "@/plugin/tools/officecli"
-import { editTool } from "@/plugin/tools/edit"
-import { BINARY_EXTENSIONS, OFFICE_READ_EXTENSIONS } from "@/core/format/detect"
-import { configureOptions } from "@/core/options"
+import { Plugin } from "@opencode/plugin/effect";
+import { Tool } from "@opencode/schema/tool";
+import { Effect } from "effect";
 
-export function isBlockedTool(tool: string): boolean {
-  return tool === "edit" || tool === "write"
-}
+import {
+  BINARY_EXTENSIONS,
+  OFFICE_READ_EXTENSIONS,
+} from "@/core/format/detect";
+import { configureOptions } from "@/core/options";
+import { officecliInvokes } from "@/plugin/invoke-names";
+import { editTool } from "@/plugin/tools/edit";
+import { officecliTool } from "@/plugin/tools/officecli";
+
+export const isBlockedTool = (tool: string): boolean =>
+  tool === "edit" || tool === "write";
 
 // ponytail: live host ctx drifts from the GA Context type (custom host ships invoke, stock ships tool) — feature-detect at the seam
 interface ToolEditorLike {
-  add: (tool: unknown) => void
+  add: (tool: unknown) => void;
 }
 interface LiveCtx {
-  options?: unknown
-  invoke?: { register: (name: string, h: (i: unknown) => Effect.Effect<unknown>) => Effect.Effect<unknown> }
+  options?: unknown;
+  invoke?: {
+    register: (
+      name: string,
+      h: (i: unknown) => Effect.Effect<unknown>
+    ) => Effect.Effect<unknown>;
+  };
   tool?: {
-    transform: (cb: (editor: ToolEditorLike) => void) => Effect.Effect<unknown>
-    hook: (name: string, cb: (e: { tool: string; input?: unknown }) => void) => Effect.Effect<unknown>
-  }
+    transform: (cb: (editor: ToolEditorLike) => void) => Effect.Effect<unknown>;
+    hook: (
+      name: string,
+      cb: (e: { tool: string; input?: unknown }) => void
+    ) => Effect.Effect<unknown>;
+  };
 }
 
-const blockMessage = "use officecli tool for office/PDF files — office is the main method for read + handle"
+const blockMessage =
+  "use officecli tool for office/PDF files — office is the main method for read + handle";
 
-export function blockBinary(tool: string, input: unknown): void {
-  const args = (input ?? {}) as Record<string, unknown>
-  const fp = typeof args.filePath === "string" ? args.filePath : typeof args.path === "string" ? args.path : ""
-  const ext = fp.includes(".") ? fp.slice(fp.lastIndexOf(".")).toLowerCase() : ""
-  if ((isBlockedTool(tool) && BINARY_EXTENSIONS.has(ext)) || (tool === "read" && OFFICE_READ_EXTENSIONS.has(ext))) {
-    throw new Tool.Error({ message: blockMessage })
+export const blockBinary = (tool: string, input: unknown): void => {
+  const args = (input ?? {}) as Record<string, unknown>;
+  let fp = "";
+  if (typeof args.filePath === "string") {
+    fp = args.filePath;
+  } else if (typeof args.path === "string") {
+    fp = args.path;
   }
-}
+  const ext = fp.includes(".")
+    ? fp.slice(fp.lastIndexOf(".")).toLowerCase()
+    : "";
+  if (
+    (isBlockedTool(tool) && BINARY_EXTENSIONS.has(ext)) ||
+    (tool === "read" && OFFICE_READ_EXTENSIONS.has(ext))
+  ) {
+    throw new Tool.Error({ message: blockMessage });
+  }
+};
 
 export const OpenOfficePlugin = Plugin.define({
-  id: "openoffice",
   effect: (rawCtx) =>
-    Effect.gen(function* () {
-      const ctx = rawCtx as unknown as LiveCtx
-      configureOptions(ctx.options as never)
+    Effect.gen(function* effect() {
+      const ctx = rawCtx as unknown as LiveCtx;
+      configureOptions(ctx.options as never);
 
       if (ctx.invoke) {
         for (const name of Object.keys(officecliInvokes)) {
@@ -48,40 +69,42 @@ export const OpenOfficePlugin = Plugin.define({
             name,
             (input: unknown) =>
               Effect.tryPromise({
+                catch: (error) =>
+                  error instanceof Error ? error : new Error(String(error)),
                 try: async () => {
-                  const { runOfficecliInvoke } = await import("@/plugin/host")
-                  return runOfficecliInvoke(name, input)
+                  const { runOfficecliInvoke } = await import("@/plugin/host");
+                  return runOfficecliInvoke(name, input);
                 },
-                catch: (error) => (error instanceof Error ? error : new Error(String(error))),
-              }) as unknown as Effect.Effect<unknown>,
-          )
+              }) as unknown as Effect.Effect<unknown>
+          );
         }
       }
 
       if (ctx.tool) {
         // add(editTool) replaces the builtin edit by name (ADR 0010) — draft lifecycle covers every write
         yield* ctx.tool.transform((editor) => {
-          editor.add(officecliTool)
-          editor.add(editTool)
-        })
+          editor.add(officecliTool);
+          editor.add(editTool);
+        });
         // ponytail: host runs hook callbacks through yield* — the non-throwing path must return an Effect, not undefined
         yield* ctx.tool.hook("execute.before", (event) => {
-          blockBinary(event.tool, event.input)
-          return Effect.void
-        })
+          blockBinary(event.tool, event.input);
+          return Effect.void;
+        });
       }
 
       yield* Effect.addFinalizer(() =>
         Effect.promise(async () => {
-          const { listActiveDrafts } = await import("@/core/draft/manager")
+          const { listActiveDrafts } = await import("@/core/draft/manager");
           for (const draft of listActiveDrafts()) {
             if (draft.orphaned) {
-              console.log(`[office-plugin] Orphaned draft: ${draft.filePath}`)
+              console.log(`[office-plugin] Orphaned draft: ${draft.filePath}`);
             }
           }
-        }).pipe(Effect.ignore),
-      )
+        }).pipe(Effect.ignore)
+      );
     }),
-})
+  id: "openoffice",
+});
 
-export default OpenOfficePlugin
+export default OpenOfficePlugin;

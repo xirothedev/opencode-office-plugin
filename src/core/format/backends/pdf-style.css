@@ -10,14 +10,14 @@ body {
 }
 h1 {
   font-size: 20pt;
-  color: #1F4E79;
-  border-bottom: 2pt solid #2E75B6;
+  color: #1f4e79;
+  border-bottom: 2pt solid #2e75b6;
   padding-bottom: 6pt;
   margin-top: 18pt;
 }
 h2 {
   font-size: 14pt;
-  color: #2E75B6;
+  color: #2e75b6;
   margin-top: 14pt;
 }
 h3 {
@@ -32,24 +32,25 @@ table {
   font-size: 9pt;
 }
 th {
-  background-color: #D9E1F2;
-  color: #1F4E79;
+  background-color: #d9e1f2;
+  color: #1f4e79;
   font-weight: bold;
   text-align: center;
-  border: 0.5pt solid #B4C6E7;
+  border: 0.5pt solid #b4c6e7;
   padding: 6pt;
 }
 td {
-  border: 0.5pt solid #B4C6E7;
+  border: 0.5pt solid #b4c6e7;
   padding: 6pt;
   text-align: left;
 }
 tr:nth-child(even) td {
-  background-color: #F2F6FD;
+  background-color: #f2f6fd;
 }
 p {
   margin: 6pt 0;
 }
-ul, ol {
+ul,
+ol {
   margin-left: 18pt;
 }
