@@ -45,5 +45,5 @@ for user-facing changes.
 ## No CLA/DCO
 
 No Contributor License Agreement or Developer Certificate of Origin.
-By opening a PR you agree your contribution is MIT-licensed under `LICENSE`,
+By opening a PR you agree your contribution is MIT-licensed under `../LICENSE`,
 except for third-party skill materials carved out there.
