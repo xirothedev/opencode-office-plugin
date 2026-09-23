@@ -1,9 +1,9 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect } from "bun:test"
 import { officecliTool } from "@/plugin/tools/officecli"
 import { runTool, setupHermeticDirs, cleanupTestFile } from "./harness"
 import { getLocksDir, getFilePathHash } from "@/core/storage/paths"
-import { readFileSync, existsSync, writeFileSync } from "fs"
-import { join } from "path"
+import { readFileSync, existsSync, writeFileSync } from "node:fs"
+import { join } from "node:path"
 
 describe("officecli batch create/accept", () => {
   const fileA = "/tmp/officecli-batch-a.txt"

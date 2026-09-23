@@ -2,11 +2,11 @@
 import { officecliTool } from "./src/plugin/tools/officecli.ts"
 import { configureOptions } from "./src/core/options.ts"
 import { Schema, Effect } from "effect"
-import { mkdir, copyFile, readdir, stat } from "fs/promises"
-import { existsSync } from "fs"
-import { join, dirname, extname, basename } from "path"
-import { exec } from "child_process"
-import { promisify } from "util"
+import { mkdir, copyFile, readdir, stat } from "node:fs/promises"
+import { existsSync } from "node:fs"
+import { join, dirname, extname, basename } from "node:path"
+import { exec } from "node:child_process"
+import { promisify } from "node:util"
 const execAsync = promisify(exec)
 
 const DATA_DIR = "./tests/isolated-workspace/.data"

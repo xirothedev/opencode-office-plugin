@@ -1,13 +1,10 @@
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs"
 import { classifyPdfAsync } from "@firecrawl/pdf-inspector"
 import { toMarkdown, type ConvertOptions } from "@firecrawl/anydoc"
-import { readFileSync, writeFileSync, unlinkSync } from "fs"
-import { exec } from "child_process"
-import { promisify } from "util"
+import { readFileSync, writeFileSync, unlinkSync } from "node:fs"
 import { getFirecrawlApiKey, getFirecrawlApiUrl, getPdfEngine } from "@/core/options"
 import { sanitizeXmlText } from "@/core/format/sanitize"
-
-const execAsync = promisify(exec)
+import { runCommand } from "../exec"
 
 export async function extractTextFromPDF(
   absolutePath: string,
@@ -31,7 +28,7 @@ export async function extractTextFromPDF(
       const fallback = await extractViaPdfjs(buffer)
       if (fallback.trim().length > 0) return fallback
       // blank PDFs (no image, no text) are not scanned — return empty instead of throwing
-      const hasImage = buffer.includes(Buffer.from("/Image"))
+      const hasImage = buffer.includes(new TextEncoder().encode("/Image"))
       if (!hasImage) return fallback
       throw error
     }
@@ -66,11 +63,11 @@ export async function writePdfFromMarkdown(markdown: string, outputPath: string)
   const engine = getPdfEngine()
   try {
     // ponytail: weasyprint respects --css, xelatex ignores it — harmless, no branch needed
-    await execAsync(`pandoc "${tempPath}" --pdf-engine=${engine} --css="${cssPath}" -o "${outputPath}"`)
+    await runCommand(`pandoc "${tempPath}" --pdf-engine=${engine} --css="${cssPath}" -o "${outputPath}"`)
   } catch (error) {
     // fallback without css if engine doesn't support it (e.g. xelatex without weasyprint css)
     try {
-      await execAsync(`pandoc "${tempPath}" --pdf-engine=${engine} -o "${outputPath}"`)
+      await runCommand(`pandoc "${tempPath}" --pdf-engine=${engine} -o "${outputPath}"`)
     } catch (e2) {
       throw new Error(`pandoc PDF conversion failed: ${(error as Error).message}`)
     }

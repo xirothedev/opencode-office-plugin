@@ -1,9 +1,9 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect } from "bun:test"
 import { officecliTool } from "@/plugin/tools/officecli"
 import { runTool, setupHermeticDirs, cleanupTestFile } from "./harness"
 import { getLocksDir, getFilePathHash } from "@/core/storage/paths"
-import { readFileSync, writeFileSync } from "fs"
-import { join } from "path"
+import { readFileSync, writeFileSync } from "node:fs"
+import { join } from "node:path"
 
 describe("officecli lock-status action", () => {
   const testFile = "/tmp/officecli-lock-status.txt"

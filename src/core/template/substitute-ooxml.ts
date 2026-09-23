@@ -253,9 +253,9 @@ function detectFormatFromZip(zip: JSZip): "docx" | "xlsx" | "pptx" | null {
 }
 
 export async function substituteOoxml(
-  buffer: Buffer,
+  buffer: Uint8Array,
   data: Record<string, string | number>,
-): Promise<{ buffer: Buffer; replaced: number; format: string }> {
+): Promise<{ buffer: Uint8Array; replaced: number; format: string }> {
   const zip = await JSZip.loadAsync(buffer)
   const format = detectFormatFromZip(zip)
   if (!format) throw new Error("not an OOXML file (docx/xlsx/pptx)")
@@ -288,8 +288,8 @@ export async function substituteOoxml(
     // but if still 0, surface helpful error
     throw new Error(`no placeholders replaced — check {{keys}} in Template and data keys: ${Object.keys(data).join(", ")}`)
   }
-  const out = await zip.generateAsync({ type: "nodebuffer" })
-  return { buffer: out as Buffer, replaced: totalReplaced, format }
+  const out = await zip.generateAsync({ type: "uint8array" })
+  return { buffer: out, replaced: totalReplaced, format }
 }
 
 // For testing: expose helpers

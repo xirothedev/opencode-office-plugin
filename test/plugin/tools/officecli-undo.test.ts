@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect } from "bun:test"
 import { officecliTool } from "@/plugin/tools/officecli"
 import { runTool, setupHermeticDirs, cleanupTestFile } from "./harness"
 import { getFilePathHash } from "@/core/storage/paths"

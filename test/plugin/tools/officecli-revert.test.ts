@@ -1,8 +1,8 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect } from "bun:test"
 import { officecliTool } from "@/plugin/tools/officecli"
 import { runTool, setupHermeticDirs, cleanupTestFile } from "./harness"
 import { getFilePathHash } from "@/core/storage/paths"
-import { readFile } from "fs/promises"
+import { readFile } from "node:fs/promises"
 import { getDraftPath } from "@/core/draft/manager"
 
 describe("officecli revert action", () => {

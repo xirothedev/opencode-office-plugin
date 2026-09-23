@@ -1,8 +1,8 @@
-import { describe, it, expect, beforeEach } from "vitest"
+import { describe, it, expect, beforeEach } from "bun:test"
 import { officecliTool } from "@/plugin/tools/officecli"
 import { runTool, setupHermeticDirs, cleanupTestFile } from "./harness"
-import { copyFile, readFile } from "fs/promises"
-import { join } from "path"
+import { copyFile, readFile } from "node:fs/promises"
+import { join } from "node:path"
 import sharp from "sharp"
 
 describe("officecli annotate", () => {

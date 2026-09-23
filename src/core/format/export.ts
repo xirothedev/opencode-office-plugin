@@ -1,5 +1,5 @@
-import { mkdirSync } from "fs"
-import { dirname, extname, resolve } from "path"
+import { mkdirSync } from "node:fs"
+import { dirname, extname, resolve } from "node:path"
 import { writeOfficeFromMarkdown } from "@/core/format/backends/office"
 import { writePdfFromMarkdown } from "@/core/format/backends/pdf"
 import { writeXlsxFromMarkdown } from "@/core/format/backends/xlsx"

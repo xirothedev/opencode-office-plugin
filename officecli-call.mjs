@@ -4,7 +4,7 @@
 import { officecliTool } from "/Users/xirothedev/workspace/opencode-office-plugin/src/plugin/tools/officecli.ts"
 import { configureOptions } from "/Users/xirothedev/workspace/opencode-office-plugin/src/core/options.ts"
 import { getDraftsDir, getHistoryDir, getLocksDir, getRegistryDir, getSidecarsDir } from "/Users/xirothedev/workspace/opencode-office-plugin/src/core/storage/paths.ts"
-import { mkdir } from "fs/promises"
+import { mkdir } from "node:fs/promises"
 import { Effect, Schema } from "effect"
 
 const DATA_DIR = "/Users/xirothedev/workspace/opencode-office-plugin/tests/isolated-workspace/.data"

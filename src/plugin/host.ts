@@ -2,8 +2,8 @@
 // agent-facing officecli tool. Returns objects (office.preview) or action strings;
 // never Tool.Context — the session is resolved from the lock when not provided.
 import { Effect, Schema } from "effect"
-import { existsSync, readFileSync } from "fs"
-import { basename, extname } from "path"
+import { existsSync, readFileSync } from "node:fs"
+import { basename, extname } from "node:path"
 import * as Draft from "@/core/draft"
 import * as Comments from "@/core/comments"
 import { fail } from "@/plugin/tools/boundary"

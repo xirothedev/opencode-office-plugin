@@ -1,11 +1,8 @@
 import { toMarkdown, type ConvertOptions } from "@firecrawl/anydoc"
-import { exec } from "child_process"
-import { promisify } from "util"
-import { writeFileSync, unlinkSync } from "fs"
+import { writeFileSync, unlinkSync } from "node:fs"
+import { runCommand } from "../exec"
 import { sanitizeXmlText } from "@/core/format/sanitize"
 import { getFirecrawlApiKey, getFirecrawlApiUrl } from "@/core/options"
-
-const execAsync = promisify(exec)
 
 export async function extractTextFromOffice(
   absolutePath: string,
@@ -25,7 +22,7 @@ export async function writeOfficeFromMarkdown(markdown: string, outputPath: stri
   const tempPath = `${outputPath}.tmp.md`
   writeFileSync(tempPath, markdown)
   try {
-    await execAsync(`pandoc "${tempPath}" -o "${outputPath}"`)
+    await runCommand(`pandoc "${tempPath}" -o "${outputPath}"`)
   } finally {
     unlinkSync(tempPath)
   }

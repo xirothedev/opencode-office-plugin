@@ -1,10 +1,10 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect } from "bun:test"
 import { officecliTool } from "@/plugin/tools/officecli"
 import { editTool } from "@/plugin/tools/edit"
 import { runTool, setupHermeticDirs, cleanupTestFile } from "./harness"
-import { writeFile } from "fs/promises"
-import { readdirSync, rmSync } from "fs"
-import { join } from "path"
+import { writeFile } from "node:fs/promises"
+import { readdirSync, rmSync } from "node:fs"
+import { join } from "node:path"
 import { getLocksDir } from "@/core/storage/paths"
 
 describe("officecli list action", () => {

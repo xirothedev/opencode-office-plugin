@@ -1,7 +1,7 @@
 import JSZip from "jszip"
 import { parseStringPromise } from "xml2js"
 import { PDFDocument } from "pdf-lib"
-import { readFileSync, writeFileSync } from "fs"
+import { readFileSync, writeFileSync } from "node:fs"
 import { detectFormat } from "@/core/format/detect"
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs"
 import { ensureContentType, escapeXml } from "@/core/format/ooxml/parts"
@@ -233,7 +233,7 @@ async function applyOfficeMetadata(absolutePath: string, props: FileMetadata): P
   if (props.custom && Object.keys(props.custom).length > 0) {
     await ensureContentType(zip, "/docProps/custom.xml", CUSTOM_PROPERTIES_CONTENT_TYPE)
   }
-  writeFileSync(absolutePath, await zip.generateAsync({ type: "nodebuffer" }))
+  writeFileSync(absolutePath, await zip.generateAsync({ type: "uint8array" }))
 }
 
 function parsePdfDate(value: string | undefined): Date | undefined {

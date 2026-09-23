@@ -52,7 +52,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PUBLISHED_THIS_RUN: ${{ steps.changesets.outputs.published }}
         run: |
-          version="$(node -p "require('./package.json').version")"
+          version="$(bun -e "console.log(require('./package.json').version)")"
           tag="v$version"
           if git ls-remote --tags --exit-code origin "refs/tags/$tag" >/dev/null 2>&1; then
             echo "Tag $tag already exists on origin"

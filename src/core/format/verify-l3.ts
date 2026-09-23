@@ -1,5 +1,5 @@
 import JSZip from "jszip"
-import { readFileSync } from "fs"
+import { readFileSync } from "node:fs"
 
 function stripTextNodes(xml: string): string {
   // ponytail: L3 allows text diff only — normalize w:t/a:t/t/v to constant.
@@ -75,10 +75,10 @@ export async function verifyL3(fileA: string, fileB: string): Promise<VerifyResu
       if (diffs.join("\n").length > maxLen * 5) break
     } else {
       // binary compare
-      const a = await fa.async("nodebuffer")
-      const b = await fb.async("nodebuffer")
-      if (a.length !== b.length || !a.equals(b as Buffer)) {
-        diffs.push(`Binary diff in ${name} (${a.length} vs ${(b as Buffer).length} bytes)`)
+      const a = await fa.async("uint8array")
+      const b = await fb.async("uint8array")
+      if (a.length !== b.length || !a.every((v, i) => v === b[i])) {
+        diffs.push(`Binary diff in ${name} (${a.length} vs ${b.length} bytes)`)
       }
     }
   }

@@ -1,5 +1,5 @@
 import JSZip from "jszip"
-import { readFileSync, writeFileSync } from "fs"
+import { readFileSync, writeFileSync } from "node:fs"
 import { parseStringPromise, Builder } from "xml2js"
 import { SUGGESTED_TEXT_PREFIX, parseSuggestion, OPENOFFICE_NS, OO_XMLNS_ATTR, OO_STATUS_ATTR, OO_ORIG_ID_ATTR, openofficeStatusAttributes, parseStatus, type CommentStatus } from "@/core/format/ooxml/parts"
 
@@ -8,7 +8,7 @@ function numericWId(id: string): string {
   const m = id.match(/\d+/)
   return m ? m[0] : String(Math.abs([...id].reduce((a, c) => a + c.charCodeAt(0), 0)) % 10000)
 }
-function isZipBuffer(buf: Buffer): boolean {
+function isZipBuffer(buf: Uint8Array): boolean {
   return buf.length >= 2 && buf[0] === 0x50 && buf[1] === 0x4b
 }
 
@@ -264,7 +264,7 @@ export async function writeComment(docPath: string, comment: Comment): Promise<v
   }
 
   // Write back to file
-  const buffer = await zip.generateAsync({ type: "nodebuffer" })
+  const buffer = await zip.generateAsync({ type: "uint8array" })
   writeFileSync(docPath, buffer)
 }
 
@@ -400,7 +400,7 @@ export async function applyCommentSuggestion(docPath: string, commentId: string)
   }).buildObject(commentsRoot)
   zip.file("word/comments.xml", newCommentsXml)
 
-  const buffer = await zip.generateAsync({ type: "nodebuffer" })
+  const buffer = await zip.generateAsync({ type: "uint8array" })
   writeFileSync(docPath, buffer)
   return "applied"
 }
@@ -455,7 +455,7 @@ export async function updateComment(
   }).buildObject(commentsRoot)
   zip.file("word/comments.xml", newCommentsXml)
 
-  const buffer = await zip.generateAsync({ type: "nodebuffer" })
+  const buffer = await zip.generateAsync({ type: "uint8array" })
   writeFileSync(docPath, buffer)
   return "updated"
 }
@@ -553,7 +553,7 @@ export async function deleteComment(docPath: string, commentId: string): Promise
     zip.file("word/document.xml", new Builder().buildObject(docObj))
   }
 
-  const buffer = await zip.generateAsync({ type: "nodebuffer" })
+  const buffer = await zip.generateAsync({ type: "uint8array" })
   writeFileSync(docPath, buffer)
   return "deleted"
 }
@@ -612,7 +612,7 @@ export async function setCommentStatus(
   }).buildObject(commentsRoot)
   zip.file("word/comments.xml", newCommentsXml)
 
-  const buffer = await zip.generateAsync({ type: "nodebuffer" })
+  const buffer = await zip.generateAsync({ type: "uint8array" })
   writeFileSync(docPath, buffer)
   return "ok"
 }

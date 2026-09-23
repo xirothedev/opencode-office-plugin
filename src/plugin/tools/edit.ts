@@ -2,8 +2,8 @@ import { Schema } from "effect"
 import { Tool } from "@opencode/schema/tool"
 import { acquireLock, getLock } from "@/core/draft/lock"
 import { getFilePathHash } from "@/core/storage/paths"
-import { readFileSync, writeFileSync, existsSync } from "fs"
-import { extname } from "path"
+import { readFileSync, writeFileSync, existsSync } from "node:fs"
+import { extname } from "node:path"
 import { fail, tryExecute } from "@/plugin/tools/boundary"
 
 // ponytail: editTool is unregistered until host ships ctx.tool; extensions live in detect for the plugin-level permission guard

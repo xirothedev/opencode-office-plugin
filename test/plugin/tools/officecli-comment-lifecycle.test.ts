@@ -1,11 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect } from "bun:test";
 import JSZip from "jszip";
 import { officecliTool } from "@/plugin/tools/officecli";
 import { runTool, setupHermeticDirs, cleanupTestFile } from "./harness";
 import { getFilePathHash } from "@/core/storage/paths";
 import { getDraftPath } from "@/core/draft/manager";
-import { copyFileSync, readFileSync, writeFileSync } from "fs";
-import { join } from "path";
+import { copyFileSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 
 const testFile = "/tmp/comment-lifecycle.docx";
 const SESSION = "test-session";

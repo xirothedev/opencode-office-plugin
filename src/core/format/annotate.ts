@@ -1,5 +1,5 @@
 import sharp from "sharp"
-import { writeFileSync } from "fs"
+import { writeFileSync } from "node:fs"
 import type { AnnotationOp } from "@/core/draft/sidecar"
 import { escapeXml } from "@/core/format/ooxml/parts"
 
@@ -113,6 +113,8 @@ export async function renderAnnotationsToImage(absolutePath: string, annotations
     throw new Error("could not read image dimensions")
   }
   const svg = buildSvg(annotations, meta.width, meta.height)
+  // ponytail: sharp's composite input *types* only accept Buffer — runtime takes
+  // Uint8Array, but the boundary stays Buffer until sharp widens its types
   const buffer = await image.composite([{ input: Buffer.from(svg) }]).toBuffer()
   writeFileSync(absolutePath, buffer)
 }

@@ -1,8 +1,8 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect } from "bun:test"
 import { officecliTool } from "@/plugin/tools/officecli"
 import { runTool, setupHermeticDirs, cleanupTestFile } from "./harness"
-import { writeFile } from "fs/promises"
-import { resolve } from "path"
+import { writeFile } from "node:fs/promises"
+import { resolve } from "node:path"
 
 describe("officecli diff action", () => {
   const testFile = "/tmp/officecli-diff.txt"

@@ -1,7 +1,7 @@
 import { toMarkdownBytes } from "@firecrawl/anydoc"
-import { readFileSync } from "fs"
+import { readFileSync } from "node:fs"
 import sharp from "sharp"
-import { extname } from "path"
+import { extname } from "node:path"
 
 export async function extractTextFromImage(absolutePath: string): Promise<string> {
   const buffer = readFileSync(absolutePath)
@@ -36,5 +36,5 @@ export async function writeImageFromMarkdown(markdown: string, outputPath: strin
   const ext = extname(outputPath).toLowerCase()
   const format = ext === ".jpg" || ext === ".jpeg" ? "jpeg" : "png"
 
-  await sharp(Buffer.from(svg)).toFormat(format).toFile(outputPath)
+  await sharp(new TextEncoder().encode(svg)).toFormat(format).toFile(outputPath)
 }

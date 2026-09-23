@@ -220,7 +220,7 @@ The plugin targets the opencode V2 plugin API: `Plugin.define({ id: "openoffice"
 | Runtime & package manager | Bun |
 | Plugin API | opencode V2 (`@opencode/plugin`, `@opencode/schema`, `effect`) |
 | Office backends | `docx`, `exceljs`, `pdf-lib`, `pdfjs-dist`, `jszip`, `xml2js`, `sharp`, pandoc |
-| Tests | Vitest + v8 coverage |
+| Tests | `bun test` + coverage (lcov) |
 | Lint & build | oxlint · `tsc` + `tsc-alias` · Turbo |
 | CI/CD | GitHub Actions → npm publish on `v*` tags with provenance |
 
@@ -229,7 +229,7 @@ The plugin targets the opencode V2 plugin API: `Plugin.define({ id: "openoffice"
 ```bash
 bun install
 bun run check      # turbo: lint + typecheck + test + build
-bun run test       # vitest
+bun run test       # bun test
 bun run build      # tsc + tsc-alias → dist/
 ```
 

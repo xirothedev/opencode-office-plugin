@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest"
-import { copyFileSync, rmSync, mkdirSync } from "fs"
-import { join } from "path"
-import { tmpdir } from "os"
+import { describe, it, expect, beforeEach, afterEach } from "bun:test"
+import { copyFileSync, rmSync, mkdirSync } from "node:fs"
+import { join } from "node:path"
+import { tmpdir } from "node:os"
 import * as Comments from "@/core/comments"
 
 const FIXTURES = {

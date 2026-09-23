@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest"
+import { describe, it, expect, beforeEach, afterEach } from "bun:test"
 import JSZip from "jszip"
 import { writeComment, readComments, applyCellSuggestion } from "@/core/format/ooxml/xlsxcomments"
-import { copyFileSync, unlinkSync, mkdirSync, existsSync, readFileSync, writeFileSync } from "fs"
-import { join } from "path"
-import { tmpdir } from "os"
+import { copyFileSync, unlinkSync, mkdirSync, existsSync, readFileSync, writeFileSync } from "node:fs"
+import { join } from "node:path"
+import { tmpdir } from "node:os"
 
 const FIXTURE = join(process.cwd(), "test/fixtures/sample.xlsx")
 
@@ -106,7 +106,7 @@ describe("OOXML XLSX Comment Writer", () => {
     const rich = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <comments xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><authors><author>AI Agent</author></authors><commentList><comment ref="B2" authorId="0"><text><r><rPr><b/><sz val="9"/><color indexed="81"/><rFont val="Tahoma"/><family val="2"/></rPr><t xml:space="preserve">This needs review</t></r></text></comment><comment ref="B3" authorId="0"><text><r><rPr><sz val="10"/></rPr><t xml:space="preserve">First part</t></r><r><t>second part</t></r></text></comment></commentList></comments>`
     zip.file("xl/comments1.xml", rich)
-    writeFileSync(testXlsxPath, await zip.generateAsync({ type: "nodebuffer" }))
+    writeFileSync(testXlsxPath, await zip.generateAsync({ type: "uint8array" }))
 
     const comments = await readComments(testXlsxPath)
     expect(comments).toHaveLength(2)

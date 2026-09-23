@@ -1,6 +1,6 @@
 import { PDFDocument, StandardFonts, degrees, rgb } from "pdf-lib"
 import JSZip from "jszip"
-import { readFileSync, writeFileSync } from "fs"
+import { readFileSync, writeFileSync } from "node:fs"
 import { detectFormat } from "@/core/format/detect"
 import { addRelationship, ensureContentType, escapeXml } from "@/core/format/ooxml/parts"
 import type { WatermarkConfig, WatermarkPosition } from "@/core/draft/sidecar"
@@ -104,7 +104,7 @@ async function applyDocxWatermark(absolutePath: string, config: WatermarkConfig)
     throw new Error("no sectPr found in DOCX document")
   }
   zip.file(documentPath, documentXml)
-  writeFileSync(absolutePath, await zip.generateAsync({ type: "nodebuffer" }))
+  writeFileSync(absolutePath, await zip.generateAsync({ type: "uint8array" }))
 }
 
 export const WATERMARK_EXTENSIONS = [".docx", ".pdf"]

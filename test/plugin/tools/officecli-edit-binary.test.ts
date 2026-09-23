@@ -1,8 +1,8 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect } from "bun:test"
 import { officecliTool } from "@/plugin/tools/officecli"
 import { runTool, setupHermeticDirs, cleanupTestFile } from "./harness"
-import { copyFile } from "fs/promises"
-import { join } from "path"
+import { copyFile } from "node:fs/promises"
+import { join } from "node:path"
 
 describe("officecli edit binary (DOCX)", () => {
   const testFile = "/tmp/test-edit.docx"

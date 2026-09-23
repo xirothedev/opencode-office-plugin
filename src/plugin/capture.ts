@@ -1,7 +1,7 @@
 // Capture: one JSON record per officecli invoke (ADR 0014), same shape as test
 // Captures plus `source`. Local-only, fire-and-forget: a failed write never fails an invoke.
-import { existsSync, mkdirSync, readdirSync, unlinkSync, writeFileSync } from "fs"
-import { join } from "path"
+import { existsSync, mkdirSync, readdirSync, unlinkSync, writeFileSync } from "node:fs"
+import { join } from "node:path"
 import { getCapturesDir } from "@/core/storage/paths"
 
 const MAX_KEEP = 200

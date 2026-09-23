@@ -1,6 +1,6 @@
 import { getSidecarsDir } from "@/core/storage/paths"
-import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync } from "fs"
-import { join, dirname } from "path"
+import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync } from "node:fs"
+import { join, dirname } from "node:path"
 import type { FileMetadata } from "@/core/format/metadata"
 
 export type WatermarkPosition = "diagonal-center" | "top-center" | "bottom-center"

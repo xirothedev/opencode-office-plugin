@@ -1,4 +1,4 @@
-import { extname } from "path"
+import { extname } from "node:path"
 
 export type Format = "pdf" | "docx" | "xlsx" | "pptx" | "image" | "text"
 

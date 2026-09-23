@@ -2,13 +2,13 @@ import { Effect, Schema } from "effect"
 import { Tool } from "@opencode/schema/tool"
 import type { officecliTool } from "@/plugin/tools/officecli"
 import type { editTool } from "@/plugin/tools/edit"
-import { beforeEach, afterEach } from "vitest"
-import { mkdir, rm } from "fs/promises"
-import { existsSync } from "fs"
+import { beforeEach, afterEach } from "bun:test"
+import { mkdir, rm } from "node:fs/promises"
+import { existsSync } from "node:fs"
 import { getDraftsDir, getHistoryDir, getLocksDir, getRegistryDir, getSidecarsDir } from "@/core/storage/paths"
 import { configureOptions } from "@/core/options"
-import { tmpdir } from "os"
-import { join } from "path"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 
 export type AnyTool = typeof officecliTool | typeof editTool
 export type ToolArgs = Record<string, unknown>

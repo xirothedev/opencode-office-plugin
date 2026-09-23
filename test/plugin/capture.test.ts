@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach } from "vitest"
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync } from "fs"
-import { tmpdir } from "os"
-import { join } from "path"
+import { describe, it, expect, beforeEach } from "bun:test"
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { configureOptions } from "@/core/options"
 import { capture, captureQuiet } from "@/plugin/capture"
 

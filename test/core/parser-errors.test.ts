@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect } from "bun:test"
 import { parseRules } from "@/core/format/validate"
 import { parseTemplateData, parseGenerateEntries } from "@/core/template/generate"
 import { parseAnnotationOps } from "@/core/format/annotate"

@@ -1,7 +1,7 @@
 import { getLocksDir } from "@/core/storage/paths"
 import { getStaleThresholdMs } from "@/core/options"
-import { readFileSync, writeFileSync, existsSync, unlinkSync, mkdirSync } from "fs"
-import { dirname, join } from "path"
+import { readFileSync, writeFileSync, existsSync, unlinkSync, mkdirSync } from "node:fs"
+import { dirname, join } from "node:path"
 
 export type LockStatus = "acquired" | "in-review" | "stale"
 

@@ -1,6 +1,6 @@
 import { getRegistryDir, getFilePathHash } from "@/core/storage/paths"
-import { readFileSync, writeFileSync, existsSync, unlinkSync, mkdirSync } from "fs"
-import { join, dirname } from "path"
+import { readFileSync, writeFileSync, existsSync, unlinkSync, mkdirSync } from "node:fs"
+import { join, dirname } from "node:path"
 
 interface RegistryEntry {
   absolutePath: string

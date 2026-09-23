@@ -21,9 +21,9 @@
     "build": "tsc && tsc-alias",
     "prepack": "bun run build",
     "prepublishOnly": "bun run build",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
+    "test": "bun test --isolate",
+    "test:watch": "bun test --watch",
+    "test:coverage": "bun test --isolate --coverage --coverage-reporter=lcov",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint",
     "check": "turbo run lint typecheck test build",
@@ -60,13 +60,12 @@
   },
   "devDependencies": {
     "@changesets/cli": "^3.0.2",
+    "@types/bun": "^1.4.2",
     "@types/node": "^26.2.0",
     "@types/xml2js": "^0.4.14",
-    "@vitest/coverage-v8": "^4.1.10",
     "oxlint": "^1.77.0",
     "tsc-alias": "^1.9.1",
     "turbo": "^2.10.9",
-    "typescript": "^7.0.2",
-    "vitest": "^4.1.10"
+    "typescript": "^7.0.2"
   }
 }
