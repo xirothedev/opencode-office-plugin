@@ -1,64 +1,85 @@
-import { getSidecarsDir } from "@/core/storage/paths"
-import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync } from "node:fs"
-import { join, dirname } from "node:path"
-import type { FileMetadata } from "@/core/format/metadata"
+import {
+  readFileSync,
+  writeFileSync,
+  existsSync,
+  mkdirSync,
+  unlinkSync,
+} from "node:fs";
+import path from "node:path";
 
-export type WatermarkPosition = "diagonal-center" | "top-center" | "bottom-center"
+import type { FileMetadata } from "@/core/format/metadata";
+import { getSidecarsDir } from "@/core/storage/paths";
+
+export type WatermarkPosition =
+  | "diagonal-center"
+  | "top-center"
+  | "bottom-center";
 
 export interface WatermarkConfig {
-  text: string
-  position?: WatermarkPosition
-  size?: number
-  opacity?: number
+  text: string;
+  position?: WatermarkPosition;
+  size?: number;
+  opacity?: number;
 }
 
 export interface AnnotationPosition {
-  x: number
-  y: number
+  x: number;
+  y: number;
 }
 
 export interface AnnotationRect {
-  x: number
-  y: number
-  width: number
-  height: number
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 
 export interface AnnotationOp {
-  type: "note" | "highlight" | "stamp"
-  text?: string
-  position?: AnnotationPosition
-  rect?: AnnotationRect
-  size?: number
+  type: "note" | "highlight" | "stamp";
+  text?: string;
+  position?: AnnotationPosition;
+  rect?: AnnotationRect;
+  size?: number;
 }
 
 export interface Sidecar {
-  metadata?: FileMetadata
-  watermark?: WatermarkConfig | null
-  annotations?: AnnotationOp[]
+  metadata?: FileMetadata;
+  watermark?: WatermarkConfig | null;
+  annotations?: AnnotationOp[];
 }
 
-export function getSidecarPath(filePathHash: string, sessionID: string): string {
-  return join(getSidecarsDir(), filePathHash, `${sessionID}.json`)
-}
+export const getSidecarPath = (
+  filePathHash: string,
+  sessionID: string
+): string => path.join(getSidecarsDir(), filePathHash, `${sessionID}.json`);
 
-export function readSidecar(filePathHash: string, sessionID: string): Sidecar | null {
-  const sidecarPath = getSidecarPath(filePathHash, sessionID)
+export const readSidecar = (
+  filePathHash: string,
+  sessionID: string
+): Sidecar | null => {
+  const sidecarPath = getSidecarPath(filePathHash, sessionID);
   if (!existsSync(sidecarPath)) {
-    return null
+    return null;
   }
-  return JSON.parse(readFileSync(sidecarPath, "utf-8")) as Sidecar
-}
+  return JSON.parse(readFileSync(sidecarPath, "utf-8")) as Sidecar;
+};
 
-export function writeSidecar(filePathHash: string, sessionID: string, sidecar: Sidecar): void {
-  const sidecarPath = getSidecarPath(filePathHash, sessionID)
-  mkdirSync(dirname(sidecarPath), { recursive: true })
-  writeFileSync(sidecarPath, JSON.stringify(sidecar))
-}
+export const writeSidecar = (
+  filePathHash: string,
+  sessionID: string,
+  sidecar: Sidecar
+): void => {
+  const sidecarPath = getSidecarPath(filePathHash, sessionID);
+  mkdirSync(path.dirname(sidecarPath), { recursive: true });
+  writeFileSync(sidecarPath, JSON.stringify(sidecar));
+};
 
-export function deleteSidecar(filePathHash: string, sessionID: string): void {
-  const sidecarPath = getSidecarPath(filePathHash, sessionID)
+export const deleteSidecar = (
+  filePathHash: string,
+  sessionID: string
+): void => {
+  const sidecarPath = getSidecarPath(filePathHash, sessionID);
   if (existsSync(sidecarPath)) {
-    unlinkSync(sidecarPath)
+    unlinkSync(sidecarPath);
   }
-}
+};

@@ -1,22 +1,23 @@
-import { Effect } from "effect"
-import { Tool } from "@opencode/schema/tool"
+import { Tool } from "@opencode/schema/tool";
+import { Effect } from "effect";
 
-export function fail(message: string): never {
-  throw new Tool.Error({ message })
-}
+export const fail = (message: string): never => {
+  throw new Tool.Error({ message });
+};
 
-export function toToolError(error: unknown): Tool.Error {
+export const toToolError = (error: unknown): Tool.Error => {
   if (error instanceof Tool.Error) {
-    return error
+    return error;
   }
   return new Tool.Error({
     message: error instanceof Error ? error.message : String(error),
-  })
-}
+  });
+};
 
-export function tryExecute<A>(run: () => Promise<A>): Effect.Effect<A, Tool.Error> {
-  return Effect.tryPromise({
-    try: run,
+export const tryExecute = <A>(
+  run: () => Promise<A>
+): Effect.Effect<A, Tool.Error> =>
+  Effect.tryPromise({
     catch: toToolError,
-  })
-}
+    try: run,
+  });

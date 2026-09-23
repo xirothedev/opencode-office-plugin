@@ -1,31 +1,24 @@
-import { join } from "node:path"
-import { createHash } from "node:crypto"
-import { getPluginDataDir } from "@/core/options"
+import { createHash } from "node:crypto";
+import path from "node:path";
 
-export function getDraftsDir(): string {
-  return join(getPluginDataDir(), "drafts")
-}
+import { getPluginDataDir } from "@/core/options";
 
-export function getLocksDir(): string {
-  return join(getPluginDataDir(), "locks")
-}
+export const getDraftsDir = (): string =>
+  path.join(getPluginDataDir(), "drafts");
 
-export function getHistoryDir(): string {
-  return join(getPluginDataDir(), "history")
-}
+export const getLocksDir = (): string => path.join(getPluginDataDir(), "locks");
 
-export function getRegistryDir(): string {
-  return join(getPluginDataDir(), "registry")
-}
+export const getHistoryDir = (): string =>
+  path.join(getPluginDataDir(), "history");
 
-export function getSidecarsDir(): string {
-  return join(getPluginDataDir(), "sidecars")
-}
+export const getRegistryDir = (): string =>
+  path.join(getPluginDataDir(), "registry");
 
-export function getCapturesDir(): string {
-  return join(getPluginDataDir(), ".capture")
-}
+export const getSidecarsDir = (): string =>
+  path.join(getPluginDataDir(), "sidecars");
 
-export function getFilePathHash(absolutePath: string): string {
-  return createHash("sha256").update(absolutePath).digest("hex")
-}
+export const getCapturesDir = (): string =>
+  path.join(getPluginDataDir(), ".capture");
+
+export const getFilePathHash = (absolutePath: string): string =>
+  createHash("sha256").update(absolutePath).digest("hex");

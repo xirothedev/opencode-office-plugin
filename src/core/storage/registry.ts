@@ -1,30 +1,42 @@
-import { getRegistryDir, getFilePathHash } from "@/core/storage/paths"
-import { readFileSync, writeFileSync, existsSync, unlinkSync, mkdirSync } from "node:fs"
-import { join, dirname } from "node:path"
+import {
+  readFileSync,
+  writeFileSync,
+  existsSync,
+  unlinkSync,
+  mkdirSync,
+} from "node:fs";
+import path from "node:path";
+
+import { getRegistryDir, getFilePathHash } from "@/core/storage/paths";
 
 interface RegistryEntry {
-  absolutePath: string
+  absolutePath: string;
 }
 
-export function registerDraft(absolutePath: string): void {
-  const filePathHash = getFilePathHash(absolutePath)
-  const registryPath = join(getRegistryDir(), `${filePathHash}.json`)
-  mkdirSync(dirname(registryPath), { recursive: true })
-  writeFileSync(registryPath, JSON.stringify({ absolutePath } satisfies RegistryEntry))
-}
+export const registerDraft = (absolutePath: string): void => {
+  const filePathHash = getFilePathHash(absolutePath);
+  const registryPath = path.join(getRegistryDir(), `${filePathHash}.json`);
+  mkdirSync(path.dirname(registryPath), { recursive: true });
+  writeFileSync(
+    registryPath,
+    JSON.stringify({ absolutePath } satisfies RegistryEntry)
+  );
+};
 
-export function unregisterDraft(filePathHash: string): void {
-  const registryPath = join(getRegistryDir(), `${filePathHash}.json`)
+export const unregisterDraft = (filePathHash: string): void => {
+  const registryPath = path.join(getRegistryDir(), `${filePathHash}.json`);
   if (existsSync(registryPath)) {
-    unlinkSync(registryPath)
+    unlinkSync(registryPath);
   }
-}
+};
 
-export function getRegisteredPath(filePathHash: string): string | null {
-  const registryPath = join(getRegistryDir(), `${filePathHash}.json`)
+export const getRegisteredPath = (filePathHash: string): string | null => {
+  const registryPath = path.join(getRegistryDir(), `${filePathHash}.json`);
   if (!existsSync(registryPath)) {
-    return null
+    return null;
   }
-  const entry = JSON.parse(readFileSync(registryPath, "utf-8")) as RegistryEntry
-  return entry.absolutePath
-}
+  const entry = JSON.parse(
+    readFileSync(registryPath, "utf-8")
+  ) as RegistryEntry;
+  return entry.absolutePath;
+};

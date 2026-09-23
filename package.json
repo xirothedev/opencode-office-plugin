@@ -25,8 +25,10 @@
     "test:watch": "bun test --watch",
     "test:coverage": "bun test --isolate --coverage --coverage-reporter=lcov",
     "typecheck": "tsc --noEmit",
-    "lint": "oxlint",
-    "check": "turbo run lint typecheck test build",
+    "lint": "oxlint src test scripts",
+    "format": "oxfmt --write src test scripts",
+    "format:check": "oxfmt --check src test scripts",
+    "check": "turbo run lint format:check typecheck test build",
     "changeset": "changeset",
     "changeset:version": "changeset version",
     "release": "changeset publish"
@@ -63,9 +65,11 @@
     "@types/bun": "^1.4.2",
     "@types/node": "^26.2.0",
     "@types/xml2js": "^0.4.14",
-    "oxlint": "^1.77.0",
+    "oxfmt": "0.70.0",
+    "oxlint": "1.83.0",
     "tsc-alias": "^1.9.1",
     "turbo": "^2.10.9",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "ultracite": "7.12.0"
   }
 }

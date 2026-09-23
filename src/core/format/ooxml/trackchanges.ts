@@ -1,151 +1,211 @@
-import JSZip from "jszip"
-import { readFileSync, writeFileSync } from "node:fs"
-import { parseStringPromise, Builder } from "xml2js"
+import { readFileSync, writeFileSync } from "node:fs";
+
+import JSZip from "jszip";
+import { parseStringPromise, Builder } from "xml2js";
 
 export interface TrackChange {
-  id: string
-  type: "insertion" | "deletion"
-  author: string
-  timestamp: Date
-  text: string
-  paragraph: number
-  offset: number
+  id: string;
+  type: "insertion" | "deletion";
+  author: string;
+  timestamp: Date;
+  text: string;
+  paragraph: number;
+  offset: number;
 }
 
-export async function writeTrackChange(docPath: string, trackChange: TrackChange): Promise<void> {
-  const data = readFileSync(docPath)
-  const zip = await JSZip.loadAsync(data)
+type XmlNode = Record<string, unknown>;
+
+const toArray = <T>(value: T | T[] | undefined): T[] => {
+  if (value === undefined) {
+    return [];
+  }
+  return Array.isArray(value) ? value : [value];
+};
+
+const childText = (node: XmlNode, key: string): string => {
+  const v: unknown = node[key];
+  return typeof v === "string" ? v : "";
+};
+
+const attrText = (node: XmlNode, ...keys: string[]): string => {
+  const attrs = node.$ as Record<string, unknown> | undefined;
+  if (!attrs) {
+    return "";
+  }
+  for (const k of keys) {
+    const v: unknown = attrs[k];
+    if (typeof v === "string" && v !== "") {
+      return v;
+    }
+  }
+  return "";
+};
+
+const attrDate = (node: XmlNode, ...keys: string[]): Date =>
+  new Date(attrText(node, ...keys) || new Date());
+
+const nestedText = (node: XmlNode, outer: string, inner: string): string => {
+  const mid = node[outer] as XmlNode | undefined;
+  if (!mid || typeof mid !== "object") {
+    return "";
+  }
+  return childText(mid, inner);
+};
+
+const paragraphsOf = (docObj: XmlNode): XmlNode[] => {
+  const root = (docObj.document ?? docObj["w:document"]) as XmlNode | undefined;
+  if (!root) {
+    throw new Error("Could not find document root element");
+  }
+  const body = (root.body ?? root["w:body"]) as XmlNode | undefined;
+  if (!body) {
+    throw new Error("Could not find document body element");
+  }
+  return toArray<XmlNode>(body["w:p"] as XmlNode | XmlNode[] | undefined);
+};
+
+const readParagraphs = (docObj: XmlNode): XmlNode[] => {
+  const root = (docObj.document ?? docObj["w:document"]) as XmlNode | undefined;
+  if (!root) {
+    return [];
+  }
+  const body = (root.body ?? root["w:body"]) as XmlNode | undefined;
+  if (!body) {
+    return [];
+  }
+  return toArray<XmlNode>(body["w:p"] as XmlNode | XmlNode[] | undefined);
+};
+
+const collectInsertion = (
+  para: XmlNode,
+  paraIndex: number,
+  changes: TrackChange[]
+): void => {
+  const ins = para["w:ins"] as XmlNode | undefined;
+  if (!ins) {
+    return;
+  }
+  changes.push({
+    author: attrText(ins, "w:author", "author"),
+    id: attrText(ins, "w:id", "id"),
+    // Simplified - real impl needs to parse position
+    offset: 0,
+    paragraph: paraIndex,
+    text: nestedText(ins, "w:r", "w:t"),
+    timestamp: attrDate(ins, "w:date", "date"),
+    type: "insertion",
+  });
+};
+
+const collectDeletion = (
+  para: XmlNode,
+  paraIndex: number,
+  changes: TrackChange[]
+): void => {
+  const del = para["w:del"] as XmlNode | undefined;
+  if (!del) {
+    return;
+  }
+  changes.push({
+    author: attrText(del, "w:author", "author"),
+    id: attrText(del, "w:id", "id"),
+    offset: 0,
+    paragraph: paraIndex,
+    text: nestedText(del, "w:r", "w:delText"),
+    timestamp: attrDate(del, "w:date", "date"),
+    type: "deletion",
+  });
+};
+
+export const writeTrackChange = async (
+  docPath: string,
+  trackChange: TrackChange
+): Promise<void> => {
+  const data = readFileSync(docPath);
+  const zip = await JSZip.loadAsync(data);
 
   // Read document.xml
-  const documentXml = zip.file("word/document.xml")
+  const documentXml = zip.file("word/document.xml");
   if (!documentXml) {
-    throw new Error("document.xml not found in DOCX")
+    throw new Error("document.xml not found in DOCX");
   }
 
-  const docContent = await documentXml.async("string")
-  const docObj = await parseStringPromise(docContent, { explicitArray: false })
-
-  // Find body - handle namespace variations
-  const root = docObj.document || docObj["w:document"]
-  if (!root) {
-    throw new Error("Could not find document root element")
-  }
-  const body = root.body || root["w:body"]
-  if (!body) {
-    throw new Error("Could not find document body element")
-  }
+  const docContent = await documentXml.async("string");
+  const docObj = await parseStringPromise(docContent, { explicitArray: false });
 
   // Get target paragraph
-  const paragraphs = body["w:p"] ? (Array.isArray(body["w:p"]) ? body["w:p"] : [body["w:p"]]) : []
-  const targetPara = paragraphs[trackChange.paragraph]
+  const paragraphs = paragraphsOf(docObj as XmlNode);
+  const targetPara = paragraphs[trackChange.paragraph];
 
   if (!targetPara) {
-    throw new Error(`Paragraph ${trackChange.paragraph} not found`)
+    throw new Error(`Paragraph ${trackChange.paragraph} not found`);
   }
 
   // Ensure runs array exists
   if (!targetPara["w:r"]) {
-    targetPara["w:r"] = []
+    targetPara["w:r"] = [];
   }
   if (!Array.isArray(targetPara["w:r"])) {
-    targetPara["w:r"] = [targetPara["w:r"]]
+    targetPara["w:r"] = [targetPara["w:r"]];
   }
 
   // Create track change element - OOXML: <w:ins>/<w:del> is sibling of <w:r> inside <w:p>, not child of <w:r>
   if (trackChange.type === "insertion") {
     const insElement = {
       $: {
-        "w:id": trackChange.id,
         "w:author": trackChange.author,
         "w:date": trackChange.timestamp.toISOString(),
+        "w:id": trackChange.id,
       },
       "w:r": {
         "w:t": trackChange.text,
       },
-    }
+    };
     // Add as sibling of w:r at paragraph level
-    targetPara["w:ins"] = insElement
+    targetPara["w:ins"] = insElement;
   } else if (trackChange.type === "deletion") {
     const delElement = {
       $: {
-        "w:id": trackChange.id,
         "w:author": trackChange.author,
         "w:date": trackChange.timestamp.toISOString(),
+        "w:id": trackChange.id,
       },
       "w:r": {
         "w:delText": trackChange.text,
       },
-    }
-    targetPara["w:del"] = delElement
+    };
+    targetPara["w:del"] = delElement;
   }
 
   // Write back
-  const builder = new Builder()
-  const newDocXml = builder.buildObject(docObj)
-  zip.file("word/document.xml", newDocXml)
+  const builder = new Builder();
+  const newDocXml = builder.buildObject(docObj);
+  zip.file("word/document.xml", newDocXml);
 
   // Write back to file
-  const buffer = await zip.generateAsync({ type: "uint8array" })
-  writeFileSync(docPath, buffer)
-}
+  const buffer = await zip.generateAsync({ type: "uint8array" });
+  writeFileSync(docPath, buffer);
+};
 
-export async function readTrackChanges(docPath: string): Promise<TrackChange[]> {
-  const data = readFileSync(docPath)
-  const zip = await JSZip.loadAsync(data)
+export const readTrackChanges = async (
+  docPath: string
+): Promise<TrackChange[]> => {
+  const data = readFileSync(docPath);
+  const zip = await JSZip.loadAsync(data);
 
-  const documentXml = zip.file("word/document.xml")
+  const documentXml = zip.file("word/document.xml");
   if (!documentXml) {
-    return []
+    return [];
   }
 
-  const content = await documentXml.async("string")
-  const docObj = await parseStringPromise(content, { explicitArray: false })
+  const content = await documentXml.async("string");
+  const docObj = await parseStringPromise(content, { explicitArray: false });
 
-  const root = docObj.document || docObj["w:document"]
-  if (!root) {
-    return []
-  }
-  const body = root.body || root["w:body"]
-  if (!body) {
-    return []
+  const changes: TrackChange[] = [];
+  for (const [paraIndex, para] of readParagraphs(docObj as XmlNode).entries()) {
+    collectInsertion(para, paraIndex, changes);
+    collectDeletion(para, paraIndex, changes);
   }
 
-  const changes: TrackChange[] = []
-
-  // Find all paragraphs
-  const paragraphs = body["w:p"] ? (Array.isArray(body["w:p"]) ? body["w:p"] : [body["w:p"]]) : []
-
-  paragraphs.forEach((para: any, paraIndex: number) => {
-    // Check for insertion at paragraph level (sibling of w:r)
-    if (para["w:ins"]) {
-      const ins = para["w:ins"]
-      const text = ins["w:r"]?.["w:t"] || ""
-      changes.push({
-        id: ins.$?.["w:id"] || ins.$?.id || "",
-        type: "insertion",
-        author: ins.$?.["w:author"] || ins.$?.author || "",
-        timestamp: new Date(ins.$?.["w:date"] || ins.$?.date || new Date()),
-        text: typeof text === "string" ? text : "",
-        paragraph: paraIndex,
-        offset: 0, // Simplified - real impl needs to parse position
-      })
-    }
-
-    // Check for deletion at paragraph level (sibling of w:r)
-    if (para["w:del"]) {
-      const del = para["w:del"]
-      const text = del["w:r"]?.["w:delText"] || ""
-      changes.push({
-        id: del.$?.["w:id"] || del.$?.id || "",
-        type: "deletion",
-        author: del.$?.["w:author"] || del.$?.author || "",
-        timestamp: new Date(del.$?.["w:date"] || del.$?.date || new Date()),
-        text: typeof text === "string" ? text : "",
-        paragraph: paraIndex,
-        offset: 0,
-      })
-    }
-  })
-
-  return changes
-}
+  return changes;
+};

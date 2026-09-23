@@ -1,53 +1,61 @@
-import { describe, it, expect } from "bun:test"
-import { Tool } from "@opencode/schema/tool"
-import { officecliTool } from "@/plugin/tools/officecli"
-import { officecliInvokes, runOfficecliInvoke } from "@/plugin/host"
-import { runTool, setupHermeticDirs, cleanupTestFile, mockContext } from "./harness"
-import { getFilePathHash } from "@/core/storage/paths"
-import { getDraftPath } from "@/core/draft/manager"
-import { writeComment } from "@/core/format/ooxml/comments"
-import { copyFileSync, readFileSync, utimesSync } from "node:fs"
-import { join } from "node:path"
+import { describe, it, expect } from "bun:test";
+import { copyFileSync, readFileSync, utimesSync } from "node:fs";
+import path from "node:path";
 
-const DOCX_FILE = "/tmp/office-invoke.docx"
-const MD_FILE = "/tmp/office-invoke.md"
-const SESSION = "test-session"
-const DOCX_FIXTURE = join(process.cwd(), "test/fixtures/sample.docx")
+import { Tool } from "@opencode/schema/tool";
 
-type PreviewComment = {
-  id: string
-  author: string
-  text: string
-  status: "open" | "resolved" | "denied"
-  suggestedText?: string
-  anchor?: string
-  createdAt: number
+import { getDraftPath } from "@/core/draft/manager";
+import { writeComment } from "@/core/format/ooxml/comments";
+import { getFilePathHash } from "@/core/storage/paths";
+import { officecliInvokes, runOfficecliInvoke } from "@/plugin/host";
+import { officecliTool } from "@/plugin/tools/officecli";
+
+import {
+  runTool,
+  setupHermeticDirs,
+  cleanupTestFile,
+  mockContext,
+} from "./harness";
+
+const DOCX_FILE = "/tmp/office-invoke.docx";
+const MD_FILE = "/tmp/office-invoke.md";
+const SESSION = "test-session";
+const DOCX_FIXTURE = path.join(process.cwd(), "test/fixtures/sample.docx");
+
+interface PreviewComment {
+  id: string;
+  author: string;
+  text: string;
+  status: "open" | "resolved" | "denied";
+  suggestedText?: string;
+  anchor?: string;
+  createdAt: number;
 }
 
-type PreviewResult = {
-  managed: boolean
-  source?: "draft" | "file"
-  filename?: string
-  contentType?: string
-  content?: string
-  fileUrl?: string
-  comments?: PreviewComment[]
-  lock?: { sessionID: string; owner: string; stale: boolean }
+interface PreviewResult {
+  managed: boolean;
+  source?: "draft" | "file";
+  filename?: string;
+  contentType?: string;
+  content?: string;
+  fileUrl?: string;
+  comments?: PreviewComment[];
+  lock?: { sessionID: string; owner: string; stale: boolean };
 }
 
-function parseList(result: string): Array<Record<string, unknown>> {
-  return JSON.parse(result.slice(result.indexOf("\n") + 1)) as Array<
-    Record<string, unknown>
-  >
-}
+const parseList = (result: string): Record<string, unknown>[] =>
+  JSON.parse(result.slice(result.indexOf("\n") + 1)) as Record<
+    string,
+    unknown
+  >[];
 
 describe("officecli host invokes", () => {
-  setupHermeticDirs()
-  cleanupTestFile(DOCX_FILE)
-  cleanupTestFile(MD_FILE)
+  setupHermeticDirs();
+  cleanupTestFile(DOCX_FILE);
+  cleanupTestFile(MD_FILE);
 
   it("registers one invoke per host-driven action", () => {
-    expect(Object.keys(officecliInvokes).sort()).toEqual([
+    expect(Object.keys(officecliInvokes).toSorted()).toEqual([
       "office.accept",
       "office.comment.approve",
       "office.comment.create",
@@ -57,227 +65,227 @@ describe("officecli host invokes", () => {
       "office.comment.resolve",
       "office.edit.save",
       "office.preview",
-    ])
-  })
+    ]);
+  });
 
   it("office.comment.create writes a comment as the lock owner", async () => {
     await runTool(officecliTool, {
       action: "create",
-      filePath: DOCX_FILE,
       content: "stub",
-    })
+      filePath: DOCX_FILE,
+    });
     copyFileSync(
       DOCX_FIXTURE,
-      getDraftPath(getFilePathHash(DOCX_FILE), SESSION, ".docx"),
-    )
+      getDraftPath(getFilePathHash(DOCX_FILE), SESSION, ".docx")
+    );
 
     await runOfficecliInvoke("office.comment.create", {
-      filename: DOCX_FILE,
-      commentId: "c-invoke",
       author: "Host UI",
+      commentId: "c-invoke",
       commentText: "from host",
-      rangeStartParagraph: 0,
-      rangeStartOffset: 0,
-      rangeEndParagraph: 0,
+      filename: DOCX_FILE,
       rangeEndOffset: 5,
-    })
+      rangeEndParagraph: 0,
+      rangeStartOffset: 0,
+      rangeStartParagraph: 0,
+    });
 
     const [comment] = parseList(
       await runTool(officecliTool, {
         action: "list-comments",
         filePath: DOCX_FILE,
-      }),
-    )
-    expect(comment.id).toBe("c-invoke")
-    expect(comment.status).toBe("open")
-  })
+      })
+    );
+    expect(comment.id).toBe("c-invoke");
+    expect(comment.status).toBe("open");
+  });
 
   it("office.preview returns the managed draft with lock", async () => {
     await runTool(officecliTool, {
       action: "create",
-      filePath: MD_FILE,
       content: "# Title",
-    })
+      filePath: MD_FILE,
+    });
 
     const out = (await runOfficecliInvoke("office.preview", {
       filePath: MD_FILE,
       sessionID: SESSION,
-    })) as PreviewResult
-    expect(out.managed).toBe(true)
-    expect(out.source).toBe("draft")
-    expect(out.filename).toBe("office-invoke.md")
-    expect(out.contentType).toBe("markdown")
-    expect(out.content).toBe("# Title")
-    expect(out.fileUrl).toBeUndefined()
-    expect(out.comments).toEqual([])
+    })) as PreviewResult;
+    expect(out.managed).toBe(true);
+    expect(out.source).toBe("draft");
+    expect(out.filename).toBe("office-invoke.md");
+    expect(out.contentType).toBe("markdown");
+    expect(out.content).toBe("# Title");
+    expect(out.fileUrl).toBeUndefined();
+    expect(out.comments).toEqual([]);
     expect(out.lock).toEqual({
-      sessionID: SESSION,
       owner: "test-agent",
+      sessionID: SESSION,
       stale: false,
-    })
-  })
+    });
+  });
 
   it("office.preview prefers the requested session draft, else the most recent", async () => {
-    const hash = getFilePathHash(MD_FILE)
+    const hash = getFilePathHash(MD_FILE);
     await runTool(officecliTool, {
       action: "create",
-      filePath: MD_FILE,
       content: "old draft",
-    })
+      filePath: MD_FILE,
+    });
     await runTool(
       officecliTool,
-      { action: "create", filePath: MD_FILE, content: "new draft" },
+      { action: "create", content: "new draft", filePath: MD_FILE },
       {
         ...mockContext,
-        sessionID: "other-session",
         agent: "other-agent",
-      },
-    )
-    utimesSync(getDraftPath(hash, SESSION, ".md"), 1_000_000, 1_000_000)
+        sessionID: "other-session",
+      }
+    );
+    utimesSync(getDraftPath(hash, SESSION, ".md"), 1_000_000, 1_000_000);
     utimesSync(
       getDraftPath(hash, "other-session", ".md"),
       2_000_000,
-      2_000_000,
-    )
+      2_000_000
+    );
 
     const fallback = (await runOfficecliInvoke("office.preview", {
       filePath: MD_FILE,
-    })) as PreviewResult
-    expect(fallback.source).toBe("draft")
-    expect(fallback.content).toBe("new draft")
+    })) as PreviewResult;
+    expect(fallback.source).toBe("draft");
+    expect(fallback.content).toBe("new draft");
 
     const pinned = (await runOfficecliInvoke("office.preview", {
       filePath: MD_FILE,
       sessionID: SESSION,
-    })) as PreviewResult
-    expect(pinned.content).toBe("old draft")
-  })
+    })) as PreviewResult;
+    expect(pinned.content).toBe("old draft");
+  });
 
   it("office.preview shapes draft comments for office files", async () => {
     await runTool(officecliTool, {
       action: "create",
-      filePath: DOCX_FILE,
       content: "stub",
-    })
+      filePath: DOCX_FILE,
+    });
     copyFileSync(
       DOCX_FIXTURE,
-      getDraftPath(getFilePathHash(DOCX_FILE), SESSION, ".docx"),
-    )
+      getDraftPath(getFilePathHash(DOCX_FILE), SESSION, ".docx")
+    );
     await runOfficecliInvoke("office.comment.create", {
-      filename: DOCX_FILE,
-      commentId: "c-preview",
       author: "Host UI",
+      commentId: "c-preview",
       commentText: "preview comment",
-      rangeStartParagraph: 0,
-      rangeStartOffset: 0,
-      rangeEndParagraph: 0,
+      filename: DOCX_FILE,
       rangeEndOffset: 5,
-    })
+      rangeEndParagraph: 0,
+      rangeStartOffset: 0,
+      rangeStartParagraph: 0,
+    });
 
     const out = (await runOfficecliInvoke("office.preview", {
       filePath: DOCX_FILE,
       sessionID: SESSION,
-    })) as PreviewResult
-    expect(out.source).toBe("draft")
-    expect(typeof out.content).toBe("string")
-    const comment = out.comments?.find((c) => c.id === "c-preview")
+    })) as PreviewResult;
+    expect(out.source).toBe("draft");
+    expect(typeof out.content).toBe("string");
+    const comment = out.comments?.find((c) => c.id === "c-preview");
     expect(comment).toMatchObject({
-      id: "c-preview",
-      author: "Host UI",
-      text: "preview comment",
-      status: "open",
       anchor: "0:0",
-    })
-    expect(typeof comment?.createdAt).toBe("number")
-  })
+      author: "Host UI",
+      id: "c-preview",
+      status: "open",
+      text: "preview comment",
+    });
+    expect(typeof comment?.createdAt).toBe("number");
+  });
 
   it("office.preview returns the managed file without a draft", async () => {
-    copyFileSync(DOCX_FIXTURE, DOCX_FILE)
+    copyFileSync(DOCX_FIXTURE, DOCX_FILE);
     await writeComment(DOCX_FILE, {
-      id: "c-file",
       author: "File Author",
-      text: "from real file",
-      timestamp: new Date(1700000000000),
-      rangeStart: { paragraph: 0, offset: 0 },
-      rangeEnd: { paragraph: 0, offset: 4 },
+      id: "c-file",
       parentId: null,
+      rangeEnd: { offset: 4, paragraph: 0 },
+      rangeStart: { offset: 0, paragraph: 0 },
       status: "resolved",
       suggestedText: "suggested",
-    })
+      text: "from real file",
+      timestamp: new Date(1_700_000_000_000),
+    });
 
     const out = (await runOfficecliInvoke("office.preview", {
       filePath: DOCX_FILE,
-    })) as PreviewResult
-    expect(out.managed).toBe(true)
-    expect(out.source).toBe("file")
-    expect(out.filename).toBe("office-invoke.docx")
-    expect(out.content).toBeUndefined()
+    })) as PreviewResult;
+    expect(out.managed).toBe(true);
+    expect(out.source).toBe("file");
+    expect(out.filename).toBe("office-invoke.docx");
+    expect(out.content).toBeUndefined();
     expect(
       out.fileUrl?.startsWith(
-        "data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,",
-      ),
-    ).toBe(true)
-    const comment = out.comments?.find((c) => c.id === "c-file")
+        "data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,"
+      )
+    ).toBe(true);
+    const comment = out.comments?.find((c) => c.id === "c-file");
     expect(comment).toMatchObject({
-      id: "c-file",
+      anchor: "0:0",
       author: "File Author",
-      // docx reader returns the stored text, which carries the suggestion prefix
-      text: "Suggested text: suggested",
+      createdAt: 1_700_000_000_000,
+      id: "c-file",
       status: "resolved",
       suggestedText: "suggested",
-      anchor: "0:0",
-      createdAt: 1700000000000,
-    })
-    expect(out.lock).toBeUndefined()
-  })
+      // docx reader returns the stored text, which carries the suggestion prefix
+      text: "Suggested text: suggested",
+    });
+    expect(out.lock).toBeUndefined();
+  });
 
   it("office.preview resolves managed false for unknown paths", async () => {
     const out = (await runOfficecliInvoke("office.preview", {
       filePath: "/tmp/office-invoke-unknown.docx",
-    })) as PreviewResult
-    expect(out).toEqual({ managed: false })
-  })
+    })) as PreviewResult;
+    expect(out).toEqual({ managed: false });
+  });
 
   it("office.edit.save writes draft content and resolves a string", async () => {
     await runTool(officecliTool, {
       action: "create",
-      filePath: MD_FILE,
       content: "before",
-    })
+      filePath: MD_FILE,
+    });
 
     const out = await runOfficecliInvoke("office.edit.save", {
-      filePath: MD_FILE,
       content: "after",
-    })
-    expect(typeof out).toBe("string")
+      filePath: MD_FILE,
+    });
+    expect(typeof out).toBe("string");
     expect(
       readFileSync(
         getDraftPath(getFilePathHash(MD_FILE), SESSION, ".md"),
-        "utf-8",
-      ),
-    ).toBe("after")
-  })
+        "utf-8"
+      )
+    ).toBe("after");
+  });
 
   it("office.accept writes the draft to the real file", async () => {
     await runTool(officecliTool, {
       action: "create",
-      filePath: MD_FILE,
       content: "accepted",
-    })
+      filePath: MD_FILE,
+    });
 
-    await runOfficecliInvoke("office.accept", { filePath: MD_FILE })
-    expect(readFileSync(MD_FILE, "utf-8")).toBe("accepted")
-  })
+    await runOfficecliInvoke("office.accept", { filePath: MD_FILE });
+    expect(readFileSync(MD_FILE, "utf-8")).toBe("accepted");
+  });
 
   it("rejects unknown invoke names", async () => {
     await expect(
-      runOfficecliInvoke("office.bogus", { filePath: MD_FILE }),
-    ).rejects.toBeInstanceOf(Tool.Error)
-  })
+      runOfficecliInvoke("office.bogus", { filePath: MD_FILE })
+    ).rejects.toBeInstanceOf(Tool.Error);
+  });
 
   it("rejects invokes without filePath", async () => {
     await expect(runOfficecliInvoke("office.preview", {})).rejects.toThrow(
-      "requires filePath",
-    )
-  })
-})
+      "requires filePath"
+    );
+  });
+});
