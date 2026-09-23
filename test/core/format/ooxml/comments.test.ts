@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest"
+import { describe, it, expect, beforeEach, afterEach } from "bun:test"
 import JSZip from "jszip"
 import { writeComment, readComments, applyCommentSuggestion, updateComment, deleteComment, setCommentStatus } from "@/core/format/ooxml/comments"
 import { Document, Packer, Paragraph, TextRun } from "docx"
-import { writeFileSync, unlinkSync, mkdirSync, existsSync, readFileSync } from "fs"
-import { join } from "path"
-import { tmpdir } from "os"
+import { writeFileSync, unlinkSync, mkdirSync, existsSync, readFileSync } from "node:fs"
+import { join } from "node:path"
+import { tmpdir } from "node:os"
 
 describe("OOXML Comment Writer", () => {
   let testDir: string

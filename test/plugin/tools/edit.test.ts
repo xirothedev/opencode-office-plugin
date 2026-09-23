@@ -1,7 +1,7 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect } from "bun:test"
 import { editTool } from "@/plugin/tools/edit"
 import { runTool, setupHermeticDirs, cleanupTestFile } from "./harness"
-import { writeFileSync } from "fs"
+import { writeFileSync } from "node:fs"
 
 describe("edit tool", () => {
   const testFile = "/tmp/edit-test.txt"

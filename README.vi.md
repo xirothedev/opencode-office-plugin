@@ -220,7 +220,7 @@ Plugin dùng plugin API V2 của opencode: `Plugin.define({ id: "openoffice", ef
 | Runtime & package manager | Bun |
 | Plugin API | opencode V2 (`@opencode/plugin`, `@opencode/schema`, `effect`) |
 | Backend Office | `docx`, `exceljs`, `pdf-lib`, `pdfjs-dist`, `jszip`, `xml2js`, `sharp`, pandoc |
-| Test | Vitest + coverage v8 |
+| Test | `bun test` + coverage |
 | Lint & build | oxlint · `tsc` + `tsc-alias` · Turbo |
 | CI/CD | GitHub Actions → publish npm khi tag `v*`, kèm provenance |
 
@@ -229,7 +229,7 @@ Plugin dùng plugin API V2 của opencode: `Plugin.define({ id: "openoffice", ef
 ```bash
 bun install
 bun run check      # turbo: lint + typecheck + test + build
-bun run test       # vitest
+bun run test       # bun test
 bun run build      # tsc + tsc-alias → dist/
 ```
 

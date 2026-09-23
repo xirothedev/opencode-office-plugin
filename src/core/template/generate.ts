@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "fs"
+import { existsSync, readFileSync } from "node:fs"
 import { detectFormat } from "@/core/format/detect"
 
 export interface TemplateData {
@@ -88,7 +88,7 @@ export function parseGenerateEntries(input: {
 
 // ponytail: binary copy preserves 100% Format — validates the Reference ZIP once,
 // the clone action and the L3 flow share these checks
-export function readCloneSource(sourcePath: string, label: string): Buffer {
+export function readCloneSource(sourcePath: string, label: string): Uint8Array {
   if (!existsSync(sourcePath)) {
     throw new Error(`clone source not found: ${label}`)
   }

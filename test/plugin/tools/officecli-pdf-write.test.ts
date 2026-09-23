@@ -1,22 +1,21 @@
-import { describe, it, expect, beforeEach, vi } from "vitest"
+import { describe, it, expect, beforeEach, mock } from "bun:test"
 import { officecliTool } from "@/plugin/tools/officecli"
 import { runTool, setupHermeticDirs, cleanupTestFile } from "./harness"
-import { existsSync } from "fs"
+import { existsSync } from "node:fs"
 
-vi.mock("child_process", () => {
-  const calls: string[] = []
-  const exec = vi.fn((cmd: string, cb: (err: Error | null, result: { stdout: string }) => void) => {
-    calls.push(cmd)
-    if (process.env.MOCK_PANDOC_FAIL === "1") {
-      cb(new Error("spawn pandoc ENOENT"), { stdout: "" })
-    } else {
-      cb(null, { stdout: "" })
-    }
-  })
-  return { exec, __calls: calls }
+// ponytail: mock the owned spawn seam, never node:child_process (sharp imports spawnSync from it)
+const pandocCalls: string[] = []
+
+mock.module("@/core/format/exec", () => {
+  return {
+    runCommand: mock(async (cmd: string) => {
+      pandocCalls.push(cmd)
+      if (process.env.MOCK_PANDOC_FAIL === "1") {
+        throw new Error("spawn pandoc ENOENT")
+      }
+    }),
+  }
 })
-
-import { exec } from "child_process"
 
 describe("officecli PDF write", () => {
   const testFile = "/tmp/officecli-pdf-write.pdf"
@@ -26,12 +25,11 @@ describe("officecli PDF write", () => {
   beforeEach(() => {
     delete process.env.OFFICECLI_PDF_ENGINE
     delete process.env.MOCK_PANDOC_FAIL
-    vi.mocked(exec).mockClear()
+    pandocCalls.length = 0
   })
 
   function pandocCommands(): string[] {
-    const m = vi.mocked(exec) as unknown as { mock: { calls: string[][] } }
-    return m.mock.calls.map((c) => c[0])
+    return [...pandocCalls]
   }
 
   it("accept converts the markdown draft to PDF via pandoc with xelatex", async () => {

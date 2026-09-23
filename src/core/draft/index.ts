@@ -2,8 +2,8 @@
 // Owns hashing, locks, Registry registration, Sidecars, snapshots, and the
 // draft-file IO. Callers state intent + session identity; the hash/lock
 // preamble lives exactly once, here.
-import { dirname, extname, join, resolve } from "path"
-import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSync } from "fs"
+import { dirname, extname, join, resolve } from "node:path"
+import { readFileSync, writeFileSync, existsSync, readdirSync, statSync, mkdirSync } from "node:fs"
 import { getDraftsDir, getFilePathHash } from "@/core/storage/paths"
 import { readRealFileAsMarkdown } from "@/core/format/read"
 import { registerDraft } from "@/core/storage/registry"
@@ -88,7 +88,7 @@ export function create(filePath: string, sessionID: string, owner: string, conte
   createDraft(filePath, sessionID, content)
 }
 
-export function write(filePath: string, sessionID: string, content: string | Buffer): void {
+export function write(filePath: string, sessionID: string, content: string | Uint8Array): void {
   writeFileSync(draftPath(filePath, sessionID), content)
 }
 
@@ -100,7 +100,7 @@ export async function draftMarkdown(filePath: string, sessionID: string): Promis
   return isZip ? readRealFileAsMarkdown(path) : buf.toString("utf-8")
 }
 
-export function cloneIntoDraft(filePath: string, sessionID: string, owner: string, buffer: Buffer): void {
+export function cloneIntoDraft(filePath: string, sessionID: string, owner: string, buffer: Uint8Array): void {
   const hash = getFilePathHash(filePath)
   lock.acquireLock(hash, sessionID, owner)
   const target = join(getDraftsDir(), hash, `${sessionID}${extname(filePath)}`)

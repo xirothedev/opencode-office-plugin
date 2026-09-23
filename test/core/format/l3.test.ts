@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeAll } from "vitest"
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs"
-import { join, dirname } from "path"
-import { tmpdir } from "os"
+import { describe, it, expect, beforeAll } from "bun:test"
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs"
+import { join, dirname } from "node:path"
+import { tmpdir } from "node:os"
 import JSZip from "jszip"
 import { substituteOoxml } from "@/core/template/substitute-ooxml"
 import { verifyL3 } from "@/core/format/verify-l3"
@@ -25,7 +25,7 @@ describe("L3 Fidelity — clone + substitute", () => {
     // Inject placeholder {{greeting}} where "Hello DOCX" sits
     xml = xml.replace("Hello DOCX", "{{greeting}}")
     zip.file("word/document.xml", xml)
-    const templateBuf = (await zip.generateAsync({ type: "nodebuffer" })) as Buffer
+    const templateBuf = (await zip.generateAsync({ type: "uint8array" })) as Uint8Array
 
     const { buffer: substituted } = await substituteOoxml(templateBuf, { greeting: "Hello L3" })
 
@@ -50,7 +50,7 @@ describe("L3 Fidelity — clone + substitute", () => {
       '<w:t>{{greet</w:t></w:r><w:r><w:t>ing}}</w:t>',
     )
     zip.file("word/document.xml", xml)
-    const templateBuf = (await zip.generateAsync({ type: "nodebuffer" })) as Buffer
+    const templateBuf = (await zip.generateAsync({ type: "uint8array" })) as Uint8Array
 
     const { buffer: out } = await substituteOoxml(templateBuf, { greeting: "Hi Split" })
     const tplPath = tmpPath("tpl-split.docx")
@@ -68,7 +68,7 @@ describe("L3 Fidelity — clone + substitute", () => {
     let xml = await zip.file("xl/sharedStrings.xml")!.async("string")
     xml = xml.replace("Widgets", "{{item}}")
     zip.file("xl/sharedStrings.xml", xml)
-    const templateBuf = (await zip.generateAsync({ type: "nodebuffer" })) as Buffer
+    const templateBuf = (await zip.generateAsync({ type: "uint8array" })) as Uint8Array
 
     const { buffer: out } = await substituteOoxml(templateBuf, { item: "Gadgets-2" })
     const tplPath = tmpPath("tpl.xlsx")
@@ -86,7 +86,7 @@ describe("L3 Fidelity — clone + substitute", () => {
     let xml = await zip.file("ppt/slides/slide1.xml")!.async("string")
     xml = xml.replace("Hello from slide 1", "{{title}}")
     zip.file("ppt/slides/slide1.xml", xml)
-    const templateBuf = (await zip.generateAsync({ type: "nodebuffer" })) as Buffer
+    const templateBuf = (await zip.generateAsync({ type: "uint8array" })) as Uint8Array
 
     const { buffer: out } = await substituteOoxml(templateBuf, { title: "New Slide Title" })
     const tplPath = tmpPath("tpl.pptx")
@@ -104,7 +104,7 @@ describe("L3 Fidelity — clone + substitute", () => {
     let styles = await zip.file("word/styles.xml")!.async("string")
     styles = styles.replace("Heading1", "Heading9")
     zip.file("word/styles.xml", styles)
-    const alteredBuf = (await zip.generateAsync({ type: "nodebuffer" })) as Buffer
+    const alteredBuf = (await zip.generateAsync({ type: "uint8array" })) as Uint8Array
 
     const aPath = tmpPath("a.docx")
     const bPath = tmpPath("b.docx")
@@ -136,7 +136,7 @@ describe("L3 Fidelity — clone + substitute", () => {
     let xml = await zip.file("word/document.xml")!.async("string")
     xml = xml.replace("Hello DOCX", "{{content}}")
     zip.file("word/document.xml", xml)
-    const templateBuf = (await zip.generateAsync({ type: "nodebuffer" })) as Buffer
+    const templateBuf = (await zip.generateAsync({ type: "uint8array" })) as Uint8Array
     const { buffer: out } = await substituteOoxml(templateBuf, { content: "line1\nline2\nline3" })
     const outZip = await JSZip.loadAsync(out)
     const outXml = await outZip.file("word/document.xml")!.async("string")
@@ -153,7 +153,7 @@ describe("L3 Fidelity — clone + substitute", () => {
     let xml = await zip.file("word/document.xml")!.async("string")
     xml = xml.replace("Hello DOCX", "{{content}}")
     zip.file("word/document.xml", xml)
-    const templateBuf = (await zip.generateAsync({ type: "nodebuffer" })) as Buffer
+    const templateBuf = (await zip.generateAsync({ type: "uint8array" })) as Uint8Array
     const { buffer: out } = await substituteOoxml(templateBuf, { content: "a\r\nb" })
     const outZip = await JSZip.loadAsync(out)
     const outXml = await outZip.file("word/document.xml")!.async("string")

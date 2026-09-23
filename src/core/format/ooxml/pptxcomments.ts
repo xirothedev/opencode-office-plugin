@@ -1,5 +1,5 @@
 import JSZip from "jszip"
-import { readFileSync, writeFileSync } from "fs"
+import { readFileSync, writeFileSync } from "node:fs"
 import { parseStringPromise, Builder } from "xml2js"
 import { addRelationship, ensureContentType, partRelsPath, readRelationships, SUGGESTED_TEXT_PREFIX, OPENOFFICE_NS, OO_XMLNS_ATTR, OO_STATUS_ATTR, openofficeStatusAttributes, parseStatus, type CommentStatus } from "@/core/format/ooxml/parts"
 
@@ -61,7 +61,7 @@ export async function writeComment(pptxPath: string, comment: PptxComment): Prom
   await ensureContentType(zip, "/ppt/comments/comment1.xml", COMMENTS_CONTENT_TYPE)
   await ensureContentType(zip, "/ppt/commentAuthors.xml", COMMENT_AUTHORS_CONTENT_TYPE)
 
-  const buffer = await zip.generateAsync({ type: "nodebuffer" })
+  const buffer = await zip.generateAsync({ type: "uint8array" })
   writeFileSync(pptxPath, buffer)
 }
 
@@ -331,7 +331,7 @@ export async function applySlideSuggestion(pptxPath: string, commentId: string):
   }).buildObject(commentsRoot)
   zip.file("ppt/comments/comment1.xml", newCommentsXml)
 
-  const buffer = await zip.generateAsync({ type: "nodebuffer" })
+  const buffer = await zip.generateAsync({ type: "uint8array" })
   writeFileSync(pptxPath, buffer)
   return "applied"
 }
@@ -472,7 +472,7 @@ export async function updateComment(
   }).buildObject(commentsRoot)
   zip.file("ppt/comments/comment1.xml", xml)
 
-  const buffer = await zip.generateAsync({ type: "nodebuffer" })
+  const buffer = await zip.generateAsync({ type: "uint8array" })
   writeFileSync(pptxPath, buffer)
   return "updated"
 }
@@ -510,7 +510,7 @@ export async function deleteComment(pptxPath: string, commentId: string): Promis
   }).buildObject(commentsRoot)
   zip.file("ppt/comments/comment1.xml", xml)
 
-  const buffer = await zip.generateAsync({ type: "nodebuffer" })
+  const buffer = await zip.generateAsync({ type: "uint8array" })
   writeFileSync(pptxPath, buffer)
   return "deleted"
 }
@@ -558,7 +558,7 @@ export async function setCommentStatus(
   }).buildObject(commentsRoot)
   zip.file("ppt/comments/comment1.xml", xml)
 
-  const buffer = await zip.generateAsync({ type: "nodebuffer" })
+  const buffer = await zip.generateAsync({ type: "uint8array" })
   writeFileSync(pptxPath, buffer)
   return "ok"
 }

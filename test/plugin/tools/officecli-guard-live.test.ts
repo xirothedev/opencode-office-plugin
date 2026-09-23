@@ -1,9 +1,9 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect } from "bun:test"
 import { officecliTool } from "@/plugin/tools/officecli"
 import { runTool, setupHermeticDirs, cleanupTestFile } from "./harness"
 import { BINARY_EXTENSIONS } from "@/plugin/tools/edit"
 import { readLiveOrFileAsMarkdown } from "@/core/format/read"
-import { writeFile } from "fs/promises"
+import { writeFile } from "node:fs/promises"
 
 function isBlockedTool(tool: string): boolean {
   return tool === "edit" || tool === "write"

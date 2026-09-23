@@ -1,19 +1,18 @@
-import { describe, it, expect, beforeEach, vi } from "vitest"
+import { describe, it, expect, beforeEach, mock } from "bun:test"
 import { officecliTool } from "@/plugin/tools/officecli"
 import { runTool, setupHermeticDirs, cleanupTestFile } from "./harness"
-import { copyFile } from "fs/promises"
-import { join } from "path"
+import { copyFile } from "node:fs/promises"
+import { join } from "node:path"
 
-const { pandocCalls, tmpMarkdownContents } = vi.hoisted(() => {
-  const pandocCalls: string[] = []
-  const tmpMarkdownContents: string[] = []
-  return { pandocCalls, tmpMarkdownContents }
-})
+// ponytail: bun:test mock.module factories close over module state directly — no vi.hoisted needed.
+// Mock the owned spawn seam, never node:child_process (sharp imports spawnSync from it).
+const pandocCalls: string[] = []
+const tmpMarkdownContents: string[] = []
 
-vi.mock("child_process", async () => {
+mock.module("@/core/format/exec", async () => {
   const fs = await import("node:fs")
   return {
-    exec: vi.fn((cmd: string, cb: (err: Error | null, result: { stdout: string }) => void) => {
+    runCommand: mock(async (cmd: string) => {
       pandocCalls.push(cmd)
       const tmpMatch = cmd.match(/"([^"]+\.tmp\.md)"/)
       if (tmpMatch) {
@@ -23,7 +22,6 @@ vi.mock("child_process", async () => {
           // temp file may not exist yet
         }
       }
-      cb(null, { stdout: "" })
     }),
   }
 })
@@ -65,7 +63,7 @@ describe("officecli export", () => {
     })
     expect(result).toContain("Exported")
     // DOCX now uses docx library, not pandoc — check file created
-    const { existsSync } = await import("fs")
+    const { existsSync } = await import("node:fs")
     expect(existsSync(docxTarget)).toBe(true)
   })
 

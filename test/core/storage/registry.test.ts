@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest"
+import { describe, it, expect, beforeEach, afterEach } from "bun:test"
 import { getRegistryDir, getFilePathHash } from "@/core/storage/paths"
 import { registerDraft, unregisterDraft, getRegisteredPath } from "@/core/storage/registry"
-import { mkdir, rm } from "fs/promises"
+import { mkdir, rm } from "node:fs/promises"
 
 describe("draft registry", () => {
   beforeEach(async () => {

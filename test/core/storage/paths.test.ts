@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect } from "bun:test"
 import { getDraftsDir, getLocksDir, getHistoryDir, getFilePathHash } from "@/core/storage/paths"
 import { getPluginDataDir } from "@/core/options"
 

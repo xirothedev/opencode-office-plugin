@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest"
+import { describe, it, expect, beforeEach, afterEach } from "bun:test"
 import { writeTrackChange, readTrackChanges } from "@/core/format/ooxml/trackchanges"
 import { Document, Packer, Paragraph, TextRun } from "docx"
-import { writeFileSync, unlinkSync, mkdirSync, existsSync } from "fs"
-import { join } from "path"
-import { tmpdir } from "os"
+import { writeFileSync, unlinkSync, mkdirSync, existsSync } from "node:fs"
+import { join } from "node:path"
+import { tmpdir } from "node:os"
 
 describe("OOXML Track Changes Writer", () => {
   let testDir: string

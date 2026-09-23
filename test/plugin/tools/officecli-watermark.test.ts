@@ -1,27 +1,33 @@
-import { describe, it, expect, beforeEach, vi } from "vitest"
+import { describe, it, expect, beforeEach, mock } from "bun:test"
 import { officecliTool } from "@/plugin/tools/officecli"
 import { runTool, setupHermeticDirs, cleanupTestFile } from "./harness"
-import { copyFile, readFile } from "fs/promises"
-import { join } from "path"
+import { copyFile, readFile } from "node:fs/promises"
+import { writeFileSync } from "node:fs"
+import { join } from "node:path"
 import JSZip from "jszip"
+import { PDFDocument } from "pdf-lib"
+import { spawnSync } from "bun"
 import { extractTextFromPDF } from "@/core/format/backends/pdf"
 
-vi.mock("child_process", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("node:child_process")>()
-  const { PDFDocument } = await import("pdf-lib")
-  const fs = await import("node:fs")
+// ponytail: bun:test has no importOriginal — non-PDF commands fall through to the
+// real shell via spawnSync. Mock the owned seam, never node:child_process
+// (sharp imports spawnSync from it). Factory stays sync: dynamic imports
+// inside the factory can deadlock module evaluation (seen with pdf-lib).
+mock.module("@/core/format/exec", () => {
+  const decoder = new TextDecoder()
   return {
-    exec: vi.fn((cmd: string, cb: (...args: unknown[]) => void) => {
+    runCommand: mock(async (cmd: string) => {
       const outMatch = cmd.match(/-o "([^"]+)"/)
       if (outMatch && outMatch[1].toLowerCase().endsWith(".pdf")) {
-        void (async () => {
-          const doc = await PDFDocument.create()
-          doc.addPage([300, 300])
-          fs.writeFileSync(outMatch[1], await doc.save())
-          cb(null, { stdout: "" })
-        })()
-      } else {
-        actual.exec(cmd, (err: Error | null, stdout: string, stderr: string) => cb(err, stdout, stderr))
+        const doc = await PDFDocument.create()
+        doc.addPage([300, 300])
+        writeFileSync(outMatch[1], await doc.save())
+        return
+      }
+      const proc = spawnSync({ cmd: ["sh", "-c", cmd], stdout: "pipe", stderr: "pipe" })
+      if (proc.exitCode !== 0) {
+        const stderr = decoder.decode(proc.stderr).trim()
+        throw new Error(stderr || `command failed: ${cmd}`)
       }
     }),
   }

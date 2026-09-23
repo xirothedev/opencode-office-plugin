@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -e
-# ponytail: global file edit, per-project config if opencode.json exists else global — no daemon, no dep beyond node+bash
+# ponytail: global file edit, per-project config if opencode.json exists else global — no daemon, no dep beyond bun+bash
 
 PLUGIN="@xirothedev/openoffice-plugin-opencode"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -46,17 +46,18 @@ if [ "$SKILL_ONLY" -eq 0 ]; then
   else CFG="$TARGET/opencode.json"; fi
   [ -f "$CFG" ] || echo '{"plugins":[]}' > "$CFG"
   PKG="$PLUGIN"
-  # ponytail: one node line edits plugins array, idempotent — jq if available would be smaller but node is stdlib
-  node -e '
-    const fs=require("fs"), p=process.argv[1], pkg=process.argv[2];
-    let j; try{ j=JSON.parse(fs.readFileSync(p,"utf8")); }catch{
-      let raw=fs.readFileSync(p,"utf8").replace(/^\s*\/\/.*$/gm,"").replace(/\/\*[\s\S]*?\*\//g,"").replace(/,\s*([}\]])/g,"$1");
-      j=JSON.parse(raw);
+  # ponytail: one bun line edits plugins array, idempotent — Bun.file/Bun.write, no jq/node needed
+  bun -e '
+    const p = process.argv[1], pkg = process.argv[2];
+    const raw = await Bun.file(p).text();
+    let j;
+    try { j = JSON.parse(raw); } catch {
+      j = JSON.parse(raw.replace(/^\s*\/\/.*$/gm,"").replace(/\/\*[\s\S]*?\*\//g,"").replace(/,\s*([}\]])/g,"$1"));
     }
-    j.plugins=j.plugins||[];
-    const found=j.plugins.some(x=> (typeof x==="string"?x:x.package)===pkg);
-    if(!found) j.plugins.push(pkg);
-    fs.writeFileSync(p, JSON.stringify(j,null,2)+"\n");
+    j.plugins = j.plugins || [];
+    const found = j.plugins.some((x) => (typeof x === "string" ? x : x.package) === pkg);
+    if (!found) j.plugins.push(pkg);
+    await Bun.write(p, JSON.stringify(j, null, 2) + "\n");
     console.log("plugin →", p, ":", pkg);
   ' "$CFG" "$PKG"
   if [ "$LOCAL" -eq 1 ]; then

@@ -1,5 +1,5 @@
 import JSZip from "jszip"
-import { readFileSync, writeFileSync } from "fs"
+import { readFileSync, writeFileSync } from "node:fs"
 import { parseStringPromise, Builder } from "xml2js"
 import { addRelationship, ensureContentType, escapeXml, partRelsPath, parseSuggestion, readRelationships, resolveTarget, SUGGESTED_VALUE_PREFIX, OPENOFFICE_NS, OO_XMLNS_ATTR, OO_STATUS_ATTR, openofficeStatusAttributes, parseStatus, type CommentStatus } from "@/core/format/ooxml/parts"
 
@@ -43,7 +43,7 @@ export async function writeComment(xlsxPath: string, comment: XlsxComment): Prom
   await ensureContentType(zip, "/xl/comments1.xml", COMMENTS_CONTENT_TYPE)
   await ensureContentType(zip, `/${vmlPath}`, VML_CONTENT_TYPE)
 
-  const buffer = await zip.generateAsync({ type: "nodebuffer" })
+  const buffer = await zip.generateAsync({ type: "uint8array" })
   writeFileSync(xlsxPath, buffer)
 }
 
@@ -341,7 +341,7 @@ export async function applyCellSuggestion(xlsxPath: string, commentId: string): 
 
   await removeVmlShapeForCell(zip, cellRef, text)
 
-  const buffer = await zip.generateAsync({ type: "nodebuffer" })
+  const buffer = await zip.generateAsync({ type: "uint8array" })
   writeFileSync(xlsxPath, buffer)
   return "applied"
 }
@@ -463,7 +463,7 @@ export async function updateComment(
   }).buildObject(commentsRoot)
   zip.file("xl/comments1.xml", xml)
 
-  const buffer = await zip.generateAsync({ type: "nodebuffer" })
+  const buffer = await zip.generateAsync({ type: "uint8array" })
   writeFileSync(xlsxPath, buffer)
   return "updated"
 }
@@ -506,7 +506,7 @@ export async function deleteComment(xlsxPath: string, commentId: string): Promis
   zip.file("xl/comments1.xml", xml)
   await removeVmlShapeForCell(zip, cellRef, text)
 
-  const buffer = await zip.generateAsync({ type: "nodebuffer" })
+  const buffer = await zip.generateAsync({ type: "uint8array" })
   writeFileSync(xlsxPath, buffer)
   return "deleted"
 }
@@ -557,7 +557,7 @@ export async function setCommentStatus(
   }).buildObject(commentsRoot)
   zip.file("xl/comments1.xml", xml)
 
-  const buffer = await zip.generateAsync({ type: "nodebuffer" })
+  const buffer = await zip.generateAsync({ type: "uint8array" })
   writeFileSync(xlsxPath, buffer)
   return "ok"
 }

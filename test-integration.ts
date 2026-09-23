@@ -8,10 +8,10 @@
 
 import { officecliTool } from "./src/plugin/tools/officecli"
 import { configureOptions } from "./src/core/options"
-import { mkdir, writeFile, readFile } from "fs/promises"
+import { mkdir, writeFile, readFile } from "node:fs/promises"
 import { Effect, Schema } from "effect"
-import { tmpdir } from "os"
-import { join } from "path"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 
 const TEST_DIR = "/tmp/orca-office-tests-direct"
 const HOSPITAL_DIR = "/Users/xirothedev/workspace/Tài liệu làm việc/Tài liệu nội bộ/Bệnh viện"

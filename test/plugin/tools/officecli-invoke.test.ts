@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest"
+import { describe, it, expect } from "bun:test"
 import { Tool } from "@opencode/schema/tool"
 import { officecliTool } from "@/plugin/tools/officecli"
 import { officecliInvokes, runOfficecliInvoke } from "@/plugin/host"
@@ -6,8 +6,8 @@ import { runTool, setupHermeticDirs, cleanupTestFile, mockContext } from "./harn
 import { getFilePathHash } from "@/core/storage/paths"
 import { getDraftPath } from "@/core/draft/manager"
 import { writeComment } from "@/core/format/ooxml/comments"
-import { copyFileSync, readFileSync, utimesSync } from "fs"
-import { join } from "path"
+import { copyFileSync, readFileSync, utimesSync } from "node:fs"
+import { join } from "node:path"
 
 const DOCX_FILE = "/tmp/office-invoke.docx"
 const MD_FILE = "/tmp/office-invoke.md"

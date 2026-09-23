@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest"
+import { describe, it, expect, beforeEach, afterEach } from "bun:test"
 import { acquireLock, releaseLock, getLock, isLockStale, overrideLock } from "@/core/draft/lock"
 import { getLocksDir, getFilePathHash } from "@/core/storage/paths"
-import { mkdir, rm } from "fs/promises"
+import { mkdir, rm } from "node:fs/promises"
 
 describe("lock", () => {
   const testFile = "/test/file.docx"

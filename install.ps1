@@ -1,4 +1,4 @@
-# ponytail: native Windows — one file, stdlib only (powershell + node), mirrors install.sh
+# ponytail: native Windows — one file, stdlib only (powershell + bun), mirrors install.sh
 param(
   [switch]$Global,
   [string]$Project = ".",
@@ -40,7 +40,8 @@ j.plugins=j.plugins||[];
 if(!j.plugins.some(x=> (typeof x==="string"?x:x.package)===pkg)) j.plugins.push(pkg);
 fs.writeFileSync(p, JSON.stringify(j,null,2)+"\n"); console.log("plugin →", p, ":", pkg);
 '@
-  node -e $code $CFG $PKG
+  # ponytail: same logic as install.sh, run under bun (bun -e supports require/process.argv)
+  bun -e $code $CFG $PKG
   if ($Local) {
     Write-Host "local: linking plugin via bun link"
     Push-Location $SCRIPT_DIR; try { bun link --global } catch { Write-Host "bun link failed — ensure bun is installed" } finally { Pop-Location }

@@ -1,7 +1,7 @@
 // Comment intake module: the only comment surface the plugin layer may import.
 // Routes each operation to the DOCX/XLSX/PPTX adapter by file extension and
 // sanitizes all text at the seam. The adapters are private to this module.
-import { extname } from "path"
+import { extname } from "node:path"
 import {
   writeComment,
   readComments,

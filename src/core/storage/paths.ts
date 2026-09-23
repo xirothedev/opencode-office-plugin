@@ -1,5 +1,5 @@
-import { join } from "path"
-import { createHash } from "crypto"
+import { join } from "node:path"
+import { createHash } from "node:crypto"
 import { getPluginDataDir } from "@/core/options"
 
 export function getDraftsDir(): string {

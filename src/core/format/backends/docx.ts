@@ -12,7 +12,7 @@ import {
   BorderStyle,
   ShadingType,
 } from "docx"
-import { writeFileSync } from "fs"
+import { writeFileSync } from "node:fs"
 import { sanitizeXmlText } from "@/core/format/sanitize"
 
 // ponytail: v2 styled defaults — A4, 1" margins, header shading, DXA dual widths, bullet numbering. Boring markdown still works.

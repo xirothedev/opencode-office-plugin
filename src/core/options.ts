@@ -1,6 +1,6 @@
-import { homedir } from "os"
-import { join } from "path"
-import { mkdirSync } from "fs"
+import { homedir } from "node:os"
+import { join } from "node:path"
+import { mkdirSync } from "node:fs"
 
 export interface PluginOptions {
   pdfEngine?: string

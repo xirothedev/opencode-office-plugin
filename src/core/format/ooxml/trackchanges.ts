@@ -1,5 +1,5 @@
 import JSZip from "jszip"
-import { readFileSync, writeFileSync } from "fs"
+import { readFileSync, writeFileSync } from "node:fs"
 import { parseStringPromise, Builder } from "xml2js"
 
 export interface TrackChange {
@@ -85,7 +85,7 @@ export async function writeTrackChange(docPath: string, trackChange: TrackChange
   zip.file("word/document.xml", newDocXml)
 
   // Write back to file
-  const buffer = await zip.generateAsync({ type: "nodebuffer" })
+  const buffer = await zip.generateAsync({ type: "uint8array" })
   writeFileSync(docPath, buffer)
 }
 

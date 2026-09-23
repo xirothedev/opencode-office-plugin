@@ -15,7 +15,7 @@ bun install          # Install dependencies
 bun run build        # Compile TypeScript (tsc + tsc-alias) to dist/
 bun run typecheck    # tsc --noEmit
 bun run lint         # oxlint
-bun run test         # vitest run
+bun run test         # bun test
 ```
 
 ## Architecture

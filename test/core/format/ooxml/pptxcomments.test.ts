@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest"
+import { describe, it, expect, beforeEach, afterEach } from "bun:test"
 import JSZip from "jszip"
 import { writeComment, readComments, applySlideSuggestion } from "@/core/format/ooxml/pptxcomments"
-import { copyFileSync, unlinkSync, mkdirSync, existsSync, readFileSync, writeFileSync } from "fs"
-import { join } from "path"
-import { tmpdir } from "os"
+import { copyFileSync, unlinkSync, mkdirSync, existsSync, readFileSync, writeFileSync } from "node:fs"
+import { join } from "node:path"
+import { tmpdir } from "node:os"
 
 const FIXTURE = join(process.cwd(), "test/fixtures/sample.pptx")
 
@@ -210,7 +210,7 @@ describe("OOXML PPTX Comment Writer", () => {
       '<p:sp><p:nvSpPr><p:cNvPr id="99" name="Sidebar"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>' +
       '<p:spPr/><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>Sidebar note</a:t></a:r></a:p></p:txBody></p:sp>'
     zip.file("ppt/slides/slide1.xml", slideXml.replace("</p:spTree>", `${extraShape}</p:spTree>`))
-    writeFileSync(testPptxPath, await zip.generateAsync({ type: "nodebuffer" }))
+    writeFileSync(testPptxPath, await zip.generateAsync({ type: "uint8array" }))
 
     await writeComment(testPptxPath, {
       id: "s1",

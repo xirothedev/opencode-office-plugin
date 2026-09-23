@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest"
-import { rmSync } from "fs"
+import { describe, it, expect } from "bun:test"
+import { rmSync } from "node:fs"
 import { officecliTool } from "@/plugin/tools/officecli"
 import { runTool, setupHermeticDirs } from "./harness"
 import { acquireLock, releaseLock } from "@/core/draft/lock"

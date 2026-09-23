@@ -1,10 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest"
+import { describe, it, expect, beforeEach, afterEach } from "bun:test"
 import { createDraft, acceptDraft, draftExists, getDraftPath } from "@/core/draft/manager"
 import { getDraftsDir, getHistoryDir, getLocksDir, getFilePathHash } from "@/core/storage/paths"
 import { acquireLock } from "@/core/draft/lock"
-import { mkdir, rm } from "fs/promises"
-import { readFileSync, existsSync } from "fs"
-import { join } from "path"
+import { mkdir, rm } from "node:fs/promises"
+import { readFileSync, existsSync } from "node:fs"
+import { join } from "node:path"
 
 describe("draft manager", () => {
   const testFile = "/tmp/test-real-file.txt"
