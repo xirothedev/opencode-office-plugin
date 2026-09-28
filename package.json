@@ -48,7 +48,7 @@
   "dependencies": {
     "@firecrawl/anydoc": "^0.2.4",
     "@firecrawl/pdf-inspector": "^1.13.0",
-    "@opencode/plugin": "2.0.10",
+    "@opencode/plugin": "2.0.12",
     "@opencode/schema": "2.0.10",
     "diff": "^9.0.0",
     "docx": "^9.7.1",
