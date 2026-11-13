@@ -1,5 +1,11 @@
 import { describe, it, expect } from "bun:test";
-import { copyFileSync, readFileSync, utimesSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdirSync,
+  readFileSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 
 import { Tool } from "@opencode/schema/tool";
@@ -10,12 +16,7 @@ import { getFilePathHash } from "@/core/storage/paths";
 import { officecliInvokes, runOfficecliInvoke } from "@/plugin/host";
 import { officecliTool } from "@/plugin/tools/officecli";
 
-import {
-  runTool,
-  setupHermeticDirs,
-  cleanupTestFile,
-  mockContext,
-} from "./harness";
+import { cleanupTestFile, runTool, setupHermeticDirs } from "./harness";
 
 const DOCX_FILE = "/tmp/office-invoke.docx";
 const MD_FILE = "/tmp/office-invoke.md";
@@ -132,15 +133,9 @@ describe("officecli host invokes", () => {
       content: "old draft",
       filePath: MD_FILE,
     });
-    await runTool(
-      officecliTool,
-      { action: "create", content: "new draft", filePath: MD_FILE },
-      {
-        ...mockContext,
-        agent: "other-agent",
-        sessionID: "other-session",
-      }
-    );
+    const otherDraft = getDraftPath(hash, "other-session", ".md");
+    mkdirSync(path.dirname(otherDraft), { recursive: true });
+    writeFileSync(otherDraft, "new draft");
     utimesSync(getDraftPath(hash, SESSION, ".md"), 1_000_000, 1_000_000);
     utimesSync(
       getDraftPath(hash, "other-session", ".md"),
