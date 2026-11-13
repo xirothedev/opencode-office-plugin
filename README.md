@@ -311,4 +311,4 @@ Configure via the `options` object of the plugin entry:
 
 ## License
 
-MIT
+MIT. Third-party skill materials are under their own licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
