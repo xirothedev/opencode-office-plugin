@@ -7,7 +7,7 @@ param(
   [switch]$PluginOnly,
   [switch]$Help
 )
-$PLUGIN="@xirothedev/openoffice-plugin-opencode"
+$PLUGIN="@sunaookamishirokodev/openoffice-plugin-opencode"
 $SCRIPT_DIR=$PSScriptRoot
 if (-not $SCRIPT_DIR) { $SCRIPT_DIR=Split-Path -Parent $MyInvocation.MyCommand.Path }
 $SKILL_SRC=Join-Path $SCRIPT_DIR "skills/office"

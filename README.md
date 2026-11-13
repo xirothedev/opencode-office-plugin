@@ -1,7 +1,7 @@
-# @xirothedev/openoffice-plugin-opencode
+# @sunaookamishirokodev/openoffice-plugin-opencode
 
-[![npm version](https://img.shields.io/npm/v/@xirothedev/openoffice-plugin-opencode.svg)](https://www.npmjs.com/package/@xirothedev/openoffice-plugin-opencode)
-[![CI](https://github.com/xirothedev/opencode-office-plugin/actions/workflows/ci.yml/badge.svg)](https://github.com/xirothedev/opencode-office-plugin/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/@sunaookamishirokodev/openoffice-plugin-opencode.svg)](https://www.npmjs.com/package/@sunaookamishirokodev/openoffice-plugin-opencode)
+[![CI](https://github.com/sunaookamishirokodev/opencode-office-plugin/actions/workflows/ci.yml/badge.svg)](https://github.com/sunaookamishirokodev/opencode-office-plugin/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Office document automation for opencode 2 — draft lifecycle, version history, and format conversion for DOCX, XLSX, PPTX, PDF, images, and text.
@@ -25,7 +25,7 @@ Office document automation for opencode 2 — draft lifecycle, version history, 
 
 ## Overview
 
-`@xirothedev/openoffice-plugin-opencode` is a plugin for **opencode 2** that gives the agent a single safe path for every Office document operation: it registers the `officecli` tool (31 actions) and intercepts the builtin `read`/`edit`/`write` tools for office formats, so document work cannot bypass the lifecycle.
+`@sunaookamishirokodev/openoffice-plugin-opencode` is a plugin for **opencode 2** that gives the agent a single safe path for every Office document operation: it registers the `officecli` tool (31 actions) and intercepts the builtin `read`/`edit`/`write` tools for office formats, so document work cannot bypass the lifecycle.
 
 The agent never touches a real file directly. Every change lands in a **Draft** held under an exclusive lock; the real file is written only on `accept`, which also records a **Snapshot** for `history` and `revert`.
 
@@ -85,7 +85,7 @@ Add the package to the `plugins` array in your opencode 2 config — `opencode.j
 
 ```json
 {
-  "plugins": ["@xirothedev/openoffice-plugin-opencode"]
+  "plugins": ["@sunaookamishirokodev/openoffice-plugin-opencode"]
 }
 ```
 
@@ -102,7 +102,7 @@ The plugin provides the tool; skills teach the agent when to use it. Install at 
 # flags: --global | --project DIR | --skill-only | --plugin-only | --local
 
 # Standalone (all skills, no plugin)
-npx skills add xirothedev/opencode-office-plugin
+npx skills add sunaookamishirokodev/opencode-office-plugin
 
 # Manual, one skill at a time
 cp -R skills/office ~/.config/opencode/skills/office   # global
@@ -279,7 +279,7 @@ Configure via the `options` object of the plugin entry:
 {
   "plugins": [
     {
-      "package": "@xirothedev/openoffice-plugin-opencode",
+      "package": "@sunaookamishirokodev/openoffice-plugin-opencode",
       "options": {
         "pdfEngine": "typst",
         "staleLockHours": 48,

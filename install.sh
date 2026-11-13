@@ -2,7 +2,7 @@
 set -e
 # ponytail: global file edit, per-project config if opencode.json exists else global — no daemon, no dep beyond bun+bash
 
-PLUGIN="@xirothedev/openoffice-plugin-opencode"
+PLUGIN="@sunaookamishirokodev/openoffice-plugin-opencode"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SKILL_SRC="$SCRIPT_DIR/skills/office"
 usage(){ cat <<'USAGE'

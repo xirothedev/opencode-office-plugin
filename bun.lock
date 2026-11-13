@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "@xirothedev/openoffice-plugin-opencode",
+      "name": "@sunaookamishirokodev/openoffice-plugin-opencode",
       "dependencies": {
         "@firecrawl/anydoc": "^0.2.4",
         "@firecrawl/pdf-inspector": "^1.13.0",

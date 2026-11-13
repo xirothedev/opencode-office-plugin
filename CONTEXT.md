@@ -15,7 +15,7 @@ A clean opencode install under `tests/isolated-workspace/` with its own `opencod
 _Avoid_: Clean env, test opencode, local opencode
 
 **Baseline Plugins**:
-The exact plugin list the Isolated Runtime loads. Strict baseline is only `@xirothedev/openoffice-plugin-opencode`.
+The exact plugin list the Isolated Runtime loads. Strict baseline is only `@sunaookamishirokodev/openoffice-plugin-opencode`.
 _Avoid_: Allowed plugins, pollution set
 
 **Plugin Harness**:
@@ -99,7 +99,7 @@ _Avoid_: Pixel perfect, exact copy
 ### Task & Skill Creation
 
 **Enduser**:
-The developer who installs `@xirothedev/openoffice-plugin-opencode` and creates Task Skills for repetitive work.
+The developer who installs `@sunaookamishirokodev/openoffice-plugin-opencode` and creates Task Skills for repetitive work.
 _Avoid_: User, client, clerk
 
 **Task Skill**:

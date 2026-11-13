@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for contributing to `@xirothedev/openoffice-plugin-opencode`.
+Thanks for contributing to `@sunaookamishirokodev/openoffice-plugin-opencode`.
 
 ## Workflow
 

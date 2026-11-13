@@ -1,5 +1,5 @@
 {
-  "name": "@xirothedev/openoffice-plugin-opencode",
+  "name": "@sunaookamishirokodev/openoffice-plugin-opencode",
   "version": "1.0.0",
   "description": "Office document automation for opencode: draft lifecycle, version history, format conversion, template batch generation.",
   "type": "module",
@@ -43,7 +43,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/xirothedev/opencode-office-plugin.git"
+    "url": "git+https://github.com/sunaookamishirokodev/opencode-office-plugin.git"
   },
   "dependencies": {
     "@firecrawl/anydoc": "^0.2.4",

@@ -23,7 +23,7 @@ Add the package to the `plugins` array in opencode 2 configuration:
 
 ```json
 {
-  "plugins": ["@xirothedev/openoffice-plugin-opencode"]
+  "plugins": ["@sunaookamishirokodev/openoffice-plugin-opencode"]
 }
 ```
 
@@ -31,7 +31,7 @@ Add the package to the `plugins` array in opencode 2 configuration:
 
 ```json
 {
-  "plugins": ["@xirothedev/openoffice-plugin-opencode"]
+  "plugins": ["@sunaookamishirokodev/openoffice-plugin-opencode"]
 }
 ```
 
@@ -41,7 +41,7 @@ To pin a version and pass options:
 {
   "plugins": [
     {
-      "package": "@xirothedev/openoffice-plugin-opencode@0.2.1",
+      "package": "@sunaookamishirokodev/openoffice-plugin-opencode@0.2.1",
       "options": {
         "pdfEngine": "typst",
         "staleLockHours": 48,
@@ -81,7 +81,7 @@ opencode2 api get /api/plugin
 
 | Symptom | Fix |
 | --- | --- |
-| Plugin not loading | Confirm the config file is `opencode.json` (project or global), the field is `plugins` (V2, not V1's `plugin`), and the package name is spelled `@xirothedev/openoffice-plugin-opencode`. Check the server log for load errors. |
+| Plugin not loading | Confirm the config file is `opencode.json` (project or global), the field is `plugins` (V2, not V1's `plugin`), and the package name is spelled `@sunaookamishirokodev/openoffice-plugin-opencode`. Check the server log for load errors. |
 | `officecli` not available in chat | Restart opencode 2 after changing config. Check startup logs for load errors. |
 | Plugin loads but tools are invisible to the model | Tools are registered with `codemode: false` for direct provider exposure — verify you are not on a version where the plugin package mismatch prevents registration. |
 | pandoc errors on DOCX/XLSX/PPTX | Install pandoc, verify with `pandoc --version`. |
@@ -113,16 +113,16 @@ Check and update it with npm 11.19+:
 ```bash
 npm login --auth-type=web     # browser + 2FA
 npm whoami                    # must be the package owner
-npm trust list @xirothedev/openoffice-plugin-opencode
+npm trust list @sunaookamishirokodev/openoffice-plugin-opencode
 ```
 
-The entry must read: repository `xirothedev/opencode-office-plugin`, file `cd.yml`, permissions `publish`. To replace it:
+The entry must read: repository `sunaookamishirokodev/opencode-office-plugin`, file `cd.yml`, permissions `publish`. To replace it:
 
 ```bash
-npm trust revoke @xirothedev/openoffice-plugin-opencode --id=<trust-id>
-npm trust github @xirothedev/openoffice-plugin-opencode \
+npm trust revoke @sunaookamishirokodev/openoffice-plugin-opencode --id=<trust-id>
+npm trust github @sunaookamishirokodev/openoffice-plugin-opencode \
   --file cd.yml \
-  --repo xirothedev/opencode-office-plugin \
+  --repo sunaookamishirokodev/opencode-office-plugin \
   --allow-publish -y
 ```
 
