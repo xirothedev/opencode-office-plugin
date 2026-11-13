@@ -120,6 +120,7 @@ const handleCreate = (
     return fail(targets);
   }
   if (filePath && targets.length === 0) {
+    Draft.assertNoForeignLock(filePath, sessionID, false);
     Draft.create(filePath, sessionID, owner, cleanContent);
     return existsSync(filePath)
       ? `Draft created for ${filePath} — pre-existing document: prefer comment+suggestedText for content changes; ask the user before direct-editing`
@@ -127,7 +128,7 @@ const handleCreate = (
   }
   const paths = targets.length > 0 ? targets : [filePath as string];
   for (const p of paths) {
-    Draft.assertNoForeignLock(p, sessionID, true);
+    Draft.assertNoForeignLock(p, sessionID, false);
   }
   for (const p of paths) {
     Draft.create(p, sessionID, owner, cleanContent);
@@ -270,6 +271,7 @@ const handleRevert = (
   input: Extract<OfficeCliInput, { action: "revert" }>,
   { owner, sessionID }: ActionContext
 ): string => {
+  Draft.assertNoForeignLock(input.filePath, sessionID, false);
   Draft.revert(input.filePath, sessionID, owner, input.timestamp);
   return `Reverted to snapshot for ${input.filePath}`;
 };

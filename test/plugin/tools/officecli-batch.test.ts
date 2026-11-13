@@ -129,7 +129,7 @@ describe("officecli batch create/accept", () => {
     ).rejects.toThrow(/filePaths must be a non-empty array of strings/u);
   });
 
-  it("create with filePaths acquires over a stale foreign lock", async () => {
+  it("create with filePaths refuses a stale foreign lock", async () => {
     const lockPath = path.join(getLocksDir(), `${getFilePathHash(fileB)}.json`);
     writeFileSync(
       lockPath,
@@ -140,17 +140,18 @@ describe("officecli batch create/accept", () => {
         touchedAt: Date.now() - 25 * 60 * 60 * 1000,
       })
     );
-    const result = await runTool(officecliTool, {
-      action: "create",
-      content: "shared content",
-      filePaths: JSON.stringify([fileA, fileB]),
-    });
-    expect(result).toContain("2 drafts");
+    await expect(
+      runTool(officecliTool, {
+        action: "create",
+        content: "shared content",
+        filePaths: JSON.stringify([fileA, fileB]),
+      })
+    ).rejects.toThrow(/held by session other-session/u);
     const lockStatus = await runTool(officecliTool, {
       action: "lock-status",
       filePath: fileB,
     });
-    expect(JSON.parse(lockStatus).sessionID).toBe("test-session");
+    expect(JSON.parse(lockStatus).sessionID).toBe("other-session");
   });
 
   it("accept with invalid filePaths JSON errors", async () => {
