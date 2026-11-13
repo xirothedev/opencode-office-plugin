@@ -62,7 +62,7 @@ jobs:
             published="$PUBLISHED_THIS_RUN"
             if [ "$published" != "true" ]; then
               for attempt in 1 2 3 4 5 6; do
-                published="$(npm view "@xirothedev/openoffice-plugin-opencode@$version" version 2>/dev/null || true)"
+                published="$(npm view "@sunaookamishirokodev/openoffice-plugin-opencode@$version" version 2>/dev/null || true)"
                 [ "$published" = "$version" ] && break
                 echo "Waiting for $version on npm (attempt $attempt)..."
                 sleep 15

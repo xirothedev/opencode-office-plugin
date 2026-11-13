@@ -4,7 +4,7 @@ Guidance for coding agents working in this repository.
 
 ## What This Is
 
-A platform repo that ships one publishable opencode plugin (`@xirothedev/openoffice-plugin-opencode`). The repo holds Task Skills (`skills/`), host invokes (`src/plugin/host.ts`), the isolated test workspace (`tests/isolated-workspace/`), and the plugin itself (`src/plugin/`, pure domain in `src/core/`). The npm tarball is only `dist/` + READMEs with entry `dist/index.js`.
+A platform repo that ships one publishable opencode plugin (`@sunaookamishirokodev/openoffice-plugin-opencode`). The repo holds Task Skills (`skills/`), host invokes (`src/plugin/host.ts`), the isolated test workspace (`tests/isolated-workspace/`), and the plugin itself (`src/plugin/`, pure domain in `src/core/`). The npm tarball is only `dist/` + READMEs with entry `dist/index.js`.
 
 Targets the opencode V2 plugin API: `Plugin.define({ id: "openoffice", effect })` from `@opencode/plugin/effect`, tools registered via `ctx.tool.transform(t => t.add(...))` with `options: { codemode: false }` (ADR-0016; registry pins `@opencode/plugin@2.0.10` + `@opencode/schema@2.0.10`, `effect` on the plugin-declared `4.0.0-rc.112`).
 

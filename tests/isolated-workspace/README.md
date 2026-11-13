@@ -1,6 +1,6 @@
 # Isolated Runtime — tests/isolated-workspace
 
-Strict isolation for `@xirothedev/openoffice-plugin-opencode`. No global plugins, no global MCPs. Proves the plugin works alone.
+Strict isolation for `@sunaookamishirokodev/openoffice-plugin-opencode`. No global plugins, no global MCPs. Proves the plugin works alone.
 
 ## Layout
 

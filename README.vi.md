@@ -1,7 +1,7 @@
-# @xirothedev/openoffice-plugin-opencode
+# @sunaookamishirokodev/openoffice-plugin-opencode
 
-[![npm version](https://img.shields.io/npm/v/@xirothedev/openoffice-plugin-opencode.svg)](https://www.npmjs.com/package/@xirothedev/openoffice-plugin-opencode)
-[![CI](https://github.com/xirothedev/opencode-office-plugin/actions/workflows/ci.yml/badge.svg)](https://github.com/xirothedev/opencode-office-plugin/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/@sunaookamishirokodev/openoffice-plugin-opencode.svg)](https://www.npmjs.com/package/@sunaookamishirokodev/openoffice-plugin-opencode)
+[![CI](https://github.com/sunaookamishirokodev/opencode-office-plugin/actions/workflows/ci.yml/badge.svg)](https://github.com/sunaookamishirokodev/opencode-office-plugin/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 Plugin tự động hoá tài liệu Office cho opencode 2 — vòng đời Draft, lịch sử phiên bản và chuyển đổi định dạng cho DOCX, XLSX, PPTX, PDF, ảnh và văn bản.
@@ -25,7 +25,7 @@ Plugin tự động hoá tài liệu Office cho opencode 2 — vòng đời Draf
 
 ## Tổng quan
 
-`@xirothedev/openoffice-plugin-opencode` là plugin cho **opencode 2**, đưa mọi thao tác tài liệu Office của agent về một đường đi an toàn duy nhất: plugin đăng ký tool `officecli` (31 action) và chặn các tool builtin `read`/`edit`/`write` với định dạng Office, để công việc tài liệu không thể đi vòng qua vòng đời Draft.
+`@sunaookamishirokodev/openoffice-plugin-opencode` là plugin cho **opencode 2**, đưa mọi thao tác tài liệu Office của agent về một đường đi an toàn duy nhất: plugin đăng ký tool `officecli` (31 action) và chặn các tool builtin `read`/`edit`/`write` với định dạng Office, để công việc tài liệu không thể đi vòng qua vòng đời Draft.
 
 Agent không bao giờ ghi trực tiếp vào file thật. Mọi thay đổi nằm trong một **Draft** (bản nháp) đang giữ lock độc quyền; file thật chỉ được ghi khi gọi `accept` — thao tác này đồng thời ghi một **Snapshot** cho `history` và `revert`.
 
@@ -85,7 +85,7 @@ Thêm package vào mảng `plugins` trong config opencode 2 — `opencode.json` 
 
 ```json
 {
-  "plugins": ["@xirothedev/openoffice-plugin-opencode"]
+  "plugins": ["@sunaookamishirokodev/openoffice-plugin-opencode"]
 }
 ```
 
@@ -102,7 +102,7 @@ Plugin cung cấp tool; skills dạy agent khi nào dùng tool đó. Hãy cài t
 # flags: --global | --project DIR | --skill-only | --plugin-only | --local
 
 # Độc lập (toàn bộ skills, không cần plugin)
-npx skills add xirothedev/opencode-office-plugin
+npx skills add sunaookamishirokodev/opencode-office-plugin
 
 # Thủ công, từng skill một
 cp -R skills/office ~/.config/opencode/skills/office   # global
@@ -279,7 +279,7 @@ Cấu hình qua object `options` của entry plugin:
 {
   "plugins": [
     {
-      "package": "@xirothedev/openoffice-plugin-opencode",
+      "package": "@sunaookamishirokodev/openoffice-plugin-opencode",
       "options": {
         "pdfEngine": "typst",
         "staleLockHours": 48,

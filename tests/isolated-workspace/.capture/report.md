@@ -83,4 +83,4 @@ All steps passed.
 
 
 ---
-Isolated Runtime: only @xirothedev/openoffice-plugin-opencode loaded. No global plugins.
+Isolated Runtime: only @sunaookamishirokodev/openoffice-plugin-opencode loaded. No global plugins.

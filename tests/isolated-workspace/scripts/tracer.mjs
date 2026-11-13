@@ -142,7 +142,7 @@ md += `\n## Details\n\n`
 for (const r of results) {
   md += `### ${r.format} — ${r.status}\n\nFile: \`${r.filePath}\`\n\n${r.failStep ? `Fail: ${r.failStep}\n` : "All steps passed.\n"}\n`
 }
-md += `\n---\nIsolated Runtime: only @xirothedev/openoffice-plugin-opencode loaded. No global plugins.\n`
+md += `\n---\nIsolated Runtime: only @sunaookamishirokodev/openoffice-plugin-opencode loaded. No global plugins.\n`
 
 await writeFile(REPORT_PATH, md)
 console.log(`\nReport written to ${REPORT_PATH}`)
