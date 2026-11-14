@@ -171,7 +171,7 @@ export const openofficeStatusAttributes = (
   if (status === "open") {
     return {};
   }
-  return { [OO_XMLNS_ATTR]: OPENOFFICE_NS, [OO_STATUS_ATTR]: status };
+  return { [OO_STATUS_ATTR]: status, [OO_XMLNS_ATTR]: OPENOFFICE_NS };
 };
 
 export const parseStatus = (

@@ -5,7 +5,7 @@ export const substituteTemplate = (
   data: Record<string, string | number>
 ): string => {
   const missing: string[] = [];
-  const substituted = template.replace(
+  const substituted = template.replaceAll(
     PLACEHOLDER_PATTERN,
     (match, key: string) => {
       if (!Object.hasOwn(data, key)) {

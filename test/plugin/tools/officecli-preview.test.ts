@@ -9,6 +9,7 @@ import { runTool, setupHermeticDirs, cleanupTestFile } from "./harness";
 
 // ponytail: mock the owned spawn seam, never node:child_process (sharp imports spawnSync from it)
 const pandocCalls: string[] = [];
+const pandocCommands = (): string[] => [...pandocCalls];
 
 mock.module("@/core/format/exec", () => ({
   runCommand: mock((cmd: string) => {
@@ -34,8 +35,6 @@ describe("officecli preview action", () => {
     delete process.env.MOCK_PANDOC_FAIL;
     pandocCalls.length = 0;
   });
-
-  const pandocCommands = (): string[] => [...pandocCalls];
 
   it("renders the draft to an HTML file via pandoc and returns its path", async () => {
     await runTool(officecliTool, {

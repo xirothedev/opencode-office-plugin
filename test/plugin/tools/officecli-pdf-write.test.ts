@@ -7,6 +7,7 @@ import { runTool, setupHermeticDirs, cleanupTestFile } from "./harness";
 
 // ponytail: mock the owned spawn seam, never node:child_process (sharp imports spawnSync from it)
 const pandocCalls: string[] = [];
+const pandocCommands = (): string[] => [...pandocCalls];
 
 mock.module("@/core/format/exec", () => ({
   runCommand: mock((cmd: string) => {
@@ -27,8 +28,6 @@ describe("officecli PDF write", () => {
     delete process.env.MOCK_PANDOC_FAIL;
     pandocCalls.length = 0;
   });
-
-  const pandocCommands = (): string[] => [...pandocCalls];
 
   it("accept converts the markdown draft to PDF via pandoc with xelatex", async () => {
     await runTool(officecliTool, {
