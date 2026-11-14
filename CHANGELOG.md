@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file. New releases follow [Semantic Versioning](https://semver.org/); entries are generated from [Changesets](https://github.com/changesets/changesets).
 
+## 2.0.2
+
+### Patch Changes
+
+- db415b1: Validate npm trusted publishing via GitHub Actions.
+
 ## 2.0.0
 
 ### Major Changes
