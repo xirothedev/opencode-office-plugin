@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file. New releases follow [Semantic Versioning](https://semver.org/); entries are generated from [Changesets](https://github.com/changesets/changesets).
 
+## 2.0.0
+
+### Major Changes
+
+- a95f71f: Rename package scope and repository ownership from `@xirothedev/openoffice-plugin-opencode` / `xirothedev/opencode-office-plugin` to `@sunaookamishirokodev/openoffice-plugin-opencode` / `sunaookamishirokodev/opencode-office-plugin`. Update install docs, badges, and active configuration references. Author and license holder remain unchanged.
+
 ## 1.0.0
 
 ### Major Changes

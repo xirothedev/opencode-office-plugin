@@ -1,6 +1,6 @@
 {
   "name": "@sunaookamishirokodev/openoffice-plugin-opencode",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Office document automation for opencode: draft lifecycle, version history, format conversion, template batch generation.",
   "type": "module",
   "main": "./dist/index.js",
