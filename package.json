@@ -43,11 +43,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sunaookamishirokodev/opencode-office-plugin.git"
+    "url": "git+https://github.com/xirothedev/opencode-office-plugin.git"
   },
-  "homepage": "https://github.com/sunaookamishirokodev/opencode-office-plugin#readme",
+  "homepage": "https://github.com/xirothedev/opencode-office-plugin#readme",
   "bugs": {
-    "url": "https://github.com/sunaookamishirokodev/opencode-office-plugin/issues"
+    "url": "https://github.com/xirothedev/opencode-office-plugin/issues"
   },
   "dependencies": {
     "@firecrawl/anydoc": "^0.2.4",
