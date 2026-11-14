@@ -1,7 +1,7 @@
 {
   "name": "@sunaookamishirokodev/openoffice-plugin-opencode",
-  "version": "2.0.0",
-  "description": "Office document automation for opencode: draft lifecycle, version history, format conversion, template batch generation.",
+  "version": "2.0.1",
+  "description": "OpenCode plugin for office document automation: draft lifecycle, comments, templates, format conversion, and version history.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -44,6 +44,10 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/sunaookamishirokodev/opencode-office-plugin.git"
+  },
+  "homepage": "https://github.com/sunaookamishirokodev/opencode-office-plugin#readme",
+  "bugs": {
+    "url": "https://github.com/sunaookamishirokodev/opencode-office-plugin/issues"
   },
   "dependencies": {
     "@firecrawl/anydoc": "^0.2.4",
