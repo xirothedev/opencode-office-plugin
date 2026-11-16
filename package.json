@@ -74,6 +74,6 @@
     "tsc-alias": "^1.9.10",
     "turbo": "^2.11.10",
     "typescript": "^7.0.2",
-    "ultracite": "7.12.0"
+    "ultracite": "8.1.1"
   }
 }
